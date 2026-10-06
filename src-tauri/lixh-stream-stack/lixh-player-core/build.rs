@@ -12,7 +12,7 @@ fn main() {
     b.file("native/lixh_player.c")
         .include("include")
         .warnings(true)
-        .flag_if_supported("-std=c11");
+        .flag_if_supported("-std=c11")\n        .flag_if_supported("/std:c11");
 
     if let Ok(root) = env::var("LIXH_FFMPEG_DIR") {
         let root = PathBuf::from(root);
