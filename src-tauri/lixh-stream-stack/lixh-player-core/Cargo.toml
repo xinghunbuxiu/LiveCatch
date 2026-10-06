@@ -1,0 +1,17 @@
+[package]
+name = "lixh-player-core"
+version = "0.8.1"
+edition = "2024"
+license = "MIT"
+description = "Low-latency live player core bridge for LiveCatch"
+
+[lib]
+crate-type = ["rlib", "cdylib", "staticlib"]
+
+[features]
+default = []
+
+[dependencies]
+
+[build-dependencies]
+cc = "1"
