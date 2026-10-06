@@ -40,7 +40,14 @@ jobs:
           set -euo pipefail
           bash src-tauri/lixh-stream-stack/scripts/prepare-runtime.sh "${{ inputs.platform }}"
           bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh "${{ inputs.platform }}" "src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}"
-          echo "LIXH_FFMPEG_DIR=$PWD/src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}" >> "$GITHUB_ENV"
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            echo "LIXH_FFMPEG_DIR=${{ github.workspace }}\\src-tauri\\lixh-stream-stack\\sdk\\${{ inputs.platform }}" >> "$GITHUB_ENV"
+          else
+            echo "LIXH_FFMPEG_DIR=$PWD/src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}" >> "$GITHUB_ENV"
+          fi
+          rm -rf src-tauri/resources/ffmpeg
+          mkdir -p src-tauri/resources/ffmpeg
+          cp -R "src-tauri/lixh-stream-stack/runtime/${{ inputs.platform }}/." src-tauri/resources/ffmpeg/
       - run: cargo check --manifest-path src-tauri/lixh-stream-stack/Cargo.toml
       - run: cargo check --manifest-path src-tauri/Cargo.toml
       - run: cargo test --manifest-path src-tauri/lixh-stream-stack/Cargo.toml
