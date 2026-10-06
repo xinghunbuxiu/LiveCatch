@@ -12,7 +12,8 @@ fn main() {
     b.file("native/lixh_player.c")
         .include("include")
         .warnings(true)
-        .flag_if_supported("-std=c11")\n        .flag_if_supported("/std:c11");
+        .flag_if_supported("-std=c11")
+        .flag_if_supported("/std:c11");
 
     if let Ok(root) = env::var("LIXH_FFMPEG_DIR") {
         let root = PathBuf::from(root);
@@ -23,8 +24,12 @@ fn main() {
         }
     }
 
-    if cfg!(target_os = "windows") { b.define("LIXH_WINDOWS", None); }
-    if cfg!(target_os = "macos") { b.define("LIXH_MACOS", None); }
+    if cfg!(target_os = "windows") {
+        b.define("LIXH_WINDOWS", None);
+    }
+    if cfg!(target_os = "macos") {
+        b.define("LIXH_MACOS", None);
+    }
     b.compile("lixh_player");
 
     if cfg!(target_os = "macos") {
