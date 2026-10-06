@@ -1,0 +1,24 @@
+name: Verify LiveCatch All Platforms
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - platform: windows-x64
+            runner: windows-latest
+          - platform: macos-arm64
+            runner: macos-14
+          - platform: macos-x64
+            runner: macos-13
+    uses: ./.github/workflows/verify-tauri-platform.yml
+    with:
+      platform: ${{ matrix.platform }}
+      runner: ${{ matrix.runner }}
