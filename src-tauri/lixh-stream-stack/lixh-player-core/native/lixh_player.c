@@ -124,7 +124,7 @@ static int open_decoder(LixhPlayer *p, AVStream *st, int video) {
         }
         rc = avcodec_open2(ctx, codec, NULL);
         if (rc < 0 && p->hw_device) {
-            av_buffer_unref(&ctx->hw_device);
+            av_buffer_unref(&ctx->hw_device_ctx);
             p->hw_kind = LIXH_VIDEO_SOFTWARE;
             ctx->get_format = NULL;
             rc = avcodec_open2(ctx, codec, NULL);
@@ -218,7 +218,7 @@ static void deliver_video(LixhPlayer *p, AVFrame *f, AVRational tb) {
         p->cb.on_video(p->cb.opaque, nf.kind, nf.width, nf.height, pts, 0, &nf);
 #endif
     } else {
-        p->cb.on_video(p->cb.opaque, LIXH_VIDEO_SOFTWARE, f->width, f->height, pts, 0, f);
+        LixhNativeFrame nf = { LIXH_VIDEO_SOFTWARE, f->width, f->height, f, 0, f };\n        p->cb.on_video(p->cb.opaque, nf.kind, nf.width, nf.height, pts, 0, &nf);
     }
 }
 
