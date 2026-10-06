@@ -1,0 +1,39 @@
+[package]
+name="livecatch-desk"
+version="0.47.8"
+description="LiveCatch Desk"
+authors= ["LiveCatch"]
+edition="2021"
+
+[build-dependencies]
+tauri-build= {version="2",features= [] }
+
+[dependencies]
+tauri= {version="2",features= ["macos-private-api", "webview-data-url"] }
+tauri-plugin-global-shortcut="2"
+serde= {version="1",features= ["derive"] }
+serde_json="1"
+reqwest= {version="0.12",default-features=false,features= ["blocking", "json", "gzip", "brotli", "deflate", "rustls-tls"] }
+url="2"
+raw-window-handle="0.6"
+cpal = "0.15"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = { version = "0.3", features = ["NSGeometry"] }
+objc2-app-kit = { version = "0.3", features = [
+  "NSView",
+  "NSWindow",
+  "NSColor",
+  "NSResponder",
+  "NSGraphics",
+] }
+
+lixh-stream-resolver = { path = "lixh-stream-stack/lixh-stream-resolver" }
+lixh-stream-supervisor = { path = "lixh-stream-stack/lixh-stream-supervisor" }
+lixh-playback-engine = { path = "lixh-stream-stack/lixh-playback-engine" }
+lixh-player-host = { path = "lixh-stream-stack/lixh-player-host" }
+lixh-player-core = { path = "lixh-stream-stack/lixh-player-core" }
+
+[features]
+custom-protocol= ["tauri/custom-protocol"]
