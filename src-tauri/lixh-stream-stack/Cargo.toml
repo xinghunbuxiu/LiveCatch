@@ -1,0 +1,9 @@
+[workspace]
+members = [
+  "lixh-stream-resolver",
+  "lixh-stream-supervisor",
+  "lixh-playback-engine",
+  "lixh-player-host",
+  "lixh-player-core",
+]
+resolver = "2"
