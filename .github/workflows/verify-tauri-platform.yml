@@ -1,0 +1,39 @@
+name: Verify LiveCatch Tauri Platform
+on:
+  workflow_call:
+    inputs:
+      platform:
+        required: true
+        type: string
+      runner:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  verify:
+    name: ${{ inputs.platform }}
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 30
+    env:
+      LIXH_FFMPEG_VERSION: "9.0.2"
+      LIXH_FFMPEG_REPO: "xinghunbuxiu/LiveCatchFfmpeg"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm install
+      - name: Prepare platform FFmpeg runtime and SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash src-tauri/lixh-stream-stack/scripts/prepare-runtime.sh "${{ inputs.platform }}"
+          bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh "${{ inputs.platform }}" "src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}"
+          echo "LIXH_FFMPEG_DIR=$PWD/src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}" >> "$GITHUB_ENV"
+      - run: cargo check --manifest-path src-tauri/lixh-stream-stack/Cargo.toml
+      - run: cargo check --manifest-path src-tauri/Cargo.toml
+      - run: cargo test --manifest-path src-tauri/lixh-stream-stack/Cargo.toml
+      - run: npm run build
