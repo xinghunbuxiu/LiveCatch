@@ -13,7 +13,8 @@ fn main() {
         .include("include")
         .warnings(true)
         .flag_if_supported("-std=c11")
-        .flag_if_supported("/std:c11");
+        .flag_if_supported("/std:c11")
+        .flag_if_supported("/experimental:c11atomics");
 
     if let Ok(root) = env::var("LIXH_FFMPEG_DIR") {
         let root = PathBuf::from(root);
