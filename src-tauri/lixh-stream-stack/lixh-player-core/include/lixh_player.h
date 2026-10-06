@@ -6,6 +6,7 @@ extern "C" {
 
 enum { LIXH_VIDEO_SOFTWARE = 0, LIXH_VIDEO_D3D11 = 1, LIXH_VIDEO_VIDEOTOOLBOX = 2 };
 enum { LIXH_EVT_STATE = 1, LIXH_EVT_ERROR = 2, LIXH_EVT_INFO = 3 };
+enum { LIXH_STATE_IDLE = 0, LIXH_STATE_OPEN = 1, LIXH_STATE_PLAYING = 2, LIXH_STATE_STOPPED = 3, LIXH_STATE_ERROR = 4 };
 
 typedef struct LixhNativeFrame {
     int kind;
