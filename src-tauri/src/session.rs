@@ -1984,29 +1984,20 @@ fn write_verify_readme(dir: &PathBuf) -> Result<(), String> {
     let text = r#"# Douyin session export (LiveCatch Desk)
 
 Files:
-- douyin.json         full session
-- cookie_header.txt   Cookie: request header value
-- cookies.netscape.txt  Netscape cookie jar
+- douyin.json            full session
+- cookie_header.txt      Cookie request header value
+- cookies.netscape.txt   Netscape cookie jar
 
 ## Verify with LiveCatch
+
 登录成功后 Cookie 会自动保存。开播前若无会话会自动弹扫码窗。
 
-## Use with open-source danmaku (example)
+## Use with open-source danmaku clients
 
-DouyinLiveWebFetcher / douyinLive usually accept Cookie string or browser Cookie:
- .to_string();
-            let st = room
-                .get("status")
-                .and_then(|x| x.as_i64())
-                .or_else(|| data.get("room_status").and_then(|x| x.as_i64()))
-                .unwrap_or(0);
-            if !room_id.is_empty() {
-                cache_room_id(rid, &room_id, st);
-                return Ok((room_id, st));
-            }
-        }
-    }
-    Err("enter 未返回 room_id".into())
+DouyinLiveWebFetcher / douyinLive usually accept a Cookie header or browser Cookie string.
+Use cookie_header.txt as the request Cookie value, or import cookies.netscape.txt when supported.
+"#;
+    fs::write(dir.join("README.txt"), text).map_err(|e| format!("session README: {e}"))
 }
 
 fn scrape_room_id_from_html(html: &str) -> String {
