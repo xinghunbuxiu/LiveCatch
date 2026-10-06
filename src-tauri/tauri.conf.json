@@ -1,0 +1,9 @@
+{
+  "$schema":"https://schema.tauri.app/config/2",
+  "productName":"LiveCatch Desk",
+  "version":"0.47.8",
+  "identifier":"cn.livecatch.desk",
+  "build":{"beforeDevCommand":"npm run dev","beforeBuildCommand":"npm run build","devUrl":"http://127.0.0.1:5180","frontendDist":"../dist"},
+  "app":{"macOSPrivateApi":true,"windows":[{"label":"main","title":"LiveCatch Desk","width":960,"height":900,"minWidth":860,"minHeight":720,"resizable":true}],"security":{"csp":null}},
+  "bundle":{"active":true,"targets":["nsis","dmg"],"icon":["icons/32x32.png","icons/128x128.png","icons/128x128@2x.png","icons/icon.icns","icons/icon.ico"],"resources":["tools/plugins/q1-douyin/q1-adapter","tools/plugins/q1-douyin/q1-adapter.cmd","tools/plugins/q1-douyin/manifest.json","tools/plugins/q1-douyin/products.json","tools/plugins/q1-douyin/requirements.txt","tools/plugins/q1-douyin/README.md","tools/plugins/q1-douyin/setup_venv.sh","tools/plugins/q1-douyin/wss_danmaku","resources/ffmpeg"],"windows":{"nsis":{"installMode":"perMachine"}}}
+}
