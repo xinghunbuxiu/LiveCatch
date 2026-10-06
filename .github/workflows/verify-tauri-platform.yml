@@ -18,6 +18,7 @@ jobs:
     env:
       LIXH_FFMPEG_VERSION: "9.0.2"
       LIXH_FFMPEG_REPO: "xinghunbuxiu/LiveCatchFfmpeg"
+      LIXH_FFMPEG_TAG: "ffmpeg-9.0.2-lc1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
