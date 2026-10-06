@@ -1990,12 +1990,13 @@ Files:
 
 ## Verify with LiveCatch
 
-登录成功后 Cookie 会自动保存。开播前若无会话会自动弹扫码窗。
+Cookies are saved automatically after login.
+If no session exists before starting a stream, the QR login window is opened.
 
-## Use with open-source danmaku clients
+## Open-source danmaku clients
 
-DouyinLiveWebFetcher / douyinLive usually accept a Cookie header or browser Cookie string.
-Use cookie_header.txt as the request Cookie value, or import cookies.netscape.txt when supported.
+Use cookie_header.txt as the request Cookie value, or import
+cookies.netscape.txt when the client supports Netscape cookies.
 "#;
     fs::write(dir.join("README.txt"), text).map_err(|e| format!("session README: {e}"))
 }
@@ -2020,7 +2021,7 @@ fn find_room_id_after_key(html: &str, key: &str) -> Option<String> {
             let mut j = i + key_b.len();
             while j < bytes.len() {
                 match bytes[j] {
-                    b'\\' | b'"' | b':' | b' ' | b'\\t' | b'\\r' | b'\\n' => j += 1,
+                    b'\\' | b'"' | b':' | b' ' | b'\t' | b'\r' | b'\n' => j += 1,
                     _ => break,
                 }
             }
