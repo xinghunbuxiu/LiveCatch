@@ -2001,57 +2001,47 @@ Use cookie_header.txt as the request Cookie value, or import cookies.netscape.tx
 }
 
 fn scrape_room_id_from_html(html: &str) -> String {
-    // Formats seen in live.douyin.com HTML / RENDER_DATA
-    let patterns = [
-        r#"\\"roomId\\":\\"(\d+)\\""#,
-        r#""roomId"\s*:\s*"(\d+)""#,
-        r#""roomId"\s*:\s*(\d+)"#,
-        r#"\\"room_id\\":\\"(\d+)\\""#,
-        r#""room_id"\s*:\s*"(\d+)""#,
-    ];
-    for p in patterns {
-        if let Ok(re) = regex_lite_room_id(p, html) {
-            if !re.is_empty() {
-                return re;
-            }
+    for key in ["roomId", "room_id"] {
+        if let Some(id) = find_room_id_after_key(html, key) {
+            return id;
         }
     }
     String::new()
 }
 
-/// Tiny capture without adding regex crate: find roomId digits after key.
-fn regex_lite_room_id(kind: &str, html: &str) -> Result<String, ()> {
-    let key = if kind.contains("room_id") {
-        "room_id"
-    } else {
-        "roomId"
-    };
+/// Find a numeric room id after a roomId/room_id key in escaped or normal HTML/JSON.
+fn find_room_id_after_key(html: &str, key: &str) -> Option<String> {
     let bytes = html.as_bytes();
     let key_b = key.as_bytes();
     let mut i = 0;
-    while i + key_b.len() < bytes.len() {
+
+    while i + key_b.len() <= bytes.len() {
         if bytes[i..].starts_with(key_b) {
             let mut j = i + key_b.len();
-            // skip \": or ": or ":
-            while j < bytes.len()
-                && matches!(bytes[j], b'\\' | b'"' | b':' | b' ' | b'\t')
-            {
-                j += 1;
+            while j < bytes.len() {
+                match bytes[j] {
+                    b'\\' | b'"' | b':' | b' ' | b'\\t' | b'\\r' | b'\\n' => j += 1,
+                    _ => break,
+                }
             }
+
             let start = j;
             while j < bytes.len() && bytes[j].is_ascii_digit() {
                 j += 1;
             }
+
             if j > start {
-                let id = std::str::from_utf8(&bytes[start..j]).unwrap_or("");
-                if id.len() >= 8 {
-                    return Ok(id.to_string());
+                if let Ok(id) = std::str::from_utf8(&bytes[start..j]) {
+                    if id.len() >= 8 {
+                        return Some(id.to_owned());
+                    }
                 }
             }
         }
         i += 1;
     }
-    Err(())
+
+    None
 }
 
 /// HTTP/HTML resolve room_id (web_rid → internal room_id). Empty enter body ≠ 一定未登录.
