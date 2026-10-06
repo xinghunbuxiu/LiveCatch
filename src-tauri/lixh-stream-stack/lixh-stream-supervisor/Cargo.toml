@@ -1,0 +1,10 @@
+[package]
+name = "lixh-stream-supervisor"
+version = "0.9.0"
+edition = "2021"
+license = "MIT"
+description = "Playback supervision and stream failover for LiveCatch"
+
+[dependencies]
+lixh-stream-resolver = { path = "../lixh-stream-resolver" }
+serde = { version = "1", features = ["derive"] }
