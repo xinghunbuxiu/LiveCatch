@@ -2021,7 +2021,7 @@ fn find_room_id_after_key(html: &str, key: &str) -> Option<String> {
             let mut j = i + key_b.len();
             while j < bytes.len() {
                 match bytes[j] {
-                    b'\\' | b'"' | b':' | b' ' | b'\t' | b'\r' | b'\n' => j += 1,
+                    92 | 34 | 58 | 32 | 9 | 13 | 10 => j += 1,
                     _ => break,
                 }
             }
