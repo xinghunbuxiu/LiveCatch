@@ -1,4 +1,5 @@
 #ifdef _WIN32
+#define NOMINMAX
 #include <windows.h>
 #include <d3d11.h>
 #include <dxgi1_2.h>
@@ -44,7 +45,6 @@ static bool setup_processor(LixhWinSurface*s,UINT iw,UINT ih){
     D3D11_VIDEO_PROCESSOR_CONTENT_DESC c{};
     c.InputFrameFormat=D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE;
     c.InputWidth=iw;c.InputHeight=ih;c.OutputWidth=s->w;c.OutputHeight=s->h;
-    c.OutputFrameFormat=D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE;
     if(FAILED(s->video->CreateVideoProcessorEnumerator(&c,&s->enumerator)))return false;
     if(FAILED(s->video->CreateVideoProcessor(s->enumerator,0,&s->processor)))return false;
     return true;
@@ -95,7 +95,7 @@ int lixh_surface_resize(void*surface,LixhSurfaceRect rect){
     if(!s||!s->swap||!s->hwnd)return-1;
     const double scale=rect.device_scale>0.0?rect.device_scale:1.0;
     int x=(int)llround(rect.x*scale), y=(int)llround(rect.y*scale);
-    int w=std::max(1,(int)llround(rect.width*scale)), h=std::max(1,(int)llround(rect.height*scale));
+    int w=(std::max)(1,(int)llround(rect.width*scale)), h=std::max(1,(int)llround(rect.height*scale));
     const bool same_geometry = s->w==(UINT)w && s->h==(UINT)h &&
         s->physical_x==(UINT)x && s->physical_y==(UINT)y;
     if (same_geometry) return 0;
