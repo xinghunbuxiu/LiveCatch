@@ -5,7 +5,6 @@ REPO="${LIXH_FFMPEG_REPO:-xinghunbuxiu/LiveCatchFfmpeg}"
 VERSION="${LIXH_FFMPEG_VERSION:-9.0.2}"
 PLATFORM="${1:?platform required}"
 OUT="${2:?output directory required}"
-# Keep the release identity derived from the FFmpeg version.
 TAG="${LIXH_FFMPEG_TAG:-ffmpeg-${VERSION}-lc1}"
 ASSET="LiveCatch-ffmpeg-sdk-${VERSION}-${PLATFORM}.zip"
 
@@ -13,11 +12,9 @@ mkdir -p "$OUT"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-if command -v gh >/dev/null 2>&1; then
-  gh release download "$TAG" --repo "$REPO" --pattern "$ASSET" --dir "$TMP" --clobber
-else
-  curl -fL --retry 3 -o "$TMP/$ASSET" "https://github.com/$REPO/releases/download/$TAG/$ASSET"
-fi
+# Release assets are public; download the immutable asset directly instead of
+# querying the GitHub Releases API, which can be rate-limited on hosted runners.
+curl -fL --retry 5 --retry-delay 2 -o "$TMP/$ASSET"   "https://github.com/$REPO/releases/download/$TAG/$ASSET"
 
 rm -rf "$OUT"
 mkdir -p "$OUT"

@@ -1,0 +1,9 @@
+[package]
+name = "lixh-player-host"
+version = "0.9.0"
+edition = "2021"
+license = "MIT"
+description = "Player host adapter for LiveCatch"
+
+[dependencies]
+lixh-player-core = { path = "../lixh-player-core" }
