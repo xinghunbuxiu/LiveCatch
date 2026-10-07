@@ -173,7 +173,8 @@ fn reap_child(mut c:Child){
     let _=c.wait();
 }
 fn stop_native(state: &Arc<Mutex<RuntimeState>>) -> bool {
-    let mut p = state.lock().unwrap().playback.lock().unwrap();
+    let state_guard = state.lock().unwrap();
+    let mut p = state_guard.playback.lock().unwrap();
     if let Some(mut engine) = p.take() {
         let _ = player::stop(&mut engine);
         player::destroy_native_surface();
@@ -193,7 +194,8 @@ fn player_ffmpeg_status(state: State<AppState>) -> player::FfmpegStatus {
 
 #[tauri::command]
 fn player_embed_tick(state: State<AppState>) {
-    let mut p = state.0.lock().unwrap().playback.lock().unwrap();
+    let state_guard = state.0.lock().unwrap();
+    let mut p = state_guard.playback.lock().unwrap();
     if let Some(engine) = p.as_mut() { let _ = player::poll(engine); }
 }
 
