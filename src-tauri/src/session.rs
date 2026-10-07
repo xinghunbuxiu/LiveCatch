@@ -1560,11 +1560,12 @@ fn open_login_playwright(app: &AppHandle) -> Result<(), String> {
     }
     let dir = session_dir(app)?;
     let path = dir.join("login_wait.html");
-    fs::write(
-        &path,
-        r###"<!doctype html><meta charset=utf-8><title>LiveCatch</title><body style="margin:0;background:#0b0b0c;color:#f2f2f2;font:14px -apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh"><div style="text-align:center"><h1>LiveCatch</h1><p id=st>正在打开扫码窗口…</p></div>"###,
-    )
-    .map_err(|e| e.to_string())?;
+    let html = [
+        "<!doctype html><meta charset=utf-8><title>LiveCatch</title>",
+        "<body style=\"margin:0;background:#0b0b0c;color:#f2f2f2;font:14px -apple-system,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh\">",
+        "<div style=\"text-align:center\"><h1>LiveCatch</h1><p id=st>正在打开扫码窗口…</p></div></body>",
+    ].concat();
+    fs::write(&path, html).map_err(|e| e.to_string())?;
     let html_url = Url::from_file_path(&path).map_err(|_| "bad file url".to_string())?;
     let win = WebviewWindowBuilder::new(app, AUTH_LABEL, WebviewUrl::External(html_url))
         .title("LiveCatch · 扫码登录")
