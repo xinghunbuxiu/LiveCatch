@@ -1964,19 +1964,34 @@ pub fn bind_session_to_room(app: &AppHandle, room_url: &str) -> Result<SessionSt
 }
 
 fn write_netscape(path: &PathBuf, cookies: &[CookieEntry]) -> Result<(), String> {
-    let mut out = String::from("# Netscape HTTP Cookie File\n# LiveCatch Desk export for open-source clients\n");
+    let mut out = String::from("# Netscape HTTP Cookie File");
+    out.push('\n');
+    out.push_str("# LiveCatch Desk export for open-source clients");
+    out.push('\n');
+
     for c in cookies {
         let domain = if c.domain.starts_with('.') {
             c.domain.clone()
         } else {
             format!(".{}", c.domain.trim_start_matches('.'))
         };
-        // domain \t includeSub \t path \t secure \t expires \t name \t value
-        out.push_str(&format!(
-            "{}\tTRUE\t{}\tFALSE\t0\t{}\t{}\n",
-            domain, c.path, c.name, c.value
-        ));
+
+        out.push_str(&domain);
+        out.push('\t');
+        out.push_str("TRUE");
+        out.push('\t');
+        out.push_str(&c.path);
+        out.push('\t');
+        out.push_str("FALSE");
+        out.push('\t');
+        out.push_str("0");
+        out.push('\t');
+        out.push_str(&c.name);
+        out.push('\t');
+        out.push_str(&c.value);
+        out.push('\n');
     }
+
     fs::write(path, out).map_err(|e| format!("netscape: {e}"))
 }
 
