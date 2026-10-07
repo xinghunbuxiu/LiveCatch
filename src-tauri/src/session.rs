@@ -836,6 +836,72 @@ pub fn session_status(app: &AppHandle) -> SessionStatus {
 
 
 
+/// Verify the saved Douyin session without mutating the WebView.
+pub fn verify_session(app: &AppHandle) -> Result<VerifyResult, String> {
+    let sess = load_session(app).ok_or_else(|| "尚未保存抖音登录态，请先扫码登录".to_string())?;
+    let (has_sessionid, has_ttwid) = interesting_present(&sess.cookie_header);
+    if !has_sessionid {
+        return Ok(VerifyResult {
+            ok: false,
+            http_status: 0,
+            has_sessionid,
+            has_ttwid,
+            message: "缺少 sessionid，请重新扫码登录".into(),
+            export_dir: session_dir(app).ok().map(|p| p.display().to_string()),
+        });
+    }
+    let auth = fetch_passport_auth(&sess.cookie_header);
+    let acct = fetch_account_info(&sess.cookie_header);
+    let ok = auth.ok && acct.ok;
+    Ok(VerifyResult {
+        ok,
+        http_status: if acct.status_code >= 0 { 200 } else { 0 },
+        has_sessionid,
+        has_ttwid,
+        message: if ok {
+            if acct.nickname.is_empty() { "登录态验证通过".into() } else { format!("登录态验证通过：{}", acct.nickname) }
+        } else if !auth.hint.is_empty() {
+            format!("登录态验证失败：{}", auth.hint)
+        } else {
+            format!("登录态验证失败：{}", acct.raw_hint)
+        },
+        export_dir: session_dir(app).ok().map(|p| p.display().to_string()),
+    })
+}
+
+/// Clear local session state and close any login/room WebViews.
+pub fn clear_session(app: &AppHandle) -> Result<SessionStatus, String> {
+    leave_room(app);
+    if let Some(w) = app.get_webview_window(AUTH_LABEL) {
+        clear_douyin_cookies_main(app, &w);
+        let _ = w.close();
+    }
+    if let Ok(path) = session_json_path(app) {
+        let _ = fs::remove_file(path);
+    }
+    if let Ok(dir) = session_dir(app) {
+        for name in ["cookie_header.txt", "cookies.netscape.txt", "README.txt"] {
+            let _ = fs::remove_file(dir.join(name));
+        }
+    }
+    LOGIN_CONFIRMED.store(false, Ordering::SeqCst);
+    LOGIN_FINISHING.store(false, Ordering::SeqCst);
+    LOGIN_CLOSING.store(false, Ordering::SeqCst);
+    LOGIN_PURGING.store(false, Ordering::SeqCst);
+    Ok(session_status(app))
+}
+
+/// Send a public-chat message using the saved session.
+/// Douyin may require browser-bound signing; fail explicitly rather than pretending it was sent.
+pub fn send_chat_with_cookie(
+    _app: &AppHandle,
+    _room_url: &str,
+    _text: &str,
+) -> Result<(String, String), String> {
+    Err("当前版本公屏发送接口需要 WebView/签名上下文，暂未建立可安全复用的 HTTP 签名；请重新打开直播间后发送".into())
+}
+
+
 #[cfg(target_os = "macos")]
 const CHROME_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 #[cfg(windows)]
