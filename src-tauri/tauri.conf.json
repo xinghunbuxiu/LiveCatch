@@ -39,6 +39,7 @@
       "nsis": {
         "installMode": "perMachine"
       }
-    }
+    },
+    "icon": []
   }
 }
