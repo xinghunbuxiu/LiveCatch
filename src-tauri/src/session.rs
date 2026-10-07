@@ -240,7 +240,7 @@ impl WebAuthProbe {
 
 /// 在 WebView Cookie jar 内做「授权 → 账号」（credentials:include）。
 /// 外部 HTTP 带导出 Cookie 常被判过期，必须以 WebView 为准。
-const WEBVIEW_AUTH_PROBE_JS: &str = r#"
+const WEBVIEW_AUTH_PROBE_JS: &str = r###"
 (async function () {
   try {
     document.title = 'LCAUTH:pending';
@@ -380,7 +380,7 @@ fn clear_douyin_cookies(win: &WebviewWindow) {
         }
     }
     let _ = win.eval(
-        r#"(function(){
+        r###"(function(){
   try {
     var parts = document.cookie.split(';');
     for (var i = 0; i < parts.length; i++) {
@@ -1964,10 +1964,11 @@ pub fn bind_session_to_room(app: &AppHandle, room_url: &str) -> Result<SessionSt
 }
 
 fn write_netscape(path: &PathBuf, cookies: &[CookieEntry]) -> Result<(), String> {
-    let mut out = String::from("# Netscape HTTP Cookie File");
-    out.push('\n');
+    let mut out = String::new();
+    out.push_str("# Netscape HTTP Cookie File");
+    out.push(char::from(10));
     out.push_str("# LiveCatch Desk export for open-source clients");
-    out.push('\n');
+    out.push(char::from(10));
 
     for c in cookies {
         let domain = if c.domain.starts_with('.') {
@@ -1977,404 +1978,40 @@ fn write_netscape(path: &PathBuf, cookies: &[CookieEntry]) -> Result<(), String>
         };
 
         out.push_str(&domain);
-        out.push('\t');
+        out.push(char::from(9));
         out.push_str("TRUE");
-        out.push('\t');
+        out.push(char::from(9));
         out.push_str(&c.path);
-        out.push('\t');
+        out.push(char::from(9));
         out.push_str("FALSE");
-        out.push('\t');
+        out.push(char::from(9));
         out.push_str("0");
-        out.push('\t');
+        out.push(char::from(9));
         out.push_str(&c.name);
-        out.push('\t');
+        out.push(char::from(9));
         out.push_str(&c.value);
-        out.push('\n');
+        out.push(char::from(10));
     }
 
     fs::write(path, out).map_err(|e| format!("netscape: {e}"))
-}
-
-fn write_verify_readme(dir: &PathBuf) -> Result<(), String> {
-    let text = r#"# Douyin session export (LiveCatch Desk)
-
-Files:
-- douyin.json            full session
-- cookie_header.txt      Cookie request header value
-- cookies.netscape.txt   Netscape cookie jar
-
-## Verify with LiveCatch
-
-Cookies are saved automatically after login.
-If no session exists before starting a stream, the QR login window is opened.
-
-## Open-source danmaku clients
-
-Use cookie_header.txt as the request Cookie value, or import
-cookies.netscape.txt when the client supports Netscape cookies.
-"#;
+}fn write_verify_readme(dir: &PathBuf) -> Result<(), String> {
+    let text = concat!(
+        "# Douyin session export (LiveCatch Desk)\n",
+        "\n",
+        "Files:\n",
+        "- douyin.json            full session\n",
+        "- cookie_header.txt      Cookie request header value\n",
+        "- cookies.netscape.txt   Netscape cookie jar\n",
+        "\n",
+        "## Verify with LiveCatch\n",
+        "\n",
+        "Cookies are saved automatically after login.\n",
+        "If no session exists before starting a stream, the QR login window is opened.\n",
+        "\n",
+        "## Open-source danmaku clients\n",
+        "\n",
+        "Use cookie_header.txt as the request Cookie value, or import\n",
+        "cookies.netscape.txt when the client supports Netscape cookies.\n"
+    );
     fs::write(dir.join("README.txt"), text).map_err(|e| format!("session README: {e}"))
-}
-
-fn scrape_room_id_from_html(html: &str) -> String {
-    for key in ["roomId", "room_id"] {
-        if let Some(id) = find_room_id_after_key(html, key) {
-            return id;
-        }
-    }
-    String::new()
-}
-
-/// Find a numeric room id after a roomId/room_id key in escaped or normal HTML/JSON.
-fn find_room_id_after_key(html: &str, key: &str) -> Option<String> {
-    let bytes = html.as_bytes();
-    let key_b = key.as_bytes();
-    let mut i = 0;
-
-    while i + key_b.len() <= bytes.len() {
-        if bytes[i..].starts_with(key_b) {
-            let mut j = i + key_b.len();
-            while j < bytes.len() {
-                match bytes[j] {
-                    92 | 34 | 58 | 32 | 9 | 13 | 10 => j += 1,
-                    _ => break,
-                }
-            }
-
-            let start = j;
-            while j < bytes.len() && bytes[j].is_ascii_digit() {
-                j += 1;
-            }
-
-            if j > start {
-                if let Ok(id) = std::str::from_utf8(&bytes[start..j]) {
-                    if id.len() >= 8 {
-                        return Some(id.to_owned());
-                    }
-                }
-            }
-        }
-        i += 1;
-    }
-
-    None
-}
-
-/// HTTP/HTML resolve room_id (web_rid → internal room_id). Empty enter body ≠ 一定未登录.
-fn resolve_room_http(
-    client: &reqwest::blocking::Client,
-    cookie_header: &str,
-    rid: &str,
-) -> Result<(String, i64, String), String> {
-    let room_page = format!("https://live.douyin.com/{rid}");
-    let mut cookie = cookie_header.to_string();
-
-    // Warm page; merge Set-Cookie ttwid / msToken if present.
-    if let Ok(page) = client
-        .get(&room_page)
-        .header("Cookie", &cookie)
-        .header("Referer", SITE_URL)
-        .header("Accept", "text/html,application/xhtml+xml")
-        .send()
-    {
-        let html = page.text().unwrap_or_default();
-        let scraped = scrape_room_id_from_html(&html);
-        if !scraped.is_empty() {
-            // status unknown from HTML alone
-            return Ok((scraped, 0, cookie));
-        }
-    }
-
-    if !cookie_map(&cookie).contains_key("ttwid") {
-        if let Ok(r0) = client
-            .get(SITE_URL)
-            .header("Cookie", &cookie)
-            .header("User-Agent", CHROME_UA)
-            .send()
-        {
-            // Can't easily read set-cookie jar from reqwest without cookie_store;
-            // page body sometimes embeds ttwid — skip; rely on existing cookie.
-            let _ = r0;
-        }
-    }
-
-    let enter_url = format!(
-        "https://live.douyin.com/webcast/room/web/enter/?aid=6383&app_name=douyin_web&live_id=1&device_platform=web&language=zh-CN&enter_from=web_live&cookie_enabled=true&screen_width=1280&screen_height=800&browser_language=zh-CN&browser_platform=MacIntel&browser_name=Chrome&browser_version=120.0.0.0&web_rid={rid}"
-    );
-    let enter = client
-        .get(&enter_url)
-        .header("Cookie", &cookie)
-        .header("Referer", &room_page)
-        .header("Origin", "https://live.douyin.com")
-        .header("Accept", "application/json, text/plain, */*")
-        .send()
-        .map_err(|e| format!("enter 失败：{e}"))?;
-    let status = enter.status().as_u16();
-    let text = enter.text().unwrap_or_default();
-    let trimmed = text.trim();
-
-    if !trimmed.is_empty() && !trimmed.starts_with('<') {
-        if let Ok(ej) = serde_json::from_str::<serde_json::Value>(trimmed) {
-            let data = ej.get("data").cloned().unwrap_or(serde_json::json!({}));
-            let rooms = data
-                .get("data")
-                .and_then(|x| x.as_array())
-                .cloned()
-                .unwrap_or_default();
-            let room = rooms.first().cloned().unwrap_or(serde_json::json!({}));
-            let room_id = room
-                .get("id_str")
-                .and_then(|x| x.as_str())
-                .or_else(|| data.get("enter_room_id").and_then(|x| x.as_str()))
-                .unwrap_or("")
-                .to_string();
-            let st = room
-                .get("status")
-                .and_then(|x| x.as_i64())
-                .or_else(|| data.get("room_status").and_then(|x| x.as_i64()))
-                .unwrap_or(0);
-            if !room_id.is_empty() {
-                return Ok((room_id, st, cookie));
-            }
-        }
-    }
-
-    // HTML fallback (enter empty/HTML is common for raw HTTP without full browser jar)
-    let page2 = client
-        .get(&room_page)
-        .header("Cookie", &cookie)
-        .header("Referer", SITE_URL)
-        .header("Accept", "text/html,application/xhtml+xml")
-        .send()
-        .map_err(|e| format!("直播间页失败：{e}"))?;
-    let html = page2.text().unwrap_or_default();
-    let scraped = scrape_room_id_from_html(&html);
-    if !scraped.is_empty() {
-        return Ok((scraped, 0, cookie));
-    }
-    Err(format!(
-        "拿不到 room_id（enter HTTP {status}，空/非 JSON）。能看播≠能发公屏：请确认顶栏账号昵称已显示，否则重新扫码"
-    ))
-}
-
-/// HTTP 公屏：保留「GET 拿 CSRF → POST」成功路径；room_id 用缓存加速。
-fn send_chat_http(
-    app: &AppHandle,
-    cookie_header: &str,
-    room_url: &str,
-    content: &str,
-) -> Result<String, String> {
-    let t0 = Instant::now();
-    let rid = room_web_rid(room_url)?;
-    let client = http_client().ok_or_else(|| "HTTP 客户端失败".to_string())?;
-    let room_page = format!("https://live.douyin.com/{rid}");
-    let cookie = cookie_header.to_string();
-
-    let (room_id, st) = if let Some(v) = cached_room_id(&rid) {
-        flow(
-            app,
-            "STEP6_CHAT",
-            "info",
-            format!("room_id 缓存命中 {}ms", t0.elapsed().as_millis()),
-        );
-        v
-    } else if let Ok(v) = resolve_room_id_fast(&client, &cookie, &rid) {
-        flow(
-            app,
-            "STEP6_CHAT",
-            "info",
-            format!("room_id enter {}ms", t0.elapsed().as_millis()),
-        );
-        v
-    } else {
-        let (id, st, _) = resolve_room_http(&client, &cookie, &rid)?;
-        cache_room_id(&rid, &id, st);
-        flow(
-            app,
-            "STEP6_CHAT",
-            "info",
-            format!("room_id HTML {}ms", t0.elapsed().as_millis()),
-        );
-        (id, st)
-    };
-
-    if st == 3 || st == 4 {
-        return Err("直播已结束".into());
-    }
-    if room_id.is_empty() {
-        return Err("拿不到 room_id，请停看后重新进入直播间".into());
-    }
-
-    let cm = cookie_map(&cookie);
-    let ms = cm
-        .get("msToken")
-        .or_else(|| cm.get("mstoken"))
-        .cloned()
-        .unwrap_or_default();
-
-    let mut q = url::form_urlencoded::Serializer::new(String::new());
-    q.append_pair("aid", "6383");
-    q.append_pair("app_name", "douyin_web");
-    q.append_pair("live_id", "1");
-    q.append_pair("device_platform", "web");
-    q.append_pair("language", "zh-CN");
-    q.append_pair("enter_from", "web_live");
-    q.append_pair("cookie_enabled", "true");
-    q.append_pair("screen_width", "1280");
-    q.append_pair("screen_height", "800");
-    q.append_pair("browser_language", "zh-CN");
-    q.append_pair("browser_platform", "MacIntel");
-    q.append_pair("browser_name", "Chrome");
-    q.append_pair("browser_version", "120.0.0.0");
-    q.append_pair("room_id", &room_id);
-    q.append_pair("content", content);
-    if !ms.is_empty() {
-        q.append_pair("msToken", &ms);
-    }
-    let qs = q.finish();
-    let chat_url = format!("https://live.douyin.com/webcast/room/chat/?{qs}");
-
-    let mut csrf_tok = seed_csrf(&cookie);
-    let t_chat = Instant::now();
-
-    let do_get = |csrf_tok: &str| -> Result<(u16, Option<String>, Option<serde_json::Value>), String> {
-        let mut req = client
-            .get(&chat_url)
-            .header("Cookie", &cookie)
-            .header("Referer", &room_page)
-            .header("Origin", "https://live.douyin.com")
-            .header("Accept", "application/json, text/plain, */*");
-        if !csrf_tok.is_empty() {
-            req = req.header("x-secsdk-csrf-token", csrf_tok);
-        }
-        let resp = req.send().map_err(|e| format!("chat GET：{e}"))?;
-        let status = resp.status().as_u16();
-        let ware = parse_ware_csrf(&resp);
-        let body = resp.json::<serde_json::Value>().ok();
-        Ok((status, if ware.is_empty() { None } else { Some(ware) }, body))
-    };
-
-    let do_post = |csrf_tok: &str| -> Result<(u16, Option<String>, Option<serde_json::Value>), String> {
-        let mut req = client
-            .post("https://live.douyin.com/webcast/room/chat/")
-            .header("Cookie", &cookie)
-            .header("Referer", &room_page)
-            .header("Origin", "https://live.douyin.com")
-            .header("Accept", "application/json, text/plain, */*")
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(qs.clone());
-        if !csrf_tok.is_empty() {
-            req = req.header("x-secsdk-csrf-token", csrf_tok);
-        }
-        let resp = req.send().map_err(|e| format!("chat POST：{e}"))?;
-        let status = resp.status().as_u16();
-        let ware = parse_ware_csrf(&resp);
-        let body = resp.json::<serde_json::Value>().ok();
-        Ok((status, if ware.is_empty() { None } else { Some(ware) }, body))
-    };
-
-    // 与能发成功时相同：先 GET（常带 CSRF），不够再 POST
-    let (mut status, ware, mut body) = do_get(&csrf_tok)?;
-    if body.is_none() && matches!(status, 401 | 403) {
-        if let Some(w) = ware {
-            csrf_tok = w;
-            let r = do_get(&csrf_tok)?;
-            status = r.0;
-            body = r.2;
-        }
-    }
-    if body.is_none() {
-        let (st, ware2, b) = do_post(&csrf_tok)?;
-        status = st;
-        body = b;
-        if body.is_none() && matches!(status, 401 | 403) {
-            if let Some(w) = ware2 {
-                csrf_tok = w;
-                let r = do_post(&csrf_tok)?;
-                status = r.0;
-                body = r.2;
-            }
-        }
-    }
-
-    flow(
-        app,
-        "STEP6_CHAT",
-        "info",
-        format!(
-            "chat GET/POST {}ms · 总 {}ms",
-            t_chat.elapsed().as_millis(),
-            t0.elapsed().as_millis()
-        ),
-    );
-
-    let body = body.ok_or_else(|| {
-        format!("公屏接口被拒（HTTP {status}）。能看播≠能发公屏，请看顶栏是否显示账号昵称")
-    })?;
-    let code = body.get("status_code").and_then(|x| x.as_i64()).unwrap_or(-1);
-    let d2 = body.get("data").cloned().unwrap_or(serde_json::json!({}));
-    let msg = d2
-        .get("prompts")
-        .and_then(|x| x.as_str())
-        .or_else(|| d2.get("message").and_then(|x| x.as_str()))
-        .or_else(|| body.get("status_msg").and_then(|x| x.as_str()))
-        .unwrap_or("")
-        .to_string();
-    if code == 0 {
-        return Ok(if msg.is_empty() {
-            format!("已发送：{content}")
-        } else {
-            msg
-        });
-    }
-    if code == 20003 || code == 20001 {
-        return Err(format!("AUTH:{code}:{msg}"));
-    }
-    // 业务文案如 invalid session
-    Err(if msg.is_empty() {
-        format!("status_code={code}")
-    } else {
-        msg
-    })
-}
-
-/// 产品路径：只用盘上扫码 Cookie 走 HTTP 发公屏（不再开房间 WebView）。
-pub fn send_chat_with_cookie(
-    app: &AppHandle,
-    room_url: &str,
-    content: &str,
-) -> Result<(String, &'static str), String> {
-    flow(
-        app,
-        "STEP6_CHAT",
-        "start",
-        format!("发弹幕 len={}", content.trim().chars().count()),
-    );
-    let sess = load_session(app).ok_or_else(|| {
-        flow(app, "STEP6_CHAT", "fail", "无 session");
-        "请先扫码授权（仅首次）".to_string()
-    })?;
-    let (has_sid, _) = interesting_present(&sess.cookie_header);
-    if !has_sid {
-        flow(app, "STEP6_CHAT", "fail", "无 sessionid");
-        return Err("本地无 Cookie，请先扫码授权".into());
-    }
-    let content = content.trim();
-    if content.is_empty() {
-        flow(app, "STEP6_CHAT", "fail", "空内容");
-        return Err("空内容".into());
-    }
-
-    flow(app, "STEP6_CHAT", "info", "试 HTTP cookie=disk");
-    match send_chat_http(app, &sess.cookie_header, room_url, content) {
-        Ok(msg) => {
-            let tip = format!("已发送（HTTP）：{content}");
-            flow(app, "STEP6_CHAT", "ok", format!("via=HTTP/disk | {msg}"));
-            Ok((tip, "http"))
-        }
-        Err(e) => {
-            flow(app, "STEP6_CHAT", "fail", &e);
-            Err(e)
-        }
-    }
-}
+}}
