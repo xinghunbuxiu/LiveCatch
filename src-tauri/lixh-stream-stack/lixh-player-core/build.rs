@@ -52,5 +52,6 @@ fn main() {
             .compile("lixh_surface_windows");
         println!("cargo:rustc-link-lib=d3d11");
         println!("cargo:rustc-link-lib=dxgi");
+        println!("cargo:rustc-link-lib=user32");
     }
 }
