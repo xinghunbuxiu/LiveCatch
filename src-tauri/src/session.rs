@@ -1094,6 +1094,19 @@ fn finish_login_session(app: &AppHandle, win: &WebviewWindow) -> bool {
     }
 }
 
+fn raw_qr_confirmed(win: &WebviewWindow) -> bool {
+    win.cookies()
+        .ok()
+        .unwrap_or_default()
+        .into_iter()
+        .any(|c| c.name() == "lc_qr_confirmed" && c.value() == "1")
+}
+
+fn refresh_me_after_login(app: &AppHandle) {
+    let st = session_status(app);
+    let _ = app.emit("session-updated", &st);
+}
+
 fn stop_login_watch(reason: &str) {
     LOGIN_WATCHING.store(false, Ordering::SeqCst);
     LOGIN_CONFIRMED.store(false, Ordering::SeqCst);
@@ -1797,6 +1810,75 @@ fn inject_saved_cookies(win: &WebviewWindow, entries: &[CookieEntry]) {
         });
         let _ = win.set_cookie(c);
     }
+}
+
+fn room_web_rid(room_url: &str) -> Result<String, String> {
+    let normalized = normalize_room_url(room_url)?;
+    let url = Url::parse(&normalized).map_err(|e| format!("直播间地址无效：{e}"))?;
+    let host = url.host_str().unwrap_or("").to_ascii_lowercase();
+    if host != "live.douyin.com" && !host.ends_with(".live.douyin.com") {
+        return Err("不是抖音直播间地址".into());
+    }
+    let rid = url
+        .path()
+        .trim_matches('/')
+        .split('/')
+        .next()
+        .unwrap_or("")
+        .trim();
+    if rid.is_empty() {
+        return Err("直播间地址缺少 web_rid".into());
+    }
+    if !rid.chars().all(|c| c.is_ascii_digit()) {
+        return Err(format!("直播间 web_rid 无效：{rid}"));
+    }
+    Ok(rid.to_string())
+}
+
+fn resolve_room_id_fast(
+    client: &reqwest::blocking::Client,
+    cookie_header: &str,
+    web_rid: &str,
+) -> Result<(String, i64), String> {
+    if let Some(hit) = cached_room_id(web_rid) {
+        return Ok(hit);
+    }
+    let url = format!(
+        "https://live.douyin.com/webcast/room/web/enter/?aid=6383&app_name=douyin_web&live_id=1&device_platform=web&language=zh-CN&enter_from=web_live&cookie_enabled=true&web_rid={web_rid}"
+    );
+    let mut req = client
+        .get(url)
+        .header("Referer", SITE_URL)
+        .header("Origin", "https://live.douyin.com")
+        .header("Accept", "application/json");
+    if !cookie_header.trim().is_empty() {
+        req = req.header("Cookie", cookie_header);
+    }
+    let resp = req.send().map_err(|e| format!("解析直播间失败：{e}"))?;
+    let body = read_json_response(resp, "room enter")?;
+    let data = body.get("data").cloned().unwrap_or(serde_json::json!({}));
+    let status = data
+        .get("room_status")
+        .and_then(|v| v.as_i64())
+        .or_else(|| data.get("status").and_then(|v| v.as_i64()))
+        .unwrap_or(0);
+    let room = data
+        .get("data")
+        .and_then(|v| v.as_array())
+        .and_then(|a| a.first())
+        .cloned()
+        .unwrap_or(serde_json::json!({}));
+    let room_id = room
+        .get("id_str")
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+        .or_else(|| room.get("id").and_then(|v| v.as_i64()).map(|v| v.to_string()))
+        .unwrap_or_default();
+    if room_id.is_empty() {
+        return Err(format!("未能从直播间响应获取 room_id（web_rid={web_rid}, status={status}）"));
+    }
+    cache_room_id(web_rid, &room_id, status);
+    Ok((room_id, status))
 }
 
 fn normalize_room_url(room_url: &str) -> Result<String, String> {
