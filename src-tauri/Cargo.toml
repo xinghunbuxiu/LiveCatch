@@ -18,6 +18,12 @@ url="2"
 raw-window-handle="0.6"
 cpal = "0.15"
 
+lixh-stream-resolver = { path = "lixh-stream-stack/lixh-stream-resolver" }
+lixh-stream-supervisor = { path = "lixh-stream-stack/lixh-stream-supervisor" }
+lixh-playback-engine = { path = "lixh-stream-stack/lixh-playback-engine" }
+lixh-player-host = { path = "lixh-stream-stack/lixh-player-host" }
+lixh-player-core = { path = "lixh-stream-stack/lixh-player-core" }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSGeometry"] }
@@ -28,12 +34,6 @@ objc2-app-kit = { version = "0.3", features = [
   "NSResponder",
   "NSGraphics",
 ] }
-
-lixh-stream-resolver = { path = "lixh-stream-stack/lixh-stream-resolver" }
-lixh-stream-supervisor = { path = "lixh-stream-stack/lixh-stream-supervisor" }
-lixh-playback-engine = { path = "lixh-stream-stack/lixh-playback-engine" }
-lixh-player-host = { path = "lixh-stream-stack/lixh-player-host" }
-lixh-player-core = { path = "lixh-stream-stack/lixh-player-core" }
 
 [features]
 custom-protocol= ["tauri/custom-protocol"]
