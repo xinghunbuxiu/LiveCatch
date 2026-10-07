@@ -1997,23 +1997,31 @@ fn write_netscape(path: &PathBuf, cookies: &[CookieEntry]) -> Result<(), String>
 }
 
 fn write_verify_readme(dir: &PathBuf) -> Result<(), String> {
-    let text = concat!(
-        "# Douyin session export (LiveCatch Desk)\n",
-        "\n",
-        "Files:\n",
-        "- douyin.json            full session\n",
-        "- cookie_header.txt      Cookie request header value\n",
-        "- cookies.netscape.txt   Netscape cookie jar\n",
-        "\n",
-        "## Verify with LiveCatch\n",
-        "\n",
-        "Cookies are saved automatically after login.\n",
-        "If no session exists before starting a stream, the QR login window is opened.\n",
-        "\n",
-        "## Open-source danmaku clients\n",
-        "\n",
-        "Use cookie_header.txt as the request Cookie value, or import\n",
-        "cookies.netscape.txt when the client supports Netscape cookies.\n"
-    );
+    let lines = [
+        "# Douyin session export (LiveCatch Desk)",
+        "",
+        "Files:",
+        "- douyin.json            full session",
+        "- cookie_header.txt      Cookie request header value",
+        "- cookies.netscape.txt   Netscape cookie jar",
+        "",
+        "## Verify with LiveCatch",
+        "",
+        "Cookies are saved automatically after login.",
+        "If no session exists before starting a stream, the QR login window is opened.",
+        "",
+        "## Open-source danmaku clients",
+        "",
+        "Use cookie_header.txt as the request Cookie value, or import",
+        "cookies.netscape.txt when the client supports Netscape cookies.",
+    ];
+    let mut text = String::new();
+    for (index, line) in lines.iter().enumerate() {
+        if index > 0 {
+            text.push(char::from(10));
+        }
+        text.push_str(line);
+    }
+    text.push(char::from(10));
     fs::write(dir.join("README.txt"), text).map_err(|e| format!("session README: {e}"))
-}
+}}
