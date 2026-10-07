@@ -8,6 +8,7 @@ use lixh_player_core::{LixhNativeFrame, LixhStats, LixhCallbacks};
 use lixh_player_core::surface::{NativeSurface, SurfaceRect};
 use std::ffi::c_void;
 use std::sync::{Mutex, OnceLock};
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use lixh_player_host::{CorePlayerAdapter, PlayerHost};
 use lixh_stream_resolver::{ResolvedStream, StreamCandidate};
@@ -47,9 +48,10 @@ fn audio_slot() -> &'static Mutex<AudioState> {
 
 fn start_audio_output() {
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-    static STREAM: OnceLock<Mutex<Option<cpal::Stream>>> = OnceLock::new();
-    let slot=STREAM.get_or_init(|| Mutex::new(None));
-    if slot.lock().map(|g|g.is_some()).unwrap_or(false) { return; }
+    thread_local! {
+        static STREAM: RefCell<Option<cpal::Stream>> = const { RefCell::new(None) };
+    }
+    if STREAM.with(|slot| slot.borrow().is_some()) { return; }
     let host=cpal::default_host();
     let Some(device)=host.default_output_device() else { return; };
     let Ok(supported)=device.default_output_config() else { return; };
@@ -75,7 +77,12 @@ fn start_audio_output() {
         }, |_e| {}, None),
         _ => return,
     };
-    if let Ok(stream)=stream { let _=stream.play(); if let Ok(mut g)=slot.lock(){*g=Some(stream);} }
+    if let Ok(stream)=stream {
+        let _ = stream.play();
+        STREAM.with(|slot| {
+            *slot.borrow_mut() = Some(stream);
+        });
+    }
 }
 
 fn push_audio_resampled(src:&[f32], src_rate:u32, src_channels:usize) {
