@@ -290,7 +290,7 @@ const WEBVIEW_AUTH_PROBE_JS: &str = r###"
     });
   }
 })();
-"#;
+"###;
 
 fn parse_web_auth_title(title: &str) -> Option<WebAuthProbe> {
     let t = title.trim();
@@ -398,7 +398,7 @@ fn clear_douyin_cookies(win: &WebviewWindow) {
     }
     try { localStorage.clear(); sessionStorage.clear(); } catch (e) {}
   } catch (e) {}
-})()"#,
+})()"###,
     );
 }
 
@@ -1994,7 +1994,9 @@ fn write_netscape(path: &PathBuf, cookies: &[CookieEntry]) -> Result<(), String>
     }
 
     fs::write(path, out).map_err(|e| format!("netscape: {e}"))
-}fn write_verify_readme(dir: &PathBuf) -> Result<(), String> {
+}
+
+fn write_verify_readme(dir: &PathBuf) -> Result<(), String> {
     let text = concat!(
         "# Douyin session export (LiveCatch Desk)\n",
         "\n",
@@ -2014,4 +2016,4 @@ fn write_netscape(path: &PathBuf, cookies: &[CookieEntry]) -> Result<(), String>
         "cookies.netscape.txt when the client supports Netscape cookies.\n"
     );
     fs::write(dir.join("README.txt"), text).map_err(|e| format!("session README: {e}"))
-}}
+}
