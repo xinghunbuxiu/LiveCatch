@@ -1995,4 +1995,4 @@ fn write_verify_readme(dir: &PathBuf) -> Result<(), String> {
     }
     text.push(char::from(10));
     fs::write(dir.join("README.txt"), text).map_err(|e| format!("session README: {e}"))
-}}
+}
