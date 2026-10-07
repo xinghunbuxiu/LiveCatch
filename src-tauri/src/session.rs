@@ -997,50 +997,20 @@ const OPEN_LOGIN_SCRIPT: &str = r#"
       this.__lcUrl = url || '';
       return _open.apply(this, arguments);
     };
-    XMLHttpRequest.prototype.send = function () {|| {
-                let _ = w.close();
-            }
+    XMLHttpRequest.prototype.send = function () {
+      try {
+        this.addEventListener('load', function () {
+          try {
+            handle(this.__lcUrl || '', this.responseText || '');
+          } catch (e) {}
         });
-        if let Some(p) = probe {
-            if p.ok() || !p.nickname.is_empty() || !p.uid.is_empty() {
-                match persist_cookies_with_account(
-                    &app2,
-                    cookies,
-                    p.me_ok,
-                    &p.nickname,
-                    &p.uid,
-                    &p.display_id,
-                ) {
-                    Ok(st) => {
-                        let _ = app2.emit("session-updated", &st);
-                        flow(
-                            &app2,
-                            "STEP4_ME",
-                            "ok",
-                            format!(
-                                "WebView 昵称={} uid={} me_ok={}",
-                                st.account_nickname, st.account_uid, p.me_ok
-                            ),
-                        );
-                        return;
-                    }
-                    Err(e) => flow(&app2, "STEP4_ME", "fail", format!("WebView 写盘失败: {e}")),
-                }
-            } else {
-                flow(
-                    &app2,
-                    "STEP4_ME",
-                    "warn",
-                    format!("WebView 探测无账号 hint={}", p.auth_hint),
-                );
-            }
-        } else {
-            flow(&app2, "STEP4_ME", "warn", "WebView 探测超时，进房时再试");
-        }
-    });
-}
+      } catch (e) {}
+      return _send.apply(this, arguments);
+    };
+  } catch (e) {}
+})();
+"#;
 
-/// STEP2→3：主线程读 Cookie → 落盘 → 关窗；成功后再 STEP4。
 fn finish_login_session(app: &AppHandle, win: &WebviewWindow) -> bool {
     if LOGIN_PURGING.load(Ordering::SeqCst) {
         return false;
