@@ -109,7 +109,6 @@ fn web_rid_from_url(room:&str)->Option<String>{
 /// Douyin room status via webcast enter: 2=living, 3/4=ended.
 fn probe_room_status(app:&tauri::AppHandle,room:&str)->Option<i64>{
     let rid=web_rid_from_url(room)?;
-    let cookie=session::load_session(app).map(|s|s.cookie_header).unwrap_or_default();
     let client=reqwest::blocking::Client::builder().timeout(Duration::from_secs(8)).build().ok()?;
     let enter=format!(
         "https://live.douyin.com/webcast/room/web/enter/?aid=6383&app_name=douyin_web&live_id=1&device_platform=web&language=zh-CN&enter_from=web_live&cookie_enabled=true&web_rid={rid}"
@@ -117,7 +116,6 @@ fn probe_room_status(app:&tauri::AppHandle,room:&str)->Option<i64>{
     let mut req=client.get(&enter)
         .header("User-Agent","Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         .header("Referer","https://live.douyin.com/");
-    if !cookie.is_empty(){req=req.header("Cookie",&cookie);}
     let body:serde_json::Value=serde_json::from_str(&req.send().ok()?.text().ok()?).ok()?;
     let data=body.get("data")?;
     let rooms=data.get("data").and_then(|x|x.as_array());
@@ -133,12 +131,10 @@ fn classify_no_stream(app:&tauri::AppHandle,room:&str)->String{
         Some(0)=>{
             // Ambiguous: scrape page text as fallback
             if let Some(rid)=web_rid_from_url(room){
-                let cookie=session::load_session(app).map(|s|s.cookie_header).unwrap_or_default();
-                if let Ok(client)=reqwest::blocking::Client::builder().timeout(Duration::from_secs(6)).build(){
+                            if let Ok(client)=reqwest::blocking::Client::builder().timeout(Duration::from_secs(6)).build(){
                     let mut req=client.get(format!("https://live.douyin.com/{rid}"))
                         .header("User-Agent","Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
-                    if !cookie.is_empty(){req=req.header("Cookie",&cookie);}
-                    if let Ok(resp)=req.send(){
+                                    if let Ok(resp)=req.send(){
                         if let Ok(html)=resp.text(){
                             if html.contains("直播已结束"){return "直播已结束".into();}
                             if html.contains("页面不存在")||html.contains("链接错误")||html.contains("没有找到相关内容"){
@@ -155,8 +151,7 @@ fn classify_no_stream(app:&tauri::AppHandle,room:&str)->String{
 }
 fn is_ended_err(e:&str)->bool{e.contains("直播已结束")||e.contains("无效直播间")}
 fn resolve(app:&tauri::AppHandle,room:&str)->Result<lixh_stream_resolver::ResolvedStream,String>{
-    let cookies=session::load_session(app).map(|s|s.cookie_header);
-    tauri::async_runtime::block_on(lixh_stream_resolver::resolve(room, cookies.as_deref(), None))
+    tauri::async_runtime::block_on(lixh_stream_resolver::resolve(room, None, None))
         .map_err(|e| {
             let raw=e.to_string();
             if raw.is_empty() || raw.contains("no stream") || raw.contains("empty") || raw.contains("extract") {
@@ -791,4 +786,4 @@ fn bind_douyin_room(app:tauri::AppHandle,room_url:String)->Result<(),String>{
     }
     Ok(Q1Result{request_id:id,status:"queued".into(),transport:"queue".into(),send_ms:0,message:"取消订阅已入队".into()})
 }
-fn main(){tauri::Builder::default().manage(AppState(Arc::new(Mutex::new(RuntimeState{room_url:None,last_stream_url:None,q1_last_ms:None,q1_tx:None,q1_queued:0,q1_queued_ids:HashSet::new(),q1_cancelled:HashSet::new(),q1_inflight:false,q1_active:None,q1_history:VecDeque::new(),q1_adapter_healthy:false,q1_adapter_pid:None,q1_adapter_restarts:0,live_tx:None,live_seq:0,live_generation:0,live_active:None,live_retry:0,playback:Arc::new(Mutex::new(None))})))).plugin(tauri_plugin_global_shortcut::Builder::new().build()).invoke_handler(tauri::generate_handler![start_live,stop_player,player_alive,current_room,clear_room,send_q1,send_text,cancel_q1,q1_status,q1_products,q1_set_product,tool_status,environment,app_version,player_backend,player_ffmpeg_status,player_embed_tick,dock_native_player,open_douyin_login,save_douyin_session,douyin_session_status,verify_douyin_session,clear_douyin_session,bind_douyin_room,subscribe_danmaku,unsubscribe_danmaku]).run(tauri::generate_context!()).expect("error while running application");}
+fn main(){tauri::Builder::default().manage(AppState(Arc::new(Mutex::new(RuntimeState{room_url:None,last_stream_url:None,q1_last_ms:None,q1_tx:None,q1_queued:0,q1_queued_ids:HashSet::new(),q1_cancelled:HashSet::new(),q1_inflight:false,q1_active:None,q1_history:VecDeque::new(),q1_adapter_healthy:false,q1_adapter_pid:None,q1_adapter_restarts:0,live_tx:None,live_seq:0,live_generation:0,live_active:None,live_retry:0,playback:Arc::new(Mutex::new(None))})))).plugin(tauri_plugin_global_shortcut::Builder::new().build()).invoke_handler(tauri::generate_handler![start_live,stop_player,player_alive,current_room,clear_room,send_q1,send_text,cancel_q1,q1_status,q1_products,q1_set_product,tool_status,environment,app_version,player_backend,player_ffmpeg_status,player_embed_tick,dock_native_player,]).run(tauri::generate_context!()).expect("error while running application");}
