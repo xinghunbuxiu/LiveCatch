@@ -27,7 +27,7 @@ impl StreamSupervisor{
   if let Some(current)=self.current{if !self.failed_candidates.contains(&current){self.failed_candidates.push(current)}}
   let next=self.candidates.iter().enumerate().find(|(i,c)|Some(*i)!=self.current&&!c.audio_only&&!self.failed_candidates.contains(i)).map(|(i,_)|i);
   match next{
-   Some(index)=>SupervisorAction::Switch{index,reason:reason.into()},
+   Some(index)=>{self.current=Some(index);self.last_progress_ms=None;self.last_progress_wall_ms=None;self.last_observe_ms=None;self.consecutive_stalls=0;SupervisorAction::Switch{index,reason:reason.into()}}
    None=>SupervisorAction::ReResolve{reason:reason.into()},
   }
  }
