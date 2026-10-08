@@ -5,7 +5,7 @@ use std::process::Command;
 fn main() {
     println!("cargo:rerun-if-env-changed=LIXH_FFMPEG_DIR");
 
-    if env::var_os("CARGO_CFG_TARGET_OS").as_deref() != Some("macos".as_ref()) {
+    if env::var("CARGO_CFG_TARGET_OS").ok().as_deref() != Some("macos") {
         return;
     }
 
