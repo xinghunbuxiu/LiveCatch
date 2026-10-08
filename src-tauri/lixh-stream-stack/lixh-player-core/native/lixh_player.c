@@ -141,8 +141,8 @@ static int open_input(LixhPlayer *p) {
     AVDictionary *opts = NULL;
     av_dict_set(&opts, "fflags", "nobuffer+discardcorrupt", 0);
     av_dict_set(&opts, "flags", "low_delay", 0);
-    av_dict_set(&opts, "probesize", "65536", 0);
-    av_dict_set(&opts, "analyzeduration", "200000", 0);
+    av_dict_set(&opts, "probesize", "32768", 0);
+    av_dict_set(&opts, "analyzeduration", "50000", 0);
     av_dict_set(&opts, "rw_timeout", "3000000", 0);
     av_dict_set(&opts, "reconnect", "1", 0);
     av_dict_set(&opts, "reconnect_streamed", "1", 0);
@@ -274,8 +274,8 @@ void *lixh_player_create(const LixhCallbacks *cb) {
     atomic_init(&p->first_pts_ms, AV_NOPTS_VALUE);
     atomic_init(&p->last_video_pts_ms, AV_NOPTS_VALUE);
     atomic_init(&p->last_audio_pts_ms, AV_NOPTS_VALUE);
-    p->target_latency_ms = 650;
-    p->max_latency_ms = 1400;
+    p->target_latency_ms = 400;
+    p->max_latency_ms = 900;
     return p;
 }
 
@@ -304,9 +304,9 @@ int lixh_player_open(void *opaque, const char *url) {
     atomic_store_explicit(&p->first_pts_ms, AV_NOPTS_VALUE, memory_order_release);
     atomic_store_explicit(&p->last_video_pts_ms, AV_NOPTS_VALUE, memory_order_release);
     atomic_store_explicit(&p->last_audio_pts_ms, AV_NOPTS_VALUE, memory_order_release);
-    atomic_store_explicit(&p->base_wall_ms, now_ms(), memory_order_release);
     int rc = open_input(p);
     if (rc < 0) { atomic_store_explicit(&p->state, LIXH_STATE_ERROR, memory_order_release); emit(p, LIXH_EVT_ERROR, rc, av_err2str(rc)); free_player_media(p); }
+    atomic_store_explicit(&p->base_wall_ms, now_ms(), memory_order_release);
     return rc;
 }
 
