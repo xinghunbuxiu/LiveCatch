@@ -1,5 +1,6 @@
 use std::env;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 fn main() {
     println!("cargo:rerun-if-changed=native/lixh_player.c");
@@ -19,7 +20,21 @@ fn main() {
     if let Ok(root) = env::var("LIXH_FFMPEG_DIR") {
         let root = PathBuf::from(root);
         b.include(root.join("include"));
-        println!("cargo:rustc-link-search=native={}", root.join("lib").display());
+        let lib_dir = root.join("lib");
+        println!("cargo:rustc-link-search=native={}", lib_dir.display());
+
+        if cfg!(target_os = "macos") {
+            let normalizer = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../scripts/normalize-ffmpeg-macos.sh");
+            let status = Command::new("bash")
+                .arg(&normalizer)
+                .arg(&root)
+                .status()
+                .expect("failed to run FFmpeg macOS install-name normalizer");
+            assert!(status.success(), "FFmpeg macOS install-name normalization failed");
+            println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_dir.display());
+        }
+
         for lib in ["avformat", "avcodec", "avutil", "swresample", "swscale"] {
             println!("cargo:rustc-link-lib=dylib={lib}");
         }
