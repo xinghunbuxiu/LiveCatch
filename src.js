@@ -58,7 +58,6 @@ async function start(){
   if(!state.roomUrl)return alert('请输入直播间地址');
   if(state.busy)return;
   // 看播不强制登录；登录仅用于发弹幕
-  state.pendingStartAfterLogin=false;
   destroyEmbedPlayer();
   stopDockLoop();
   state.busy=true;state.playing=false;state.liveTaskId=null;state.liveGeneration=0;state.livePhase='starting';state.health='任务提交中';state.candidates=[];state.playerError='';state.streamUrl='';state.videoPortrait=true;state.muted=true;addEvent('LIVE','starting','提交 FFmpeg 同窗内嵌');
@@ -67,7 +66,6 @@ async function start(){
   // 先把监视器洞坐标写入后端，FFmpeg 洞在开播前就位
   try{
     const topMin=56;
-    const danmaku=0;
     const hole=document.querySelector('.screen')||document.querySelector('.stage-main');
     const stage=document.querySelector('.stage');
     if(hole && stage){
@@ -89,7 +87,6 @@ async function start(){
     const r=await invoke('start_live',{roomUrl:state.roomUrl});
     state.liveTaskId=r.task_id;state.liveGeneration=generationFromResult(r);state.livePhase='queued';state.health='任务已入队';
     addEvent('LIVE','queued',`task=${r.task_id} generation=${state.liveGeneration}`);
-    // 已登录时后端 start_live 会并行进房绑定；标记避免 session-updated 再绑一次
   }catch(e){
     state.livePhase='error';state.health=String(e);addEvent('LIVE','error',String(e),'err');alert('启动失败：'+e);
   }finally{state.busy=false;render();}
