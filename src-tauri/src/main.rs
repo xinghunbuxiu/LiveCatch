@@ -292,30 +292,6 @@ fn ensure_live_worker(state:&State<AppState>)->mpsc::SyncSender<LiveJob>{let mut
 #[tauri::command]
 fn start_live(app:tauri::AppHandle,room_url:String,state:State<AppState>)->Result<StartResult,String>{
     let room=room_url.trim().to_string();if room.is_empty(){return Err("请输入直播间地址".into())}
-    // 播放不依赖登录；仅在已登录时后台暖 Cookie，便于之后发公屏
-    let st=session::session_status(&app);
-    if st.has_sessionid{
-        let app_bg=app.clone();
-        let room_bg=room.clone();
-        let _=app.emit("session-bind",serde_json::json!({"status":"pending","message":"后台绑定账号（不影响播放）…"}));
-        thread::spawn(move||{
-            match session::bind_session_to_room(&app_bg,&room_bg){
-                Ok(st)=>{
-                    let who=if !st.account_nickname.is_empty(){format!(" · {}",st.account_nickname)}else{String::new()};
-                    let _=app_bg.emit("session-bind",serde_json::json!({
-                        "status":"ok",
-                        "message":format!("账号已绑定{who}，可发公屏")
-                    }));
-                }
-                Err(e)=>{
-                    let _=app_bg.emit("session-bind",serde_json::json!({
-                        "status":"failed",
-                        "message":format!("账号绑定跳过：{e}（仍可看播）")
-                    }));
-                }
-            }
-        });
-    }
     let (id,generation)={
         let mut g=state.0.lock().unwrap();
         g.live_seq+=1;
@@ -334,7 +310,6 @@ fn start_live(app:tauri::AppHandle,room_url:String,state:State<AppState>)->Resul
 #[tauri::command]
 fn stop_player(app:tauri::AppHandle,state:State<AppState>)->bool{
     let stopped=stop_native(&state.0);
-    session::leave_room(&app);
     let mut g=state.0.lock().unwrap();
     g.live_generation=g.live_generation.saturating_add(1);
     g.live_active=None;
@@ -348,7 +323,6 @@ fn player_alive(state:State<AppState>)->bool{ let g=state.0.lock().unwrap(); let
 #[tauri::command]fn clear_room(app:tauri::AppHandle,state:State<AppState>){
     let _=stop_native(&state.0);
     stop_native(&state.0);
-    session::leave_room(&app);
     let mut g=state.0.lock().unwrap();
     g.live_generation=g.live_generation.saturating_add(1);
     g.live_active=None;
@@ -670,42 +644,6 @@ if id.starts_with("dm-sub-") && (status=="failed"||status=="error") && msg.conta
 }
 }});g.q1_tx=Some(tx.clone());tx}
 #[tauri::command]fn send_q1(app:tauri::AppHandle,room_url:String,code:String,name:String,qty:i32,request_id:Option<String>,state:State<AppState>)->Result<Q1Result,String>{if qty<=0{return Err("数量必须大于 0".into())}if room_url.trim().is_empty(){return Err("请先连接直播间".into())}if adapter_path(Some(&app),&detect_platform(&room_url)).is_none(){return Err("未安装 Q1 Adapter，请先配置 Adapter".into())}let id=request_id.filter(|x|!x.trim().is_empty()).unwrap_or_else(||format!("q1-{}-{}",now_ms(),Q1_REQUEST_SEQ.fetch_add(1,Ordering::Relaxed)));let tx=ensure_worker(app.clone(),&state);let client_ts_ms=now_ms();{let mut g=state.0.lock().unwrap();if g.q1_history.iter().any(|r|r.request_id==id)||g.q1_active.as_deref()==Some(&id)||g.q1_queued_ids.contains(&id){return Ok(Q1Result{request_id:id,status:"duplicate".into(),transport:"dedupe".into(),send_ms:0,message:"request_id 已存在或正在排队".into()})}if g.q1_queued>=QCAP{return Err("Q1 队列已满（64）".into())}g.q1_queued+=1;g.q1_queued_ids.insert(id.clone());}let payload=serde_json::json!({"action":"send_product","platform":detect_platform(&room_url),"room_url":room_url,"code":code,"name":name,"qty":qty,"text":"1","request_id":id,"client_ts_ms":client_ts_ms});if let Err(e)=tx.try_send(Q1Job{id:id.clone(),payload,reply:app,client_ts_ms}){let mut g=state.0.lock().unwrap();g.q1_queued=g.q1_queued.saturating_sub(1);g.q1_queued_ids.remove(&id);return Err(format!("Q1 入队失败：{e}"))}Ok(Q1Result{request_id:id,status:"queued".into(),transport:"queue".into(),send_ms:0,message:"Q1 已入队".into()})}
-#[tauri::command]fn send_text(app:tauri::AppHandle,room_url:String,text:String,request_id:Option<String>,_state:State<AppState>)->Result<Q1Result,String>{
-    let text=text.trim().to_string();
-    if text.is_empty(){return Err("数字不能为空".into())}
-    if room_url.trim().is_empty(){return Err("请先连接直播间".into())}
-    let st=session::session_status(&app);
-    // 有 Cookie 即可尝试；真正登录态在房间 WebView 内校验（导出 Cookie 的外部 HTTP 常误报过期）
-    if !st.has_sessionid{
-        let _=session::open_login(&app);
-        return Err("发弹幕需先登录：已打开扫码窗（看播无需登录）".into());
-    }
-    let id=request_id.filter(|x|!x.trim().is_empty()).unwrap_or_else(||format!("txt-{}-{}",now_ms(),Q1_REQUEST_SEQ.fetch_add(1,Ordering::Relaxed)));
-    let app2=app.clone();
-    let room=room_url.clone();
-    let text2=text.clone();
-    let id2=id.clone();
-    thread::spawn(move||{
-        let t0=Instant::now();
-        match session::send_chat_with_cookie(&app2,&room,&text2){
-            Ok((msg, via))=>{
-                let ms=t0.elapsed().as_millis();
-                let transport=if via=="webview"{"webview-http"}else{"http-chat"};
-                let _=app2.emit("q1-result",serde_json::json!({
-                    "request_id":id2,"status":"sent","message":msg,"send_ms":ms,
-                    "transport":transport,"code":text2,"name":"公屏数字","qty":1
-                }));
-            }
-            Err(e)=>{
-                let ms=t0.elapsed().as_millis();
-                let _=app2.emit("q1-result",serde_json::json!({
-                    "request_id":id2,"status":"failed","message":e,"send_ms":ms,"transport":"http-chat"
-                }));
-            }
-        }
-    });
-    Ok(Q1Result{request_id:id,status:"queued".into(),transport:"http-chat".into(),send_ms:0,message:format!("正在 HTTP 发送「{text}」…")})
-}
 #[tauri::command]fn cancel_q1(request_id:String,state:State<AppState>)->Result<bool,String>{let mut g=state.0.lock().unwrap();if g.q1_active.as_deref()==Some(&request_id){return Ok(false)}if g.q1_history.iter().any(|r|r.request_id==request_id){return Ok(false)}if g.q1_queued_ids.contains(&request_id){g.q1_cancelled.insert(request_id);return Ok(true)}Ok(false)}
 fn q1_products_file(app:Option<&tauri::AppHandle>,platform:&str)->Option<PathBuf>{q1_plugin(app,platform).map(|x|PathBuf::from(x.manifest).parent().unwrap_or(std::path::Path::new(".")).join("products.json"))}
 #[tauri::command]fn q1_products(app:tauri::AppHandle,room_url:Option<String>)->Result<Vec<Q1ProductMap>,String>{let platform=room_url.as_deref().map(detect_platform).unwrap_or_else(||"douyin".into());let path=q1_products_file(Some(&app),&platform).ok_or("未找到 Q1 插件")?;let raw=fs::read_to_string(&path).map_err(|e|format!("读取商品映射失败：{e}"))?;let v:serde_json::Value=serde_json::from_str(&raw).map_err(|e|format!("商品映射 JSON 无效：{e}"))?;let mut out=vec![];if let Some(o)=v.as_object(){for (code,id) in o{if let Some(n)=id.as_i64(){out.push(Q1ProductMap{code:code.clone(),product_id:n})}}}out.sort_by(|a,b|a.code.cmp(&b.code));Ok(out)}
@@ -725,39 +663,6 @@ fn tool_info(app:&tauri::AppHandle,n:&str)->ToolInfo{
 }
 #[tauri::command]fn environment()->String{if cfg!(target_os="macos"){"macOS".into()}else if cfg!(windows){"Windows".into()}else{"Other".into()}}
 #[tauri::command]fn app_version()->String{"0.47.8".into()}
-#[tauri::command]fn open_douyin_login(app:tauri::AppHandle)->Result<(),String>{session::open_login(&app)}
-#[tauri::command]fn save_douyin_session(app:tauri::AppHandle)->Result<session::SessionStatus,String>{session::save_from_webview(&app)}
-#[tauri::command]fn douyin_session_status(app:tauri::AppHandle)->session::SessionStatus{session::session_status(&app)}
-#[tauri::command]fn verify_douyin_session(app:tauri::AppHandle)->Result<session::VerifyResult,String>{session::verify_session(&app)}
-#[tauri::command]fn clear_douyin_session(app:tauri::AppHandle)->Result<session::SessionStatus,String>{session::clear_session(&app)}
-/// 登录后进入直播间（隐藏 WebView），暖 Cookie / room_id，避免发弹幕异常。不阻塞播放。
-#[tauri::command]
-fn bind_douyin_room(app:tauri::AppHandle,room_url:String)->Result<(),String>{
-    let room=room_url.trim().to_string();
-    if room.is_empty(){return Err("无直播间地址".into())}
-    let st=session::session_status(&app);
-    if !st.has_sessionid{return Err("请先登录后再绑定直播间".into())}
-    let app_bg=app.clone();
-    let _=app.emit("session-bind",serde_json::json!({"status":"pending","message":"登录后进房绑定中…"}));
-    thread::spawn(move||{
-        match session::bind_session_to_room(&app_bg,&room){
-            Ok(st)=>{
-                let who=if !st.account_nickname.is_empty(){format!(" · {}",st.account_nickname)}else{String::new()};
-                let _=app_bg.emit("session-bind",serde_json::json!({
-                    "status":"ok",
-                    "message":format!("已进入直播间{who}，可发公屏")
-                }));
-            }
-            Err(e)=>{
-                let _=app_bg.emit("session-bind",serde_json::json!({
-                    "status":"failed",
-                    "message":format!("进房绑定失败：{e}")
-                }));
-            }
-        }
-    });
-    Ok(())
-}
 #[tauri::command]fn subscribe_danmaku(app:tauri::AppHandle,room_url:String,state:State<AppState>)->Result<Q1Result,String>{
     let room=room_url.trim().to_string();
     if room.is_empty(){return Err("请先连接直播间".into())}
