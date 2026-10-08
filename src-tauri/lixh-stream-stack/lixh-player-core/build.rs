@@ -49,11 +49,15 @@ fn main() {
     b.compile("lixh_player");
 
     if cfg!(target_os = "macos") {
-        cc::Build::new()
-            .file("native/lixh_surface_macos.m")
+        let mut surf = cc::Build::new();
+        surf.file("native/lixh_surface_macos.m")
             .include("include")
-            .flag_if_supported("-fobjc-arc")
-            .compile("lixh_surface_macos");
+            .flag_if_supported("-fobjc-arc");
+        // Software-frame upload needs AVFrame layout (libavutil/frame.h).
+        if let Ok(root) = env::var("LIXH_FFMPEG_DIR") {
+            surf.include(PathBuf::from(root).join("include"));
+        }
+        surf.compile("lixh_surface_macos");
         for fw in ["Cocoa", "AVFoundation", "CoreMedia", "CoreVideo"] {
             println!("cargo:rustc-link-lib=framework={fw}");
         }

@@ -91,12 +91,19 @@ static int setup_hw(LixhPlayer *p) {
     p->hw_pix_fmt = AV_PIX_FMT_D3D11;
     p->hw_kind = LIXH_VIDEO_D3D11;
 #elif defined(LIXH_MACOS)
-    enum AVHWDeviceType type = AV_HWDEVICE_TYPE_VIDEOTOOLBOX;
-    p->hw_pix_fmt = AV_PIX_FMT_VIDEOTOOLBOX;
-    p->hw_kind = LIXH_VIDEO_VIDEOTOOLBOX;
+    /* VideoToolbox disabled: douyin live H264 streams fail VT decode
+       (-12909 on every frame). Force software decode; 720p/1080p is
+       trivial for modern CPUs and still presents via the native layer. */
+    p->hw_device = NULL;
+    p->hw_kind = LIXH_VIDEO_SOFTWARE;
+    return 0;
 #else
     return AVERROR(ENOSYS);
 #endif
+#if defined(LIXH_MACOS)
+    /* VideoToolbox disabled (see above): no device to create. */
+    return 0;
+#else
     int rc = av_hwdevice_ctx_create(&p->hw_device, type, NULL, NULL, 0);
     if (rc < 0) {
         p->hw_device = NULL;
@@ -104,6 +111,7 @@ static int setup_hw(LixhPlayer *p) {
         return rc;
     }
     return 0;
+#endif
 }
 
 static int open_decoder(LixhPlayer *p, AVStream *st, int video) {
@@ -121,6 +129,7 @@ static int open_decoder(LixhPlayer *p, AVStream *st, int video) {
         if (p->hw_device) {
             ctx->get_format = choose_hw_format;
             ctx->hw_device_ctx = av_buffer_ref(p->hw_device);
+            ctx->thread_count = 1;
         }
         rc = avcodec_open2(ctx, codec, NULL);
         if (rc < 0 && p->hw_device) {
@@ -140,11 +149,10 @@ static int open_decoder(LixhPlayer *p, AVStream *st, int video) {
 static int open_input(LixhPlayer *p) {
     AVDictionary *opts = NULL;
     av_dict_set(&opts, "fflags", "nobuffer+discardcorrupt+flush_packets", 0);
-    av_dict_set(&opts, "avioflags", "direct", 0);
     av_dict_set(&opts, "max_delay", "0", 0);
     av_dict_set(&opts, "flags", "low_delay", 0);
-    av_dict_set(&opts, "probesize", "32768", 0);
-    av_dict_set(&opts, "analyzeduration", "50000", 0);
+    av_dict_set(&opts, "probesize", "1048576", 0);
+    av_dict_set(&opts, "analyzeduration", "2000000", 0);
     av_dict_set(&opts, "rw_timeout", "3000000", 0);
     av_dict_set(&opts, "reconnect", "1", 0);
     av_dict_set(&opts, "reconnect_streamed", "1", 0);
