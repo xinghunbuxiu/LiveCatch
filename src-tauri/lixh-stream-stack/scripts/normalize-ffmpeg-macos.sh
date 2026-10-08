@@ -15,7 +15,10 @@ command -v otool >/dev/null
 # The published SDK may contain dylibs whose install names still point at the
 # build machine used by LiveCatchFfmpeg. Normalize those names before linking
 # so LiveCatch remains relocatable and CI runners never depend on that path.
-mapfile -d '' LIBS < <(find "$LIB" -type f -name '*.dylib' -print0)
+LIBS=()
+while IFS= read -r dylib; do
+  LIBS+=( "$dylib" )
+done < <(find "$LIB" -type f -name '*.dylib' -print)
 
 for dylib in "${LIBS[@]}"; do
   install_name_tool -id "@rpath/$(basename "$dylib")" "$dylib"
