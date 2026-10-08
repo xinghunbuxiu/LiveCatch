@@ -139,7 +139,9 @@ static int open_decoder(LixhPlayer *p, AVStream *st, int video) {
 
 static int open_input(LixhPlayer *p) {
     AVDictionary *opts = NULL;
-    av_dict_set(&opts, "fflags", "nobuffer+discardcorrupt", 0);
+    av_dict_set(&opts, "fflags", "nobuffer+discardcorrupt+flush_packets", 0);
+    av_dict_set(&opts, "avioflags", "direct", 0);
+    av_dict_set(&opts, "max_delay", "0", 0);
     av_dict_set(&opts, "flags", "low_delay", 0);
     av_dict_set(&opts, "probesize", "32768", 0);
     av_dict_set(&opts, "analyzeduration", "50000", 0);
@@ -305,9 +307,9 @@ int lixh_player_open(void *opaque, const char *url) {
     atomic_store_explicit(&p->last_video_pts_ms, AV_NOPTS_VALUE, memory_order_release);
     atomic_store_explicit(&p->last_audio_pts_ms, AV_NOPTS_VALUE, memory_order_release);
     int rc = open_input(p);
-    if (rc < 0) { atomic_store_explicit(&p->state, LIXH_STATE_ERROR, memory_order_release); emit(p, LIXH_EVT_ERROR, rc, av_err2str(rc)); free_player_media(p); }
+    if (rc < 0) { atomic_store_explicit(&p->state, LIXH_STATE_ERROR, memory_order_release); emit(p, LIXH_EVT_ERROR, rc, av_err2str(rc)); free_player_media(p); return rc; }
     atomic_store_explicit(&p->base_wall_ms, now_ms(), memory_order_release);
-    return rc;
+    return 0;
 }
 
 int lixh_player_play(void *opaque) {
