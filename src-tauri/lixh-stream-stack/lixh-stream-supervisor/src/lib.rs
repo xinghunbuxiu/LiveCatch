@@ -8,7 +8,7 @@ pub enum SupervisorAction{Keep,Switch{index:usize,reason:String},ReResolve{reaso
 #[derive(Debug,Clone)]
 pub struct StreamSupervisor{candidates:Vec<StreamCandidate>,current:Option<usize>,last_progress_ms:Option<i64>,last_progress_wall_ms:Option<i64>,last_observe_ms:Option<i64>,failed_candidates:Vec<usize>,consecutive_stalls:u32,failures:u32,stall_threshold_ms:i64,hard_stall_ms:i64,max_stalls:u32,max_failures:u32}
 impl StreamSupervisor{
- pub fn new(candidates:Vec<StreamCandidate>)->Self{Self{candidates,current:None,last_progress_ms:None,last_progress_wall_ms:None,last_observe_ms:None,failed_candidates:Vec::new(),consecutive_stalls:0,failures:0,stall_threshold_ms:1200,hard_stall_ms:3000,max_stalls:3,max_failures:2}}
+ pub fn new(candidates:Vec<StreamCandidate>)->Self{Self{candidates,current:None,last_progress_ms:None,last_progress_wall_ms:None,last_observe_ms:None,failed_candidates:Vec::new(),consecutive_stalls:0,failures:0,stall_threshold_ms:1200,hard_stall_ms:3000,max_stalls:2,max_failures:2}}
  pub fn set_current(&mut self,index:usize){self.current=Some(index);self.last_progress_ms=None;self.last_progress_wall_ms=None;self.last_observe_ms=None;self.consecutive_stalls=0;self.failures=0}
  pub fn current(&self)->Option<usize>{self.current}
  pub fn select_initial(&self)->Option<usize>{self.candidates.iter().enumerate().filter(|(_,c)|!c.audio_only).min_by_key(|(i,c)|(c.priority,std::cmp::Reverse(c.bitrate),*i)).map(|(i,_)|i)}
@@ -24,10 +24,12 @@ impl StreamSupervisor{
  }
  pub fn report_failure(&mut self,reason:&str)->SupervisorAction{self.failures+=1;self.failure_action(reason)}
  fn failure_action(&mut self,reason:&str)->SupervisorAction{
-  if self.failures>=self.max_failures{return SupervisorAction::ReResolve{reason:reason.into()}}
   if let Some(current)=self.current{if !self.failed_candidates.contains(&current){self.failed_candidates.push(current)}}
   let next=self.candidates.iter().enumerate().find(|(i,c)|Some(*i)!=self.current&&!c.audio_only&&!self.failed_candidates.contains(i)).map(|(i,_)|i);
-  match next{Some(index)=>SupervisorAction::Switch{index,reason:reason.into()},None=>SupervisorAction::ReResolve{reason:reason.into()}}
+  match next{
+   Some(index)=>SupervisorAction::Switch{index,reason:reason.into()},
+   None=>SupervisorAction::ReResolve{reason:reason.into()},
+  }
  }
 }
 impl PlaybackTelemetry{pub fn from_ffmpeg(now_ms:i64,stats:&lixh_player_core::LixhStats)->Self{Self{now_ms,video_pts_ms:stats.last_video_pts_ms,input_buffer_ms:stats.input_buffer_ms,video_frames:stats.video_frames,dropped_frames:stats.dropped_frames,reconnects:stats.reconnects,decode_hw:stats.decode_hw}}}
