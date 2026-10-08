@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import { register, unregister } from '@tauri-apps/plugin-global-shortcut';
 import { getCurrentWindow, LogicalSize } from '@tauri-apps/api/window';
 import './style.css';
@@ -57,10 +58,10 @@ async function start(){
   const input=document.querySelector('#url');state.roomUrl=(input?.value??state.roomUrl).trim();
   if(!state.roomUrl)return alert('请输入直播间地址');
   if(state.busy)return;
-  // 看播不强制登录；登录仅用于发弹幕
+  // 直接播放，不依赖登录态。
   destroyEmbedPlayer();
   stopDockLoop();
-  state.busy=true;state.playing=false;state.liveTaskId=null;state.liveGeneration=0;state.livePhase='starting';state.health='任务提交中';state.candidates=[];state.playerError='';state.streamUrl='';state.videoPortrait=true;state.muted=true;addEvent('LIVE','starting','提交 FFmpeg 同窗内嵌');
+  state.busy=true;state.playing=false;state.liveTaskId=null;state.liveGeneration=0;state.livePhase='starting';state.health='任务提交中';state.playerError='';state.streamUrl='';addEvent('LIVE','starting','提交 FFmpeg 同窗内嵌');
   fitAppWindow('force-portrait');
   render();
   // 先把监视器洞坐标写入后端，FFmpeg 洞在开播前就位
@@ -95,7 +96,7 @@ async function start(){
 async function stop(){
   state.busy=false;destroyEmbedPlayer();stopDockLoop();
   try{await invoke('stop_player');await invoke('clear_room')}catch(e){addEvent('LIVE','stop_error',String(e),'warn')}
-  state.playing=false;state.liveTaskId=null;state.liveGeneration=0;state.livePhase='stopped';state.health='已停止';state.streamUrl='';state.playback=null;state.playerError='';state.videoPortrait=true;
+  state.playing=false;state.liveTaskId=null;state.liveGeneration=0;state.livePhase='stopped';state.health='已停止';state.streamUrl='';state.playback=null;state.playerError='';
   addEvent('LIVE','stopped','已停止');render();
   fitAppWindow('portrait');
 }
