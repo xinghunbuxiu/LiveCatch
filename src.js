@@ -13,6 +13,8 @@ let dockTimer=null,pumpRaf=null;
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const time=()=>new Date().toLocaleTimeString('zh-CN',{hour12:false});
 function addEvent(kind,phase,message,level=''){state.events.push({time:time(),kind,phase,message,level});if(state.events.length>state.maxEvents)state.events.splice(0,state.events.length-state.maxEvents);}
+function generationFromResult(r){return Number((r?.message||'').match(/generation=(\d+)/)?.[1]||0);}
+function markLiveEnded(message){state.livePhase='ended';state.health=String(message||'直播已结束');state.playing=false;state.playerError='';destroyEmbedPlayer();stopDockLoop();invoke('stop_player').catch(()=>{});}
 function isEnded(){return state.livePhase==='ended'||/直播已结束/.test(state.health||'')||/直播已结束/.test(state.playerError||'');}
 function statusText(){if(state.playing)return 'LIVE';if(['reconnecting','probing','resolving','starting_player','starting','binding'].includes(state.livePhase))return '连接中';if(isEnded())return '已结束';if(state.livePhase==='error'||state.livePhase==='player_exit')return '错误';return '待播放';}
 function playbackText(){const p=state.playback;if(!p)return state.playing?'FFmpeg':'—';if(p.stalled)return '卡顿';if(p.buffering)return '缓冲';if(p.ipc_ok===false)return 'IPC异常';return '正常';}
