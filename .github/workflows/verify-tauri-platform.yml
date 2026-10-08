@@ -44,6 +44,9 @@ jobs:
             echo "LIXH_FFMPEG_DIR=${{ github.workspace }}\\src-tauri\\lixh-stream-stack\\sdk\\${{ inputs.platform }}" >> "$GITHUB_ENV"
           else
             echo "LIXH_FFMPEG_DIR=$PWD/src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}" >> "$GITHUB_ENV"
+            if [ "${{ runner.os }}" = "macOS" ]; then
+              echo "DYLD_LIBRARY_PATH=$PWD/src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}/lib:\${DYLD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+            fi
           fi
           rm -rf src-tauri/resources/ffmpeg
           mkdir -p src-tauri/resources/ffmpeg
