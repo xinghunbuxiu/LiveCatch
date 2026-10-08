@@ -662,32 +662,4 @@ fn tool_info(app:&tauri::AppHandle,n:&str)->ToolInfo{
 }
 #[tauri::command]fn environment()->String{if cfg!(target_os="macos"){"macOS".into()}else if cfg!(windows){"Windows".into()}else{"Other".into()}}
 #[tauri::command]fn app_version()->String{"0.47.8".into()}
-#[tauri::command]fn subscribe_danmaku(app:tauri::AppHandle,room_url:String,state:State<AppState>)->Result<Q1Result,String>{
-    let room=room_url.trim().to_string();
-    if room.is_empty(){return Err("请先连接直播间".into())}
-    if adapter_path(Some(&app),&detect_platform(&room)).is_none(){return Err("未安装公屏 Adapter（tools/plugins/q1-douyin）".into())}
-    let id=format!("dm-sub-{}-{}",now_ms(),Q1_REQUEST_SEQ.fetch_add(1,Ordering::Relaxed));
-    let tx=ensure_worker(app.clone(),&state);
-    let client_ts_ms=now_ms();
-    let payload=serde_json::json!({"action":"subscribe_danmaku","platform":detect_platform(&room),"room_url":room,"request_id":id,"client_ts_ms":client_ts_ms});
-    {let mut g=state.0.lock().unwrap();g.q1_queued+=1;g.q1_queued_ids.insert(id.clone());}
-    if let Err(e)=tx.try_send(Q1Job{id:id.clone(),payload,reply:app,client_ts_ms}){
-        let mut g=state.0.lock().unwrap();g.q1_queued=g.q1_queued.saturating_sub(1);g.q1_queued_ids.remove(&id);
-        return Err(format!("弹幕订阅入队失败：{e}"));
-    }
-    Ok(Q1Result{request_id:id,status:"queued".into(),transport:"queue".into(),send_ms:0,message:"弹幕订阅已入队".into()})
-}
-#[tauri::command]fn unsubscribe_danmaku(app:tauri::AppHandle,state:State<AppState>)->Result<Q1Result,String>{
-    let id=format!("dm-unsub-{}-{}",now_ms(),Q1_REQUEST_SEQ.fetch_add(1,Ordering::Relaxed));
-    let tx=ensure_worker(app.clone(),&state);
-    let client_ts_ms=now_ms();
-    let room=state.0.lock().unwrap().room_url.clone().unwrap_or_else(||"https://live.douyin.com/".into());
-    let payload=serde_json::json!({"action":"unsubscribe_danmaku","platform":detect_platform(&room),"room_url":room,"request_id":id,"client_ts_ms":client_ts_ms});
-    {let mut g=state.0.lock().unwrap();g.q1_queued+=1;g.q1_queued_ids.insert(id.clone());}
-    if let Err(e)=tx.try_send(Q1Job{id:id.clone(),payload,reply:app,client_ts_ms}){
-        let mut g=state.0.lock().unwrap();g.q1_queued=g.q1_queued.saturating_sub(1);g.q1_queued_ids.remove(&id);
-        return Err(format!("取消订阅入队失败：{e}"));
-    }
-    Ok(Q1Result{request_id:id,status:"queued".into(),transport:"queue".into(),send_ms:0,message:"取消订阅已入队".into()})
-}
-fn main(){tauri::Builder::default().manage(AppState(Arc::new(Mutex::new(RuntimeState{room_url:None,last_stream_url:None,q1_last_ms:None,q1_tx:None,q1_queued:0,q1_queued_ids:HashSet::new(),q1_cancelled:HashSet::new(),q1_inflight:false,q1_active:None,q1_history:VecDeque::new(),q1_adapter_healthy:false,q1_adapter_pid:None,q1_adapter_restarts:0,live_tx:None,live_seq:0,live_generation:0,live_active:None,live_retry:0,playback:Arc::new(Mutex::new(None))})))).plugin(tauri_plugin_global_shortcut::Builder::new().build()).invoke_handler(tauri::generate_handler![start_live,stop_player,player_alive,current_room,clear_room,tool_status,environment,app_version,player_backend,player_ffmpeg_status,player_embed_tick,dock_native_player,]).run(tauri::generate_context!()).expect("error while running application");}
+fn main(){tauri::Builder::default().manage(AppState(Arc::new(Mutex::new(RuntimeState{room_url:None,last_stream_url:None,q1_last_ms:None,q1_tx:None,q1_queued:0,q1_queued_ids:HashSet::new(),q1_cancelled:HashSet::new(),q1_inflight:false,q1_active:None,q1_history:VecDeque::new(),q1_adapter_healthy:false,q1_adapter_pid:None,q1_adapter_restarts:0,live_tx:None,live_seq:0,live_generation:0,live_active:None,live_retry:0,playback:Arc::new(Mutex::new(None))})))).plugin(tauri_plugin_global_shortcut::Builder::new().build()).invoke_handler(tauri::generate_handler![start_live,stop_player,player_alive,current_room,clear_room,environment,app_version,player_backend,player_ffmpeg_status,player_embed_tick,dock_native_player,]).run(tauri::generate_context!()).expect("error while running application");}
