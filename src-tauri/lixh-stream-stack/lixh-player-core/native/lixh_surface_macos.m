@@ -55,6 +55,10 @@ void *lixh_surface_create(void *native_window, const LixhSurfaceCallbacks *cb) {
     s->view = (__bridge NSView *)native_window;
     s->layer = [AVSampleBufferDisplayLayer layer];
     s->layer.videoGravity = AVLayerVideoGravityResizeAspect;
+    // Keep the picture above WebKit's compositor layers: WKWebView may
+    // insert its own page layers after ours, which would bury the video
+    // behind the opaque page background (black hole with audio only).
+    s->layer.zPosition = 1000;
     s->layer.frame = s->view.bounds;
     [s->view setWantsLayer:YES];
     [s->view.layer addSublayer:s->layer];
@@ -95,31 +99,64 @@ int lixh_surface_present(void *surface, const LixhNativeFrame *frame, int64_t pt
     static int n = 0;
     if ((++n % 300) == 1) NSLog(@"[lixh-surface] present #%d kind=%d %dx%d", n, frame->kind, frame->width, frame->height);
     dispatch_async(dispatch_get_main_queue(), ^{
-        CMVideoFormatDescriptionRef desc = NULL;
+      @try {
+        // Cache the format description: creating one per frame costs a
+        // main-thread round-trip each and starves 60fps streams.
+        // (Main queue only, no extra locking needed.)
+        static CMVideoFormatDescriptionRef cachedDesc = NULL;
+        static int cachedW = 0, cachedH = 0;
+        static OSType cachedFmt = 0;
+        OSType fmt = CVPixelBufferGetPixelFormatType(pixel);
+        int pw = (int)CVPixelBufferGetWidth(pixel), ph = (int)CVPixelBufferGetHeight(pixel);
+        if (!cachedDesc || cachedW != pw || cachedH != ph || cachedFmt != fmt) {
+            if (cachedDesc) { CFRelease(cachedDesc); cachedDesc = NULL; }
+            CMVideoFormatDescriptionCreateForImageBuffer(kCFAllocatorDefault, pixel, &cachedDesc);
+            cachedW = pw; cachedH = ph; cachedFmt = fmt;
+        }
+        CMVideoFormatDescriptionRef desc = cachedDesc;
         CMSampleBufferRef sample = NULL;
         int rc = 0;
-        CMVideoFormatDescriptionCreateForImageBuffer(kCFAllocatorDefault, pixel, &desc);
         CMTime pts = CMTimeMake(pts_ms, 1000);
         CMSampleTimingInfo timing = { .duration = kCMTimeInvalid, .presentationTimeStamp = pts, .decodeTimeStamp = kCMTimeInvalid };
         if (!desc || CMSampleBufferCreateReadyWithImageBuffer(kCFAllocatorDefault, pixel, desc, &timing, &sample) != noErr) rc = -3;
-        if (rc == 0 && sample) [s->layer enqueueSampleBuffer:sample];
+        if (rc == 0 && sample) {
+            CFArrayRef atts = CMSampleBufferGetSampleAttachmentsArray(sample, YES);
+            if (atts && CFArrayGetCount(atts) > 0) {
+                CFMutableDictionaryRef d = (CFMutableDictionaryRef)CFArrayGetValueAtIndex(atts, 0);
+                CFDictionarySetValue(d, kCMSampleAttachmentKey_DisplayImmediately, kCFBooleanTrue);
+            }
+            [s->layer enqueueSampleBuffer:sample];
+            if (s->layer.status == AVQueuedSampleBufferRenderingStatusFailed)
+                NSLog(@"[lixh-surface] layer FAILED: %@", s->layer.error);
+        }
         if (sample) CFRelease(sample);
-        if (desc) CFRelease(desc);
+        // desc is the shared cache — do NOT release per frame.
         CFRelease(pixel);
         if (rc == 0 && s->cb.on_presented) s->cb.on_presented(s->cb.opaque, pts_ms);
+      } @catch (NSException *ex) {
+        NSLog(@"[lixh-surface] enqueue EXCEPTION %@: %@", ex.name, ex.reason);
+        CFRelease(pixel);
+      }
     });
     return 0;
 }
 
 void lixh_surface_flush(void *surface) {
     LixhMacSurface *s = (LixhMacSurface *)surface;
-    if (s) dispatch_sync(dispatch_get_main_queue(), ^{ [s->layer flushAndRemoveImage]; });
+    // MUST be async: flush is issued from Tauri command handlers, which may
+    // already run on the main thread — dispatch_sync would deadlock (SIGTRAP).
+    if (s) dispatch_async(dispatch_get_main_queue(), ^{ [s->layer flushAndRemoveImage]; });
 }
 
 void lixh_surface_destroy(void *surface) {
     LixhMacSurface *s = (LixhMacSurface *)surface;
     if (!s) return;
-    dispatch_sync(dispatch_get_main_queue(), ^{ [s->layer removeFromSuperlayer]; });
+    // Async for the same reason as flush. Safe against in-flight present
+    // blocks: the main queue is serial, so everything queued before this
+    // block finishes first — no use-after-free.
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [s->layer removeFromSuperlayer];
+        free(s);
+    });
     if (s->cb.on_closed) s->cb.on_closed(s->cb.opaque);
-    free(s);
 }

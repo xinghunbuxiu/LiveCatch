@@ -154,6 +154,11 @@ static int open_input(LixhPlayer *p) {
     av_dict_set(&opts, "probesize", "1048576", 0);
     av_dict_set(&opts, "analyzeduration", "2000000", 0);
     av_dict_set(&opts, "rw_timeout", "3000000", 0);
+    /* Live CDN edge nodes (e.g. douyincdn) throttle/reset bare Lavf
+       clients mid-stream, which desyncs the FLV demuxer. Pose as a
+       browser to get a stable connection. */
+    av_dict_set(&opts, "user_agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", 0);
+    av_dict_set(&opts, "headers", "Referer: https://live.douyin.com/\r\nAccept: */*\r\n", 0);
     av_dict_set(&opts, "reconnect", "1", 0);
     av_dict_set(&opts, "reconnect_streamed", "1", 0);
     av_dict_set(&opts, "reconnect_delay_max", "2", 0);

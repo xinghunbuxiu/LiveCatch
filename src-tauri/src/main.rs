@@ -153,10 +153,45 @@ fn player_ffmpeg_status(state: State<AppState>) -> player::FfmpegStatus {
 }
 
 #[tauri::command]
-fn player_embed_tick(state: State<AppState>) {
-    let state_guard = state.0.lock().unwrap();
-    let mut p = state_guard.playback.lock().unwrap();
-    if let Some(engine) = p.as_mut() { let _ = player::poll(engine); }
+fn player_embed_tick(app: tauri::AppHandle, state: State<AppState>) {
+    static LAST_HEALTH_MS: Mutex<u128> = Mutex::new(0);
+    let (stats_opt, task_id, generation) = {
+        let g = state.0.lock().unwrap();
+        let mut p = g.playback.lock().unwrap();
+        let mut s = None;
+        if let Some(engine) = p.as_mut() {
+            let _ = player::poll(engine);
+            s = Some(player::stats(engine));
+        }
+        (s, g.live_active.clone().unwrap_or_default(), g.live_generation)
+    };
+    // The frontend stats chips (latency/buffer/speed) only move when the
+    // backend pushes playback_health events. The old code polled the engine
+    // but never emitted anything, so the footer was stuck at 0/- forever.
+    if let Some(st) = stats_opt {
+        let now = now_ms();
+        if let Ok(mut last) = LAST_HEALTH_MS.lock() {
+            if now - *last >= 500 {
+                *last = now;
+                let buf = (st.input_buffer_ms.max(0) as f64) / 1000.0;
+                emit_live(&app, LiveEvent {
+                    task_id: task_id, generation, attempt: 0,
+                    phase: "playback_health".into(), message: String::new(),
+                    stream_url: None, protocol: None, cdn: None, health: None,
+                    latency_ms: Some(st.input_buffer_ms.max(0) as u128),
+                    playback: Some(PlaybackHealth {
+                        ipc_ok: true, time_pos: None, buffer_sec: Some(buf),
+                        paused: Some(false), idle: Some(false), eof: Some(false),
+                        stalled: false, buffering: false,
+                        frame_drops: Some(st.dropped_frames),
+                        decoder_frame_drops: None, speed: None,
+                        latency_mode: None, sample_ms: now,
+                    }),
+                    candidates: vec![],
+                });
+            }
+        }
+    }
 }
 
 #[tauri::command]
@@ -284,10 +319,10 @@ fn stop_player(app:tauri::AppHandle,state:State<AppState>)->bool{
 }
 #[tauri::command]
 fn player_alive(state:State<AppState>)->bool{ let g=state.0.lock().unwrap(); let p=g.playback.lock().unwrap(); p.as_ref().map(player::alive).unwrap_or(false) }
+#[tauri::command]fn undock_native_player()->Result<(),String>{player::destroy_native_surface();Ok(())}
 #[tauri::command]fn current_room(state:State<AppState>)->Option<String>{state.0.lock().unwrap().room_url.clone()}
 #[tauri::command]fn clear_room(app:tauri::AppHandle,state:State<AppState>){
     let _=stop_native(&state.0);
-    stop_native(&state.0);
     let mut g=state.0.lock().unwrap();
     g.live_generation=g.live_generation.saturating_add(1);
     g.live_active=None;
@@ -298,4 +333,4 @@ fn player_alive(state:State<AppState>)->bool{ let g=state.0.lock().unwrap(); let
 
 #[tauri::command]fn environment()->String{if cfg!(target_os="macos"){"macOS".into()}else if cfg!(windows){"Windows".into()}else{"Other".into()}}
 #[tauri::command]fn app_version()->String{"0.47.8".into()}
-fn main(){tauri::Builder::default().manage(AppState(Arc::new(Mutex::new(RuntimeState{room_url:None,last_stream_url:None,live_tx:None,live_seq:0,live_generation:0,live_active:None,live_retry:0,playback:Arc::new(Mutex::new(None))})))).plugin(tauri_plugin_global_shortcut::Builder::new().build()).invoke_handler(tauri::generate_handler![start_live,stop_player,player_alive,current_room,clear_room,environment,app_version,player_backend,player_ffmpeg_status,player_embed_tick,dock_native_player,]).run(tauri::generate_context!()).expect("error while running application");}
+fn main(){tauri::Builder::default().manage(AppState(Arc::new(Mutex::new(RuntimeState{room_url:None,last_stream_url:None,live_tx:None,live_seq:0,live_generation:0,live_active:None,live_retry:0,playback:Arc::new(Mutex::new(None))})))).plugin(tauri_plugin_global_shortcut::Builder::new().build()).invoke_handler(tauri::generate_handler![start_live,stop_player,player_alive,current_room,clear_room,environment,app_version,player_backend,player_ffmpeg_status,player_embed_tick,dock_native_player,undock_native_player,]).run(tauri::generate_context!()).expect("error while running application");}

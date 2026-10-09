@@ -27,7 +27,7 @@ function startEmbedPump(){if(pumpRaf)return;const loop=()=>{pumpRaf=requestAnima
 function destroyEmbedPlayer(){const screen=document.querySelector('.screen');if(screen){screen.style.removeProperty('--src-ar');screen.style.removeProperty('--screen-w');}}
 async function fitAppWindow(mode){const target=mode==='force-landscape'||mode==='landscape'?'landscape':'portrait';const size=target==='landscape'?{width:1100,height:760}:{width:820,height:760};try{await getCurrentWindow().setMinSize(new LogicalSize(640,560));await getCurrentWindow().setSize(new LogicalSize(size.width,size.height));}catch(_){}}
 async function syncNativeDock(){
-  if(!state.playing)return;
+  if(!state.playing||!state.videoMode)return;
   const el=document.querySelector('.screen'),stage=document.querySelector('.stage');
   if(!el||!stage)return;
   const r=el.getBoundingClientRect(),sr=stage.getBoundingClientRect();
@@ -36,8 +36,8 @@ async function syncNativeDock(){
   if(w<80||h<120)return;
   try{await invoke('dock_native_player',{x:Math.round(x),y:Math.round(y),w,h});}catch(_){}
 }
-function startDockLoop(){stopDockLoop();if(!state.playing)return;syncNativeDock();startEmbedPump();dockTimer=setInterval(()=>void syncNativeDock(),250);window.addEventListener('resize',syncNativeDock);}
-function screenHtml(){if(!state.playing)return `<div class="empty"><div class="empty-mark">▶</div><div class="empty-title">${isEnded()?'直播已结束':'粘贴链接开始播放'}</div><div class="empty-sub">${esc(state.playerError||state.health||'低延迟 FFmpeg 播放器')}</div></div>`;return `<div class="native-stage"><div class="native-veil"><span class="live-pill"><span class="dot"></span> LIVE</span><span>${esc(state.protocol)} · 源延迟 ${state.latency??'-'} ms</span><span>缓冲 ${buffer()} · ${latencyMode()} · ${playbackSpeed()}</span></div></div>`;}
+function startDockLoop(){stopDockLoop();if(!state.playing)return;startEmbedPump();if(!state.videoMode)return;syncNativeDock();dockTimer=setInterval(()=>void syncNativeDock(),250);window.addEventListener('resize',syncNativeDock);}
+function screenHtml(){if(!state.playing){if(isEnded())return `<div class="empty"><div class="empty-mark">⏹</div><div class="empty-title">直播已结束</div><div class="empty-sub">主播已下播或信号中断 · 更换链接可重新播放</div></div>`;return `<div class="empty"><div class="empty-mark">▶</div><div class="empty-title">粘贴链接开始播放</div><div class="empty-sub">${esc(state.playerError||state.health||'低延迟 FFmpeg 播放器')}</div></div>`;}return `<div class="native-stage"><div class="native-veil"><span class="live-pill"><span class="dot"></span> LIVE</span><span>${esc(state.protocol)} · 源延迟 ${state.latency??'-'} ms</span><span>缓冲 ${buffer()} · ${latencyMode()} · ${playbackSpeed()}</span></div></div>`;}
 function render(){
   app.innerHTML=`<div class="app-shell ${state.videoMode?'video-mode':''}">
     <header class="topbar">
@@ -46,12 +46,12 @@ function render(){
       <div class="status"><span class="dot ${state.playing?'live':''}"></span>${statusText()}</div>
     </header>
     <main class="stage"><section class="player-wrap"><div class="screen">${screenHtml()}</div></section>
-      <footer class="player-bar"><span>🔊 声音：开启</span><span>延迟：${state.latency==null?'—':esc(state.latency+' ms')}</span><span>缓冲：${buffer()}</span><span>播放：${playbackText()}</span><button id="video-mode" class="mode-btn ${state.videoMode?'on':''}">${state.videoMode?'退出视频模式':'视频模式'}</button></footer>
+      <footer class="player-bar"><span>🔊 声音：开启</span><span class="lat-chip">延迟：${state.latency==null?'—':esc(state.latency+' ms')}</span><span class="buf-chip">缓冲：${buffer()}</span><span class="drop-chip">丢帧：${state.playback?.frame_drops==null?'—':esc(state.playback.frame_drops)}</span><span class="play-chip">播放：${playbackText()}</span><button id="video-mode" class="mode-btn ${state.videoMode?'on':''}">${state.videoMode?'音频模式':'视频模式'}</button></footer>
     </main>
   </div>`;
   const u=document.querySelector('#url');u?.addEventListener('input',e=>state.roomUrl=e.target.value);u?.addEventListener('keydown',e=>{if(e.key==='Enter')start();});
   document.querySelector('#start')?.addEventListener('click',start);document.querySelector('#stop')?.addEventListener('click',stop);
-  document.querySelector('#video-mode')?.addEventListener('click',async()=>{state.videoMode=!state.videoMode;await fitAppWindow(state.videoMode?'force-landscape':'force-portrait');render();});
+  document.querySelector('#video-mode')?.addEventListener('click',async()=>{state.videoMode=!state.videoMode;if(!state.videoMode){try{await invoke('undock_native_player')}catch(_){}}await fitAppWindow(state.videoMode?'force-landscape':'force-portrait');render();});
   if(state.playing)queueMicrotask(startDockLoop);else stopDockLoop();
 }
 async function start(){
@@ -64,8 +64,8 @@ async function start(){
   state.busy=true;state.playing=false;state.liveTaskId=null;state.liveGeneration=0;state.livePhase='starting';state.health='任务提交中';state.playerError='';state.streamUrl='';addEvent('LIVE','starting','提交 FFmpeg 同窗内嵌');
   fitAppWindow('force-portrait');
   render();
-  // 先把监视器洞坐标写入后端，FFmpeg 洞在开播前就位
-  try{
+  // 先把监视器洞坐标写入后端，FFmpeg 洞在开播前就位（仅视频模式；音频模式不贴洞）
+  if(state.videoMode)try{
     const topMin=56;
     const hole=document.querySelector('.screen')||document.querySelector('.stage-main');
     const stage=document.querySelector('.stage');
@@ -144,8 +144,14 @@ listen('live-event',e=>{
   else if(['error','player_exit','stopped'].includes(x.phase)){state.playing=false;destroyEmbedPlayer();stopDockLoop();}
   // Don't full re-render on every playback_health — update chips only when possible
   if(x.phase==='playback_health' && state.playing){
+    const lat=document.querySelector('.lat-chip');
+    if(lat && x.latency_ms!=null) lat.textContent=`延迟：${x.latency_ms} ms`;
     const chip=document.querySelector('.buf-chip');
     if(chip && x.playback?.buffer_sec!=null) chip.textContent=`缓冲 ${Number(x.playback.buffer_sec).toFixed(2)}s`;
+    const dc=document.querySelector('.drop-chip');
+    if(dc && x.playback?.frame_drops!=null) dc.textContent=`丢帧：${x.playback.frame_drops}`;
+    const pc=document.querySelector('.play-chip');
+    if(pc) pc.textContent=`播放：${playbackText()}`;
     const ll=document.querySelector('.ll-chip');
     if(ll) ll.textContent=`LL ${latencyMode()} · ${playbackSpeed()}`;
     const veil=document.querySelector('.native-veil .native-hint:last-child');
