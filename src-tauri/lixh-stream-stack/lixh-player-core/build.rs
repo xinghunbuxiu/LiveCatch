@@ -35,8 +35,19 @@ fn main() {
             println!("cargo:rustc-link-arg=-Wl,-rpath,{}", lib_dir.display());
         }
 
-        for lib in ["avformat", "avcodec", "avutil", "swresample", "swscale"] {
-            println!("cargo:rustc-link-lib=dylib={lib}");
+        // Windows: do NOT link swscale. The bundled MinGW-built swscale DLL
+        // depends on libgcc_s_seh-1.dll (absent on end-user machines), which
+        // breaks process startup (STATUS_DLL_NOT_FOUND). Software frames are
+        // converted to NV12 by hand in lixh_surface_windows.cpp instead.
+        let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+        if target_os == "windows" {
+            for lib in ["avformat", "avcodec", "avutil", "swresample"] {
+                println!("cargo:rustc-link-lib=dylib={lib}");
+            }
+        } else {
+            for lib in ["avformat", "avcodec", "avutil", "swresample", "swscale"] {
+                println!("cargo:rustc-link-lib=dylib={lib}");
+            }
         }
     }
 
@@ -63,12 +74,16 @@ fn main() {
         }
     }
     if cfg!(target_os = "windows") {
-        cc::Build::new()
-            .cpp(true)
+        let mut surf = cc::Build::new();
+        surf.cpp(true)
             .file("native/lixh_surface_windows.cpp")
             .include("include")
-            .flag_if_supported("/std:c++17")
-            .compile("lixh_surface_windows");
+            .flag_if_supported("/std:c++17");
+        // Software-frame upload needs AVFrame layout (libavutil/frame.h).
+        if let Ok(root) = env::var("LIXH_FFMPEG_DIR") {
+            surf.include(PathBuf::from(root).join("include"));
+        }
+        surf.compile("lixh_surface_windows");
         println!("cargo:rustc-link-lib=d3d11");
         println!("cargo:rustc-link-lib=dxgi");
         println!("cargo:rustc-link-lib=user32");

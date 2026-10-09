@@ -23,8 +23,13 @@ extern "C" fn on_video(_opaque:*mut c_void, kind:i32, width:i32, height:i32, pts
     if frame.is_null() { return; }
     let Ok(slot)=surface_slot().lock() else { return; };
     let Some(surface)=slot.as_ref() else { return; };
-    let _=surface.present(unsafe{&*frame}, pts_ms);
-    let _=(kind,width,height);
+    if let Err(e)=surface.present(unsafe{&*frame}, pts_ms) {
+        static DROPPED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let n=DROPPED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if n<5 || n%300==0 {
+            eprintln!("[livecatch] native present failed (kind={kind} {width}x{height}): {e}");
+        }
+    }
 }
 
 
