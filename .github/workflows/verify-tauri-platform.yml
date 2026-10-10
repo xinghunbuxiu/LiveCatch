@@ -17,7 +17,7 @@ jobs:
   verify:
     name: ${{ inputs.platform }}
     runs-on: ${{ inputs.runner }}
-    timeout-minutes: 90
+    timeout-minutes: 30
     env:
       # Change this single version when intentionally upgrading FFmpeg.
       # The fetch scripts derive the immutable release tag from this version.
@@ -59,69 +59,35 @@ jobs:
             ls "src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}/lib"/avutil*.def \
               "src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}/lib"/libavutil.dll.a
           fi
-      - name: cargo test (stream-stack)
+      # Legacy desktop path: compile-check only. Installable packages come from Flutter CI.
+      - name: cargo check (stream-stack)
         env:
           RUST_BACKTRACE: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo check --manifest-path src-tauri/lixh-stream-stack/Cargo.toml 2>&1 | tee "${RUNNER_TEMP}/cargo-stack.log"
+      - name: cargo check (src-tauri)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo check --manifest-path src-tauri/Cargo.toml 2>&1 | tee "${RUNNER_TEMP}/cargo-tauri.log"
+      - name: cargo test (stream-stack)
         shell: bash
         run: |
           set -euo pipefail
           cargo test --manifest-path src-tauri/lixh-stream-stack/Cargo.toml 2>&1 | tee "${RUNNER_TEMP}/cargo-test.log"
-      - name: Build Tauri installer
-        shell: bash
-        env:
-          RUST_BACKTRACE: "1"
-        run: |
-          set -euo pipefail
-          case "${{ inputs.platform }}" in
-            windows-*)
-              npm run tauri build -- --bundles nsis 2>&1 | tee "${RUNNER_TEMP}/tauri-build.log"
-              ;;
-            macos-*)
-              # Unsigned DMG is installable; Gatekeeper may require right-click → Open.
-              npm run tauri build -- --bundles dmg 2>&1 | tee "${RUNNER_TEMP}/tauri-build.log"
-              ;;
-            *)
-              echo "Unsupported platform for installer: ${{ inputs.platform }}" >&2
-              exit 1
-              ;;
-          esac
-      - name: Collect installer artifacts
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p artifacts
-          shopt -s nullglob
-          case "${{ inputs.platform }}" in
-            windows-*)
-              files=(src-tauri/target/release/bundle/nsis/*.exe)
-              ;;
-            macos-*)
-              files=(src-tauri/target/release/bundle/dmg/*.dmg)
-              ;;
-          esac
-          if [[ ${#files[@]} -eq 0 ]]; then
-            echo "No installer files found under src-tauri/target/release/bundle" >&2
-            find src-tauri/target -maxdepth 5 -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.app' \) 2>/dev/null | head -n 50 || true
-            exit 1
-          fi
-          cp -v "${files[@]}" artifacts/
-          ls -lah artifacts
-      - name: Upload installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: livecatch-tauri-${{ inputs.platform }}
-          path: artifacts/*
-          if-no-files-found: error
-      - name: Surface build errors
+      - run: npm run build
+      - name: Surface cargo errors
         if: failure()
         shell: bash
         run: |
           set -uo pipefail
-          for f in cargo-test.log tauri-build.log; do
+          for f in cargo-stack.log cargo-tauri.log cargo-test.log; do
             log="${RUNNER_TEMP}/${f}"
             [[ -f "$log" ]] || continue
             echo "===== ${f} (tail) ====="
-            tail -n 160 "$log" || true
+            tail -n 120 "$log" || true
             grep -E 'error(\[E[0-9]+\])?:|error:|FAILED|panic|assert|undefined reference|ld:|clang:|fatal' "$log" \
               | head -n 40 \
               | while IFS= read -r line; do
