@@ -37,5 +37,6 @@ Icon?
 /Flutter/ephemeral/
 /Flutter/flutter_export_environment.sh
 
-# Synced from src-tauri/.../sdk/ios-arm64 by sync_ffmpeg_ios.sh (not committed)
+# Synced by sync_ffmpeg_ios.sh (not committed)
 /Frameworks/
+/lixh_player/Sources/lixh_player_corec/include/lixh_player.h

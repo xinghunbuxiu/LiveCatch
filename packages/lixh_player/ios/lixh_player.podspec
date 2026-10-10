@@ -13,17 +13,19 @@ LiveCatch lixh_player iOS plugin: lixh-player-core + sdk/ios-arm64.
   s.source           = { :path => '.' }
   s.source_files = 'lixh_player/Sources/lixh_player/**/*.{h,m,swift}',
                    'lixh_player/Sources/lixh_player_corec/**/*.{h,c}'
-  s.public_header_files = 'lixh_player/Sources/lixh_player/include/**/*.h',
-                          'lixh_player/Sources/lixh_player_corec/include/**/*.h'
+  # Only ObjC API headers are public; C/FFmpeg stay private to avoid modularize errors.
+  s.public_header_files = 'lixh_player/Sources/lixh_player/include/**/*.h'
+  s.private_header_files = 'lixh_player/Sources/lixh_player_corec/include/**/*.h'
 
-  pod_root = Pathname.new(__dir__)
-  # In-pod copy produced by packages/lixh_player/ios/sync_ffmpeg_ios.sh
-  # (CocoaPods cannot vendor libraries outside the pod root).
-  sdk = pod_root + 'Frameworks'
-  core = pod_root + '../../../src-tauri/lixh-stream-stack/lixh-player-core'
+  pod_root = Pathname.new(File.expand_path(__dir__))
+  sdk = (pod_root + 'Frameworks').cleanpath
+  core_include = (pod_root + 'lixh_player/Sources/lixh_player_corec/include').cleanpath
 
   unless (sdk + 'include/libavcodec/avcodec.h').exist?
     raise "FFmpeg ios-arm64 not synced into #{sdk}. Run: bash packages/lixh_player/ios/sync_ffmpeg_ios.sh"
+  end
+  unless (core_include + 'lixh_player.h').exist?
+    raise "lixh_player.h missing at #{core_include}. Run: bash packages/lixh_player/ios/sync_ffmpeg_ios.sh"
   end
 
   av_names = %w[avformat avcodec avutil swresample]
@@ -42,13 +44,15 @@ LiveCatch lixh_player iOS plugin: lixh-player-core + sdk/ios-arm64.
     'DEFINES_MODULE' => 'YES',
     'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386 arm64',
     'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) LIXH_IOS=1',
-    'HEADER_SEARCH_PATHS' => "\"#{core}/include\" \"#{sdk}/include\" $(inherited)",
+    'HEADER_SEARCH_PATHS' => "\"#{core_include}\" \"#{sdk}/include\" $(inherited)",
     'LIBRARY_SEARCH_PATHS' => "\"#{sdk}/lib\" $(inherited)",
     'OTHER_CFLAGS' => '$(inherited) -std=c11',
     'OTHER_LDFLAGS' => '$(inherited) -ObjC',
     'CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES' => 'YES',
+    'OTHER_SWIFT_FLAGS' => '$(inherited) -Xcc -Wno-error=non-modular-include-in-framework-module',
   }
   s.user_target_xcconfig = {
     'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386 arm64',
+    'CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES' => 'YES',
   }
 end
