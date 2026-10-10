@@ -19,12 +19,19 @@ fn main() {
 
     let normalizer = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../scripts/normalize-ffmpeg-macos.sh");
-    let status = Command::new("bash")
+    let output = Command::new("bash")
         .arg(&normalizer)
         .arg(&root)
-        .status()
+        .output()
         .expect("failed to run FFmpeg macOS install-name normalizer");
-    assert!(status.success(), "FFmpeg macOS install-name normalization failed");
+    if !output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        panic!(
+            "FFmpeg macOS install-name normalization failed (status {:?})\nstdout:\n{stdout}\nstderr:\n{stderr}",
+            output.status.code()
+        );
+    }
 
     let rpath = lib.to_string_lossy();
     println!("cargo:rustc-link-arg=-Wl,-rpath,{rpath}");
