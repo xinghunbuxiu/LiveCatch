@@ -1,823 +1,823 @@
 {
   "flutter_app/android/app/build.gradle.kts": {
-    "mtime": 1791644325.6727235,
-    "seen": 1791644336.3480518,
+    "mtime": 1791644868.0093896,
+    "seen": 1791644879.8421602,
     "ast_hash": "0b879eafb9e00018b683ed65d73e7d4a",
     "semantic_hash": "0b879eafb9e00018b683ed65d73e7d4a"
   },
   "flutter_app/android/app/src/main/kotlin/com/example/livecatch_app/MainActivity.kt": {
-    "mtime": 1791644325.6731184,
-    "seen": 1791644336.3480563,
+    "mtime": 1791644868.0096378,
+    "seen": 1791644879.842164,
     "ast_hash": "bcb91695545dd7be52929fbc0da9e4d1",
     "semantic_hash": "bcb91695545dd7be52929fbc0da9e4d1"
   },
   "flutter_app/android/build.gradle.kts": {
-    "mtime": 1791644325.6734931,
-    "seen": 1791644336.3480587,
+    "mtime": 1791644868.0099561,
+    "seen": 1791644879.8421657,
     "ast_hash": "f509340acd3af090a0da81b296e55623",
     "semantic_hash": "f509340acd3af090a0da81b296e55623"
   },
   "flutter_app/android/settings.gradle.kts": {
-    "mtime": 1791644325.6740696,
-    "seen": 1791644336.34806,
+    "mtime": 1791644868.0105674,
+    "seen": 1791644879.842167,
     "ast_hash": "7a3f452b33a06c5201c8639f726addf5",
     "semantic_hash": "7a3f452b33a06c5201c8639f726addf5"
   },
   "flutter_app/ios/Runner/AppDelegate.swift": {
-    "mtime": 1791644325.6750247,
-    "seen": 1791644336.348061,
+    "mtime": 1791644868.011555,
+    "seen": 1791644879.8421679,
     "ast_hash": "2bd8469f2a4b701ff582f6574e58b13c",
     "semantic_hash": "2bd8469f2a4b701ff582f6574e58b13c"
   },
   "flutter_app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json": {
-    "mtime": 1791644325.675132,
-    "seen": 1791644336.3480623,
+    "mtime": 1791644868.0116427,
+    "seen": 1791644879.8421688,
     "ast_hash": "c3cdf9688b604d14f2e76a8287e16167",
     "semantic_hash": "c3cdf9688b604d14f2e76a8287e16167"
   },
   "flutter_app/ios/Runner/Assets.xcassets/LaunchImage.imageset/Contents.json": {
-    "mtime": 1791644325.6752193,
-    "seen": 1791644336.3480632,
+    "mtime": 1791644868.0117087,
+    "seen": 1791644879.8421698,
     "ast_hash": "770f4f65e02ca2fc57f46f4f4148d15d",
     "semantic_hash": "770f4f65e02ca2fc57f46f4f4148d15d"
   },
   "flutter_app/ios/Runner/Runner-Bridging-Header.h": {
-    "mtime": 1791644325.6759417,
-    "seen": 1791644336.3480642,
+    "mtime": 1791644868.012314,
+    "seen": 1791644879.8421707,
     "ast_hash": "e07862ac930ed4d8479185d52c6cc66d",
     "semantic_hash": "e07862ac930ed4d8479185d52c6cc66d"
   },
   "flutter_app/ios/Runner/SceneDelegate.swift": {
-    "mtime": 1791644325.6759417,
-    "seen": 1791644336.3480656,
+    "mtime": 1791644868.012314,
+    "seen": 1791644879.8421717,
     "ast_hash": "748d701e783e68faf618c00464257a19",
     "semantic_hash": "748d701e783e68faf618c00464257a19"
   },
   "flutter_app/ios/RunnerTests/RunnerTests.swift": {
-    "mtime": 1791644325.6759417,
-    "seen": 1791644336.3480666,
+    "mtime": 1791644868.012314,
+    "seen": 1791644879.8421724,
     "ast_hash": "a225a382d14d7b16b6f602a5c1d49331",
     "semantic_hash": "a225a382d14d7b16b6f602a5c1d49331"
   },
   "flutter_app/lib/abr_supervisor.dart": {
-    "mtime": 1791644325.6759417,
-    "seen": 1791644336.3480675,
+    "mtime": 1791644868.012314,
+    "seen": 1791644879.8421733,
     "ast_hash": "ac3a1e4c04f3d003c24a14a3232ca523",
     "semantic_hash": "ac3a1e4c04f3d003c24a14a3232ca523"
   },
   "flutter_app/lib/main.dart": {
-    "mtime": 1791644325.6762276,
-    "seen": 1791644336.3480687,
+    "mtime": 1791644868.0125413,
+    "seen": 1791644879.8421743,
     "ast_hash": "d72ac64f3cfcb2fbf44370ed11ddb7f2",
     "semantic_hash": "d72ac64f3cfcb2fbf44370ed11ddb7f2"
   },
   "flutter_app/lib/room_resolve.dart": {
-    "mtime": 1791644325.6762276,
-    "seen": 1791644336.34807,
+    "mtime": 1791644868.0125413,
+    "seen": 1791644879.8421752,
     "ast_hash": "fb8da5dc07b69b47be5a0841d5c2b31d",
     "semantic_hash": "fb8da5dc07b69b47be5a0841d5c2b31d"
   },
   "flutter_app/macos/Runner/AppDelegate.swift": {
-    "mtime": 1791644325.676952,
-    "seen": 1791644336.3480709,
+    "mtime": 1791644868.0130827,
+    "seen": 1791644879.842176,
     "ast_hash": "2a7411ae3e7c6715525b94b6f8d2e80b",
     "semantic_hash": "2a7411ae3e7c6715525b94b6f8d2e80b"
   },
   "flutter_app/macos/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json": {
-    "mtime": 1791644325.6770732,
-    "seen": 1791644336.348072,
+    "mtime": 1791644868.0131729,
+    "seen": 1791644879.8421767,
     "ast_hash": "5bd47c3ef1d1a261037c87fb3ddb9cfd",
     "semantic_hash": "5bd47c3ef1d1a261037c87fb3ddb9cfd"
   },
   "flutter_app/macos/Runner/MainFlutterWindow.swift": {
-    "mtime": 1791644325.6783268,
-    "seen": 1791644336.348073,
+    "mtime": 1791644868.0142193,
+    "seen": 1791644879.8421779,
     "ast_hash": "4a747b1f256d62a2bbb79bd976891eb5",
     "semantic_hash": "4a747b1f256d62a2bbb79bd976891eb5"
   },
   "flutter_app/macos/RunnerTests/RunnerTests.swift": {
-    "mtime": 1791644325.6783268,
-    "seen": 1791644336.348074,
+    "mtime": 1791644868.0142193,
+    "seen": 1791644879.8421788,
     "ast_hash": "97d3a20fd20a063c192e886d1822b4a8",
     "semantic_hash": "97d3a20fd20a063c192e886d1822b4a8"
   },
   "flutter_app/test/abr_supervisor_test.dart": {
-    "mtime": 1791644325.6783268,
-    "seen": 1791644336.348075,
+    "mtime": 1791644868.0142193,
+    "seen": 1791644879.8421795,
     "ast_hash": "2051373790d109f55786f16c4d393c3e",
     "semantic_hash": "2051373790d109f55786f16c4d393c3e"
   },
   "flutter_app/test/widget_test.dart": {
-    "mtime": 1791644325.6787467,
-    "seen": 1791644336.348076,
+    "mtime": 1791644868.0145528,
+    "seen": 1791644879.8421805,
     "ast_hash": "f5bc2a6b3717cbd36ca272bf2f7d9a00",
     "semantic_hash": "f5bc2a6b3717cbd36ca272bf2f7d9a00"
   },
   "flutter_app/windows/flutter/generated_plugin_registrant.cc": {
-    "mtime": 1791644325.6790056,
-    "seen": 1791644336.348077,
+    "mtime": 1791644868.0147283,
+    "seen": 1791644879.8421814,
     "ast_hash": "8c7c7951120a04b59071d00fa42e0d8f",
     "semantic_hash": "8c7c7951120a04b59071d00fa42e0d8f"
   },
   "flutter_app/windows/flutter/generated_plugin_registrant.h": {
-    "mtime": 1791644325.6790056,
-    "seen": 1791644336.348078,
+    "mtime": 1791644868.0147283,
+    "seen": 1791644879.8421822,
     "ast_hash": "0ea33875f9f8e118f9c2ded03e2e2835",
     "semantic_hash": "0ea33875f9f8e118f9c2ded03e2e2835"
   },
   "flutter_app/windows/runner/flutter_window.cpp": {
-    "mtime": 1791644325.6791682,
-    "seen": 1791644336.3480792,
+    "mtime": 1791644868.014854,
+    "seen": 1791644879.842183,
     "ast_hash": "9b92b95a9eecce25e3e9d356688d0cb6",
     "semantic_hash": "9b92b95a9eecce25e3e9d356688d0cb6"
   },
   "flutter_app/windows/runner/flutter_window.h": {
-    "mtime": 1791644325.6791682,
-    "seen": 1791644336.3480802,
+    "mtime": 1791644868.014854,
+    "seen": 1791644879.8421843,
     "ast_hash": "79bea736711adda00c49419a39a4a0b4",
     "semantic_hash": "79bea736711adda00c49419a39a4a0b4"
   },
   "flutter_app/windows/runner/main.cpp": {
-    "mtime": 1791644325.6791682,
-    "seen": 1791644336.3480809,
+    "mtime": 1791644868.014854,
+    "seen": 1791644879.8421853,
     "ast_hash": "6151f6081ffd57fdc8959355a7056087",
     "semantic_hash": "6151f6081ffd57fdc8959355a7056087"
   },
   "flutter_app/windows/runner/resource.h": {
-    "mtime": 1791644325.6791682,
-    "seen": 1791644336.3480818,
+    "mtime": 1791644868.014854,
+    "seen": 1791644879.8421862,
     "ast_hash": "c8f809a4f8d3f2f625e358fd90f72fee",
     "semantic_hash": "c8f809a4f8d3f2f625e358fd90f72fee"
   },
   "flutter_app/windows/runner/utils.cpp": {
-    "mtime": 1791644325.6791682,
-    "seen": 1791644336.348083,
+    "mtime": 1791644868.014854,
+    "seen": 1791644879.8421874,
     "ast_hash": "e56aa0d1b2e1b995000d67e8e069b83f",
     "semantic_hash": "e56aa0d1b2e1b995000d67e8e069b83f"
   },
   "flutter_app/windows/runner/utils.h": {
-    "mtime": 1791644325.6791682,
-    "seen": 1791644336.348084,
+    "mtime": 1791644868.014854,
+    "seen": 1791644879.8421884,
     "ast_hash": "c741fb9cddbf3a62f4688b6cca39ddcc",
     "semantic_hash": "c741fb9cddbf3a62f4688b6cca39ddcc"
   },
   "flutter_app/windows/runner/win32_window.cpp": {
-    "mtime": 1791644325.6791682,
-    "seen": 1791644336.348085,
+    "mtime": 1791644868.014956,
+    "seen": 1791644879.8421893,
     "ast_hash": "928e86a2be27eca688669dce6c9177d9",
     "semantic_hash": "928e86a2be27eca688669dce6c9177d9"
   },
   "flutter_app/windows/runner/win32_window.h": {
-    "mtime": 1791644325.6791682,
-    "seen": 1791644336.3480866,
+    "mtime": 1791644868.014956,
+    "seen": 1791644879.8421905,
     "ast_hash": "5a4cf051798d7e6931ee0405a4523c8f",
     "semantic_hash": "5a4cf051798d7e6931ee0405a4523c8f"
   },
   "package.json": {
-    "mtime": 1791644325.6834931,
-    "seen": 1791644336.3480875,
+    "mtime": 1791644868.0199559,
+    "seen": 1791644879.8421915,
     "ast_hash": "a3f7a658807dfc7f0bba949ba49cb09b",
     "semantic_hash": "a3f7a658807dfc7f0bba949ba49cb09b"
   },
   "packages/lixh_player/android/build.gradle.kts": {
-    "mtime": 1791644325.6850715,
-    "seen": 1791644336.3480887,
+    "mtime": 1791644868.020643,
+    "seen": 1791644879.8421924,
     "ast_hash": "fd4f0afe4c7487748afba5bf61fc9296",
     "semantic_hash": "fd4f0afe4c7487748afba5bf61fc9296"
   },
   "packages/lixh_player/android/settings.gradle.kts": {
-    "mtime": 1791644325.6850715,
-    "seen": 1791644336.34809,
+    "mtime": 1791644868.020643,
+    "seen": 1791644879.8421934,
     "ast_hash": "468822b4c291e529c6f92d00ba46f0ea",
     "semantic_hash": "468822b4c291e529c6f92d00ba46f0ea"
   },
   "packages/lixh_player/android/src/main/cpp/lixh_player_jni.cpp": {
-    "mtime": 1791644325.6853285,
-    "seen": 1791644336.348091,
+    "mtime": 1791644868.02084,
+    "seen": 1791644879.8421943,
     "ast_hash": "7cb348d4bf6f961603ad23ef85419eb5",
     "semantic_hash": "7cb348d4bf6f961603ad23ef85419eb5"
   },
   "packages/lixh_player/android/src/main/kotlin/com/livecatch/lixh_player/LixhPlayerPlugin.kt": {
-    "mtime": 1791644325.6855085,
-    "seen": 1791644336.3480926,
+    "mtime": 1791644868.0209908,
+    "seen": 1791644879.8421953,
     "ast_hash": "4f972c310dc6ebca89de8171db4cc0f0",
     "semantic_hash": "4f972c310dc6ebca89de8171db4cc0f0"
   },
   "packages/lixh_player/android/src/test/kotlin/com/livecatch/lixh_player/LixhPlayerPluginTest.kt": {
-    "mtime": 1791644325.6856863,
-    "seen": 1791644336.3480937,
+    "mtime": 1791644868.021131,
+    "seen": 1791644879.842196,
     "ast_hash": "2fc6bbee5824a207c75b83e1e774293a",
     "semantic_hash": "2fc6bbee5824a207c75b83e1e774293a"
   },
   "packages/lixh_player/example/android/app/build.gradle.kts": {
-    "mtime": 1791644325.6860466,
-    "seen": 1791644336.348095,
+    "mtime": 1791644868.0213811,
+    "seen": 1791644879.8421967,
     "ast_hash": "113444a543276d541f26c481a58e8813",
     "semantic_hash": "113444a543276d541f26c481a58e8813"
   },
   "packages/lixh_player/example/android/app/src/main/kotlin/com/livecatch/lixh_player_example/MainActivity.kt": {
-    "mtime": 1791644325.6863234,
-    "seen": 1791644336.348096,
+    "mtime": 1791644868.021592,
+    "seen": 1791644879.8421981,
     "ast_hash": "abc0da8f08f90960efc7d93abfb9c3e9",
     "semantic_hash": "abc0da8f08f90960efc7d93abfb9c3e9"
   },
   "packages/lixh_player/example/android/build.gradle.kts": {
-    "mtime": 1791644325.6864932,
-    "seen": 1791644336.3480973,
+    "mtime": 1791644868.0216942,
+    "seen": 1791644879.842199,
     "ast_hash": "f509340acd3af090a0da81b296e55623",
     "semantic_hash": "f509340acd3af090a0da81b296e55623"
   },
   "packages/lixh_player/example/android/settings.gradle.kts": {
-    "mtime": 1791644325.6871946,
-    "seen": 1791644336.3480983,
+    "mtime": 1791644868.021956,
+    "seen": 1791644879.8421998,
     "ast_hash": "495f612d7a5c53bca5d9b72fb16e8b1b",
     "semantic_hash": "495f612d7a5c53bca5d9b72fb16e8b1b"
   },
   "packages/lixh_player/example/integration_test/plugin_integration_test.dart": {
-    "mtime": 1791644325.6871946,
-    "seen": 1791644336.3481,
+    "mtime": 1791644868.021956,
+    "seen": 1791644879.8422005,
     "ast_hash": "f33cc8bb9ff26bfeb839c3674618bdc6",
     "semantic_hash": "f33cc8bb9ff26bfeb839c3674618bdc6"
   },
   "packages/lixh_player/example/ios/Runner/AppDelegate.swift": {
-    "mtime": 1791644325.6880028,
-    "seen": 1791644336.3481011,
+    "mtime": 1791644868.0228536,
+    "seen": 1791644879.8422017,
     "ast_hash": "2bd8469f2a4b701ff582f6574e58b13c",
     "semantic_hash": "2bd8469f2a4b701ff582f6574e58b13c"
   },
   "packages/lixh_player/example/ios/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json": {
-    "mtime": 1791644325.688117,
-    "seen": 1791644336.3481023,
+    "mtime": 1791644868.0229354,
+    "seen": 1791644879.8422027,
     "ast_hash": "c3cdf9688b604d14f2e76a8287e16167",
     "semantic_hash": "c3cdf9688b604d14f2e76a8287e16167"
   },
   "packages/lixh_player/example/ios/Runner/Assets.xcassets/LaunchImage.imageset/Contents.json": {
-    "mtime": 1791644325.6881945,
-    "seen": 1791644336.3481035,
+    "mtime": 1791644868.0229995,
+    "seen": 1791644879.8422034,
     "ast_hash": "770f4f65e02ca2fc57f46f4f4148d15d",
     "semantic_hash": "770f4f65e02ca2fc57f46f4f4148d15d"
   },
   "packages/lixh_player/example/ios/Runner/Runner-Bridging-Header.h": {
-    "mtime": 1791644325.6889076,
-    "seen": 1791644336.3481045,
+    "mtime": 1791644868.0235636,
+    "seen": 1791644879.842204,
     "ast_hash": "e07862ac930ed4d8479185d52c6cc66d",
     "semantic_hash": "e07862ac930ed4d8479185d52c6cc66d"
   },
   "packages/lixh_player/example/ios/Runner/SceneDelegate.swift": {
-    "mtime": 1791644325.6889076,
-    "seen": 1791644336.3481054,
+    "mtime": 1791644868.0235636,
+    "seen": 1791644879.8422053,
     "ast_hash": "748d701e783e68faf618c00464257a19",
     "semantic_hash": "748d701e783e68faf618c00464257a19"
   },
   "packages/lixh_player/example/ios/RunnerTests/RunnerTests.swift": {
-    "mtime": 1791644325.6889076,
-    "seen": 1791644336.3481064,
+    "mtime": 1791644868.0235636,
+    "seen": 1791644879.842227,
     "ast_hash": "ec1f7ede5bda1d74c964715314855b2b",
     "semantic_hash": "ec1f7ede5bda1d74c964715314855b2b"
   },
   "packages/lixh_player/example/lib/main.dart": {
-    "mtime": 1791644325.6889076,
-    "seen": 1791644336.3481076,
+    "mtime": 1791644868.0235636,
+    "seen": 1791644879.8422284,
     "ast_hash": "d51ec8d6f97a7c8cf0fecafafcc67cee",
     "semantic_hash": "d51ec8d6f97a7c8cf0fecafafcc67cee"
   },
   "packages/lixh_player/example/macos/Runner/AppDelegate.swift": {
-    "mtime": 1791644325.6896796,
-    "seen": 1791644336.3481085,
+    "mtime": 1791644868.0241575,
+    "seen": 1791644879.84223,
     "ast_hash": "2a7411ae3e7c6715525b94b6f8d2e80b",
     "semantic_hash": "2a7411ae3e7c6715525b94b6f8d2e80b"
   },
   "packages/lixh_player/example/macos/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json": {
-    "mtime": 1791644325.6898093,
-    "seen": 1791644336.3481095,
+    "mtime": 1791644868.0242758,
+    "seen": 1791644879.8422315,
     "ast_hash": "5bd47c3ef1d1a261037c87fb3ddb9cfd",
     "semantic_hash": "5bd47c3ef1d1a261037c87fb3ddb9cfd"
   },
   "packages/lixh_player/example/macos/Runner/MainFlutterWindow.swift": {
-    "mtime": 1791644325.6910448,
-    "seen": 1791644336.3481107,
+    "mtime": 1791644868.0252602,
+    "seen": 1791644879.842233,
     "ast_hash": "4a747b1f256d62a2bbb79bd976891eb5",
     "semantic_hash": "4a747b1f256d62a2bbb79bd976891eb5"
   },
   "packages/lixh_player/example/macos/RunnerTests/RunnerTests.swift": {
-    "mtime": 1791644325.6910448,
-    "seen": 1791644336.3481116,
+    "mtime": 1791644868.0252602,
+    "seen": 1791644879.8422341,
     "ast_hash": "c3550848ab179ad3ff426f27c2dad389",
     "semantic_hash": "c3550848ab179ad3ff426f27c2dad389"
   },
   "packages/lixh_player/example/test/widget_test.dart": {
-    "mtime": 1791644325.6910448,
-    "seen": 1791644336.3481126,
+    "mtime": 1791644868.0252602,
+    "seen": 1791644879.8422356,
     "ast_hash": "d475e6948cab0ce159c45cea266ca04a",
     "semantic_hash": "d475e6948cab0ce159c45cea266ca04a"
   },
   "packages/lixh_player/example/windows/flutter/generated_plugin_registrant.cc": {
-    "mtime": 1791644325.691683,
-    "seen": 1791644336.3481138,
+    "mtime": 1791644868.0257542,
+    "seen": 1791644879.842237,
     "ast_hash": "8c7c7951120a04b59071d00fa42e0d8f",
     "semantic_hash": "8c7c7951120a04b59071d00fa42e0d8f"
   },
   "packages/lixh_player/example/windows/flutter/generated_plugin_registrant.h": {
-    "mtime": 1791644325.691683,
-    "seen": 1791644336.3481147,
+    "mtime": 1791644868.0257542,
+    "seen": 1791644879.8422384,
     "ast_hash": "0ea33875f9f8e118f9c2ded03e2e2835",
     "semantic_hash": "0ea33875f9f8e118f9c2ded03e2e2835"
   },
   "packages/lixh_player/example/windows/runner/flutter_window.cpp": {
-    "mtime": 1791644325.691888,
-    "seen": 1791644336.3481157,
+    "mtime": 1791644868.025886,
+    "seen": 1791644879.84224,
     "ast_hash": "9b92b95a9eecce25e3e9d356688d0cb6",
     "semantic_hash": "9b92b95a9eecce25e3e9d356688d0cb6"
   },
   "packages/lixh_player/example/windows/runner/flutter_window.h": {
-    "mtime": 1791644325.691888,
-    "seen": 1791644336.3481166,
+    "mtime": 1791644868.025886,
+    "seen": 1791644879.8422413,
     "ast_hash": "79bea736711adda00c49419a39a4a0b4",
     "semantic_hash": "79bea736711adda00c49419a39a4a0b4"
   },
   "packages/lixh_player/example/windows/runner/main.cpp": {
-    "mtime": 1791644325.691888,
-    "seen": 1791644336.3481178,
+    "mtime": 1791644868.025886,
+    "seen": 1791644879.8422427,
     "ast_hash": "cbd13e8c8e90d91ab619f8f088ef5118",
     "semantic_hash": "cbd13e8c8e90d91ab619f8f088ef5118"
   },
   "packages/lixh_player/example/windows/runner/resource.h": {
-    "mtime": 1791644325.691888,
-    "seen": 1791644336.3481188,
+    "mtime": 1791644868.025886,
+    "seen": 1791644879.8422441,
     "ast_hash": "c8f809a4f8d3f2f625e358fd90f72fee",
     "semantic_hash": "c8f809a4f8d3f2f625e358fd90f72fee"
   },
   "packages/lixh_player/example/windows/runner/utils.cpp": {
-    "mtime": 1791644325.691888,
-    "seen": 1791644336.3481197,
+    "mtime": 1791644868.025886,
+    "seen": 1791644879.8422456,
     "ast_hash": "e56aa0d1b2e1b995000d67e8e069b83f",
     "semantic_hash": "e56aa0d1b2e1b995000d67e8e069b83f"
   },
   "packages/lixh_player/example/windows/runner/utils.h": {
-    "mtime": 1791644325.691888,
-    "seen": 1791644336.348121,
+    "mtime": 1791644868.025956,
+    "seen": 1791644879.8422472,
     "ast_hash": "c741fb9cddbf3a62f4688b6cca39ddcc",
     "semantic_hash": "c741fb9cddbf3a62f4688b6cca39ddcc"
   },
   "packages/lixh_player/example/windows/runner/win32_window.cpp": {
-    "mtime": 1791644325.691888,
-    "seen": 1791644336.348122,
+    "mtime": 1791644868.025956,
+    "seen": 1791644879.8422487,
     "ast_hash": "928e86a2be27eca688669dce6c9177d9",
     "semantic_hash": "928e86a2be27eca688669dce6c9177d9"
   },
   "packages/lixh_player/example/windows/runner/win32_window.h": {
-    "mtime": 1791644325.691888,
-    "seen": 1791644336.3481228,
+    "mtime": 1791644868.025956,
+    "seen": 1791644879.8422503,
     "ast_hash": "5a4cf051798d7e6931ee0405a4523c8f",
     "semantic_hash": "5a4cf051798d7e6931ee0405a4523c8f"
   },
   "packages/lixh_player/ios/lixh_player/Package.swift": {
-    "mtime": 1791644325.6925285,
-    "seen": 1791644336.3481238,
+    "mtime": 1791644868.026394,
+    "seen": 1791644879.8422523,
     "ast_hash": "c18344704111a889f3b8661aececba06",
     "semantic_hash": "c18344704111a889f3b8661aececba06"
   },
   "packages/lixh_player/ios/lixh_player/Sources/lixh_player/LixhAudioOutput.m": {
-    "mtime": 1791644325.692669,
-    "seen": 1791644336.348125,
+    "mtime": 1791644868.0265014,
+    "seen": 1791644879.8422537,
     "ast_hash": "673323525de1f20717bd508925bba0b8",
     "semantic_hash": "673323525de1f20717bd508925bba0b8"
   },
   "packages/lixh_player/ios/lixh_player/Sources/lixh_player/LixhPixelTexture.m": {
-    "mtime": 1791644325.69277,
-    "seen": 1791644336.3481262,
+    "mtime": 1791644868.0265837,
+    "seen": 1791644879.8422544,
     "ast_hash": "94387d8c2900235978738e5a133d3b96",
     "semantic_hash": "94387d8c2900235978738e5a133d3b96"
   },
   "packages/lixh_player/ios/lixh_player/Sources/lixh_player/LixhPlayerEngine.m": {
-    "mtime": 1791644325.69277,
-    "seen": 1791644336.3481271,
+    "mtime": 1791644868.0265837,
+    "seen": 1791644879.842255,
     "ast_hash": "90b1594219a554d731048a8cc089b878",
     "semantic_hash": "90b1594219a554d731048a8cc089b878"
   },
   "packages/lixh_player/ios/lixh_player/Sources/lixh_player/LixhPlayerPlugin.swift": {
-    "mtime": 1791644325.69277,
-    "seen": 1791644336.3481283,
+    "mtime": 1791644868.0265837,
+    "seen": 1791644879.842256,
     "ast_hash": "f9fb8c666267083782e8b566956ec4c6",
     "semantic_hash": "f9fb8c666267083782e8b566956ec4c6"
   },
   "packages/lixh_player/ios/lixh_player/Sources/lixh_player/include/LixhAudioOutput.h": {
-    "mtime": 1791644325.69277,
-    "seen": 1791644336.3481293,
+    "mtime": 1791644868.0265837,
+    "seen": 1791644879.8422568,
     "ast_hash": "5363106a5806e0d019bed3bc535706ee",
     "semantic_hash": "5363106a5806e0d019bed3bc535706ee"
   },
   "packages/lixh_player/ios/lixh_player/Sources/lixh_player/include/LixhPixelTexture.h": {
-    "mtime": 1791644325.6930535,
-    "seen": 1791644336.3481302,
+    "mtime": 1791644868.0267878,
+    "seen": 1791644879.8422577,
     "ast_hash": "b28d6e0bbbaf3d3682b612e9e894fad6",
     "semantic_hash": "b28d6e0bbbaf3d3682b612e9e894fad6"
   },
   "packages/lixh_player/ios/lixh_player/Sources/lixh_player/include/LixhPlayerEngine.h": {
-    "mtime": 1791644325.6930535,
-    "seen": 1791644336.3481317,
+    "mtime": 1791644868.0267878,
+    "seen": 1791644879.8422587,
     "ast_hash": "4fed6971c93a7ecfd6297793281c3331",
     "semantic_hash": "4fed6971c93a7ecfd6297793281c3331"
   },
   "packages/lixh_player/ios/lixh_player/Sources/lixh_player_corec/include/lixh_player_corec.h": {
-    "mtime": 1791644325.6931589,
-    "seen": 1791644336.3481326,
+    "mtime": 1791644868.026869,
+    "seen": 1791644879.8422594,
     "ast_hash": "4e9d1a28e4c5ac36ff794b9df8830518",
     "semantic_hash": "4e9d1a28e4c5ac36ff794b9df8830518"
   },
   "packages/lixh_player/ios/lixh_player/Sources/lixh_player_corec/lixh_player_unity.c": {
-    "mtime": 1791644325.6931589,
-    "seen": 1791644336.3481336,
+    "mtime": 1791644868.026869,
+    "seen": 1791644879.8422606,
     "ast_hash": "6c2ab454971f1c09ecb702e2cbd92acb",
     "semantic_hash": "6c2ab454971f1c09ecb702e2cbd92acb"
   },
   "packages/lixh_player/lib/lixh_player.dart": {
-    "mtime": 1791644325.6931589,
-    "seen": 1791644336.3481357,
+    "mtime": 1791644868.026869,
+    "seen": 1791644879.8422623,
     "ast_hash": "670ddacef25fdc98891d4706f7fd6b3b",
     "semantic_hash": "670ddacef25fdc98891d4706f7fd6b3b"
   },
   "packages/lixh_player/lib/lixh_player_method_channel.dart": {
-    "mtime": 1791644325.6933434,
-    "seen": 1791644336.3481367,
+    "mtime": 1791644868.027012,
+    "seen": 1791644879.842263,
     "ast_hash": "b866c5ed460ac81fbdb4603532d27082",
     "semantic_hash": "b866c5ed460ac81fbdb4603532d27082"
   },
   "packages/lixh_player/lib/lixh_player_platform_interface.dart": {
-    "mtime": 1791644325.6933434,
-    "seen": 1791644336.3481376,
+    "mtime": 1791644868.027012,
+    "seen": 1791644879.8422642,
     "ast_hash": "a2b5fe132b1a8136b1365eb31af0c6f3",
     "semantic_hash": "a2b5fe132b1a8136b1365eb31af0c6f3"
   },
   "packages/lixh_player/macos/lixh_player/Package.swift": {
-    "mtime": 1791644325.6935375,
-    "seen": 1791644336.3481388,
+    "mtime": 1791644868.0271392,
+    "seen": 1791644879.842265,
     "ast_hash": "8081949dd8ba96df518259adb2c0ca5c",
     "semantic_hash": "8081949dd8ba96df518259adb2c0ca5c"
   },
   "packages/lixh_player/macos/lixh_player/Sources/lixh_player/LixhAudioOutput.m": {
-    "mtime": 1791644325.6936166,
-    "seen": 1791644336.3481398,
+    "mtime": 1791644868.027195,
+    "seen": 1791644879.842266,
     "ast_hash": "673323525de1f20717bd508925bba0b8",
     "semantic_hash": "673323525de1f20717bd508925bba0b8"
   },
   "packages/lixh_player/macos/lixh_player/Sources/lixh_player/LixhPixelTexture.m": {
-    "mtime": 1791644325.693722,
-    "seen": 1791644336.3481407,
+    "mtime": 1791644868.0272827,
+    "seen": 1791644879.8422668,
     "ast_hash": "94387d8c2900235978738e5a133d3b96",
     "semantic_hash": "94387d8c2900235978738e5a133d3b96"
   },
   "packages/lixh_player/macos/lixh_player/Sources/lixh_player/LixhPlayerEngine.m": {
-    "mtime": 1791644325.693722,
-    "seen": 1791644336.3481421,
+    "mtime": 1791644868.0272827,
+    "seen": 1791644879.842268,
     "ast_hash": "dc4944cef8eb3d3968140c9d25ce4bb3",
     "semantic_hash": "dc4944cef8eb3d3968140c9d25ce4bb3"
   },
   "packages/lixh_player/macos/lixh_player/Sources/lixh_player/LixhPlayerPlugin.swift": {
-    "mtime": 1791644325.693722,
-    "seen": 1791644336.348143,
+    "mtime": 1791644868.0272827,
+    "seen": 1791644879.842269,
     "ast_hash": "3bd34e7b0671d7faf516b34c9731d58e",
     "semantic_hash": "3bd34e7b0671d7faf516b34c9731d58e"
   },
   "packages/lixh_player/macos/lixh_player/Sources/lixh_player/include/LixhAudioOutput.h": {
-    "mtime": 1791644325.693722,
-    "seen": 1791644336.3481443,
+    "mtime": 1791644868.0272827,
+    "seen": 1791644879.8422697,
     "ast_hash": "5363106a5806e0d019bed3bc535706ee",
     "semantic_hash": "5363106a5806e0d019bed3bc535706ee"
   },
   "packages/lixh_player/macos/lixh_player/Sources/lixh_player/include/LixhPixelTexture.h": {
-    "mtime": 1791644325.6939397,
-    "seen": 1791644336.3481455,
+    "mtime": 1791644868.0274343,
+    "seen": 1791644879.8422706,
     "ast_hash": "ec8dec982ed88114bfc33369adc90e70",
     "semantic_hash": "ec8dec982ed88114bfc33369adc90e70"
   },
   "packages/lixh_player/macos/lixh_player/Sources/lixh_player/include/LixhPlayerEngine.h": {
-    "mtime": 1791644325.6939397,
-    "seen": 1791644336.3481464,
+    "mtime": 1791644868.0274343,
+    "seen": 1791644879.8422716,
     "ast_hash": "23b58bfa39df895134cfed6852b64ac5",
     "semantic_hash": "23b58bfa39df895134cfed6852b64ac5"
   },
   "packages/lixh_player/macos/lixh_player/Sources/lixh_player_corec/include/lixh_player_corec.h": {
-    "mtime": 1791644325.694051,
-    "seen": 1791644336.3481476,
+    "mtime": 1791644868.0275059,
+    "seen": 1791644879.8422725,
     "ast_hash": "4e9d1a28e4c5ac36ff794b9df8830518",
     "semantic_hash": "4e9d1a28e4c5ac36ff794b9df8830518"
   },
   "packages/lixh_player/macos/lixh_player/Sources/lixh_player_corec/lixh_player_unity.c": {
-    "mtime": 1791644325.694051,
-    "seen": 1791644336.3481488,
+    "mtime": 1791644868.0275059,
+    "seen": 1791644879.8422732,
     "ast_hash": "6c2ab454971f1c09ecb702e2cbd92acb",
     "semantic_hash": "6c2ab454971f1c09ecb702e2cbd92acb"
   },
   "packages/lixh_player/test/lixh_player_method_channel_test.dart": {
-    "mtime": 1791644325.694051,
-    "seen": 1791644336.3481498,
+    "mtime": 1791644868.0275059,
+    "seen": 1791644879.842274,
     "ast_hash": "068e658fee04bb716d4344e84fc31aa0",
     "semantic_hash": "068e658fee04bb716d4344e84fc31aa0"
   },
   "packages/lixh_player/test/lixh_player_test.dart": {
-    "mtime": 1791644325.6942377,
-    "seen": 1791644336.3481507,
+    "mtime": 1791644868.0276396,
+    "seen": 1791644879.8422751,
     "ast_hash": "138c96c9e551c35a554ead6206763f73",
     "semantic_hash": "138c96c9e551c35a554ead6206763f73"
   },
   "packages/lixh_player/windows/audio_output.cpp": {
-    "mtime": 1791644325.694342,
-    "seen": 1791644336.348152,
+    "mtime": 1791644868.0277185,
+    "seen": 1791644879.842276,
     "ast_hash": "aa5529a3e362f18213c4046e5057eede",
     "semantic_hash": "aa5529a3e362f18213c4046e5057eede"
   },
   "packages/lixh_player/windows/audio_output.h": {
-    "mtime": 1791644325.694342,
-    "seen": 1791644336.3481529,
+    "mtime": 1791644868.0277185,
+    "seen": 1791644879.842277,
     "ast_hash": "ae2f60b97800f64ca81218d775c18b44",
     "semantic_hash": "ae2f60b97800f64ca81218d775c18b44"
   },
   "packages/lixh_player/windows/include/lixh_player/lixh_player_plugin_c_api.h": {
-    "mtime": 1791644325.6946006,
-    "seen": 1791644336.3481538,
+    "mtime": 1791644868.0279,
+    "seen": 1791644879.842278,
     "ast_hash": "85883baea6b1388057e1594e021f02b0",
     "semantic_hash": "85883baea6b1388057e1594e021f02b0"
   },
   "packages/lixh_player/windows/lixh_player_plugin.cpp": {
-    "mtime": 1791644325.6946006,
-    "seen": 1791644336.3481548,
+    "mtime": 1791644868.0279,
+    "seen": 1791644879.8422787,
     "ast_hash": "c71f796d94fcf75b736f666c13fcc673",
     "semantic_hash": "c71f796d94fcf75b736f666c13fcc673"
   },
   "packages/lixh_player/windows/lixh_player_plugin.h": {
-    "mtime": 1791644325.6946006,
-    "seen": 1791644336.348156,
+    "mtime": 1791644868.0279,
+    "seen": 1791644879.8422797,
     "ast_hash": "c11be2f5afc25a5d86eb4efa54de2538",
     "semantic_hash": "c11be2f5afc25a5d86eb4efa54de2538"
   },
   "packages/lixh_player/windows/lixh_player_plugin_c_api.cpp": {
-    "mtime": 1791644325.6946006,
-    "seen": 1791644336.348157,
+    "mtime": 1791644868.0279,
+    "seen": 1791644879.8422804,
     "ast_hash": "8733efe35727128e772c547838319ce8",
     "semantic_hash": "8733efe35727128e772c547838319ce8"
   },
   "packages/lixh_player/windows/player_session.cpp": {
-    "mtime": 1791644325.6946006,
-    "seen": 1791644336.348158,
+    "mtime": 1791644868.0279,
+    "seen": 1791644879.8422816,
     "ast_hash": "08b3950e553a32f950f8b3c886dd6f22",
     "semantic_hash": "08b3950e553a32f950f8b3c886dd6f22"
   },
   "packages/lixh_player/windows/player_session.h": {
-    "mtime": 1791644325.6946006,
-    "seen": 1791644336.348159,
+    "mtime": 1791644868.0279,
+    "seen": 1791644879.8422825,
     "ast_hash": "8319a5543acd46a979f918b188fcf9a9",
     "semantic_hash": "8319a5543acd46a979f918b188fcf9a9"
   },
   "packages/lixh_player/windows/shared_texture.cpp": {
-    "mtime": 1791644325.6946006,
-    "seen": 1791644336.34816,
+    "mtime": 1791644868.0279558,
+    "seen": 1791644879.8422835,
     "ast_hash": "6a9cf6e41b75b48ea95d651c2d0a98f1",
     "semantic_hash": "6a9cf6e41b75b48ea95d651c2d0a98f1"
   },
   "packages/lixh_player/windows/shared_texture.h": {
-    "mtime": 1791644325.6946006,
-    "seen": 1791644336.348161,
+    "mtime": 1791644868.0279558,
+    "seen": 1791644879.8422842,
     "ast_hash": "fb2c9b8516ce80c4f58094a4f0ca69b8",
     "semantic_hash": "fb2c9b8516ce80c4f58094a4f0ca69b8"
   },
   "packages/lixh_player/windows/test/lixh_player_plugin_test.cpp": {
-    "mtime": 1791644325.6946006,
-    "seen": 1791644336.348162,
+    "mtime": 1791644868.0279558,
+    "seen": 1791644879.8422854,
     "ast_hash": "d7f8d74e73f0f31063ba66deb945884d",
     "semantic_hash": "d7f8d74e73f0f31063ba66deb945884d"
   },
   "src-tauri/Cargo.toml": {
-    "mtime": 1791644325.6958354,
-    "seen": 1791644336.3481631,
+    "mtime": 1791644868.0289276,
+    "seen": 1791644879.8422863,
     "ast_hash": "9fbf473629808554ae38805654a9c67c",
     "semantic_hash": "9fbf473629808554ae38805654a9c67c"
   },
   "src-tauri/build.rs": {
-    "mtime": 1791644325.6958354,
-    "seen": 1791644336.3481643,
+    "mtime": 1791644868.0289276,
+    "seen": 1791644879.842287,
     "ast_hash": "b4428ba97d5c3689886c27ca765a70fd",
     "semantic_hash": "b4428ba97d5c3689886c27ca765a70fd"
   },
   "src-tauri/capabilities/default.json": {
-    "mtime": 1791644325.6958354,
-    "seen": 1791644336.3481653,
+    "mtime": 1791644868.0289276,
+    "seen": 1791644879.842288,
     "ast_hash": "002ae4ff94c832f041c21f439f4c4929",
     "semantic_hash": "002ae4ff94c832f041c21f439f4c4929"
   },
   "src-tauri/lixh-stream-stack/Cargo.toml": {
-    "mtime": 1791644325.696258,
-    "seen": 1791644336.3481665,
+    "mtime": 1791644868.0289557,
+    "seen": 1791644879.8422892,
     "ast_hash": "638322a29eb481904e54196e465a3225",
     "semantic_hash": "638322a29eb481904e54196e465a3225"
   },
   "src-tauri/lixh-stream-stack/lixh-playback-engine/Cargo.toml": {
-    "mtime": 1791644325.6965714,
-    "seen": 1791644336.3481674,
+    "mtime": 1791644868.0294943,
+    "seen": 1791644879.84229,
     "ast_hash": "2a8301fba1a8b19f14b4a5da98c8966b",
     "semantic_hash": "2a8301fba1a8b19f14b4a5da98c8966b"
   },
   "src-tauri/lixh-stream-stack/lixh-playback-engine/build.rs": {
-    "mtime": 1791644325.696624,
-    "seen": 1791644336.3481684,
+    "mtime": 1791644868.0295343,
+    "seen": 1791644879.8422909,
     "ast_hash": "fc5f60848c9375ab62ed690a8c567e82",
     "semantic_hash": "fc5f60848c9375ab62ed690a8c567e82"
   },
   "src-tauri/lixh-stream-stack/lixh-playback-engine/src/lib.rs": {
-    "mtime": 1791644325.696624,
-    "seen": 1791644336.3481696,
+    "mtime": 1791644868.0295343,
+    "seen": 1791644879.8422916,
     "ast_hash": "d4787ff098756f221e454374381433ba",
     "semantic_hash": "d4787ff098756f221e454374381433ba"
   },
   "src-tauri/lixh-stream-stack/lixh-playback-engine/src/native_surface.rs": {
-    "mtime": 1791644325.696736,
-    "seen": 1791644336.3481705,
+    "mtime": 1791644868.0296242,
+    "seen": 1791644879.8422925,
     "ast_hash": "322cd0006cd77522ae95c85f6a26a799",
     "semantic_hash": "322cd0006cd77522ae95c85f6a26a799"
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/Cargo.toml": {
-    "mtime": 1791644325.696736,
-    "seen": 1791644336.3481717,
+    "mtime": 1791644868.0296242,
+    "seen": 1791644879.8422935,
     "ast_hash": "8135a446f1921d5444f48f6af45a946b",
     "semantic_hash": "8135a446f1921d5444f48f6af45a946b"
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/build.rs": {
-    "mtime": 1791644325.696841,
-    "seen": 1791644336.348173,
+    "mtime": 1791644868.0297027,
+    "seen": 1791644879.8422942,
     "ast_hash": "3a7a85ee1ad1f33359e09ce06a3be393",
     "semantic_hash": "3a7a85ee1ad1f33359e09ce06a3be393"
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/include/lixh_player.h": {
-    "mtime": 1791644325.696841,
-    "seen": 1791644336.3481739,
+    "mtime": 1791644868.0297027,
+    "seen": 1791644879.842295,
     "ast_hash": "631097efab79f0670600862b5e014ce0",
     "semantic_hash": "631097efab79f0670600862b5e014ce0"
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/include/lixh_surface.h": {
-    "mtime": 1791644325.6969917,
-    "seen": 1791644336.3481748,
+    "mtime": 1791644868.0298076,
+    "seen": 1791644879.8422961,
     "ast_hash": "67cd7a9597f327114e7896f1e3dc7241",
     "semantic_hash": "67cd7a9597f327114e7896f1e3dc7241"
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/native/lixh_player.c": {
-    "mtime": 1791644325.6969917,
-    "seen": 1791644336.3481758,
+    "mtime": 1791644868.0298076,
+    "seen": 1791644879.8422966,
     "ast_hash": "94dda0e029e8716902d1cc0fd0738b50",
     "semantic_hash": "94dda0e029e8716902d1cc0fd0738b50"
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/native/lixh_surface_macos.m": {
-    "mtime": 1791644325.697202,
-    "seen": 1791644336.348177,
+    "mtime": 1791644868.0299735,
+    "seen": 1791644879.8422976,
     "ast_hash": "98723c02d9e0bd4976ef03e57c492188",
     "semantic_hash": "98723c02d9e0bd4976ef03e57c492188"
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/src/lib.rs": {
-    "mtime": 1791644325.697202,
-    "seen": 1791644336.348178,
+    "mtime": 1791644868.0299735,
+    "seen": 1791644879.8422985,
     "ast_hash": "152438d0756fa64d8c11922cef7237c7",
     "semantic_hash": "152438d0756fa64d8c11922cef7237c7"
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/src/runtime.rs": {
-    "mtime": 1791644325.6973486,
-    "seen": 1791644336.348179,
+    "mtime": 1791644868.0300906,
+    "seen": 1791644879.8422995,
     "ast_hash": "5408400ff0e91e8374346e31c296afd2",
     "semantic_hash": "5408400ff0e91e8374346e31c296afd2"
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/src/surface.rs": {
-    "mtime": 1791644325.6973486,
-    "seen": 1791644336.3481803,
+    "mtime": 1791644868.0300906,
+    "seen": 1791644879.8423004,
     "ast_hash": "de4e6b55c9a1b0f27d3523a5677a5b81",
     "semantic_hash": "de4e6b55c9a1b0f27d3523a5677a5b81"
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/src/surface_windows.rs": {
-    "mtime": 1791644325.6973486,
-    "seen": 1791644336.3481812,
+    "mtime": 1791644868.0300906,
+    "seen": 1791644879.8423011,
     "ast_hash": "242bcbf23c8ee4ad3317268c077cb9f0",
     "semantic_hash": "242bcbf23c8ee4ad3317268c077cb9f0"
   },
   "src-tauri/lixh-stream-stack/lixh-player-host/Cargo.toml": {
-    "mtime": 1791644325.6973486,
-    "seen": 1791644336.3481822,
+    "mtime": 1791644868.0300906,
+    "seen": 1791644879.8423018,
     "ast_hash": "44733b4b9bfc4577d469195322c46970",
     "semantic_hash": "44733b4b9bfc4577d469195322c46970"
   },
   "src-tauri/lixh-stream-stack/lixh-player-host/src/lib.rs": {
-    "mtime": 1791644325.6976423,
-    "seen": 1791644336.3481834,
+    "mtime": 1791644868.0303419,
+    "seen": 1791644879.842303,
     "ast_hash": "022ca9998792e606e54597422539629b",
     "semantic_hash": "022ca9998792e606e54597422539629b"
   },
   "src-tauri/lixh-stream-stack/lixh-stream-resolver/Cargo.toml": {
-    "mtime": 1791644325.6976423,
-    "seen": 1791644336.3481846,
+    "mtime": 1791644868.0303419,
+    "seen": 1791644879.842304,
     "ast_hash": "f05ee253dfbb5350aeede10736ef5a22",
     "semantic_hash": "f05ee253dfbb5350aeede10736ef5a22"
   },
   "src-tauri/lixh-stream-stack/lixh-stream-resolver/src/bin/lixh_resolve.rs": {
-    "mtime": 1791644325.6977775,
-    "seen": 1791644336.3481855,
+    "mtime": 1791644868.0304415,
+    "seen": 1791644879.842305,
     "ast_hash": "6e22dd0c0d7c4d627154aa8fc12976d5",
     "semantic_hash": "6e22dd0c0d7c4d627154aa8fc12976d5"
   },
   "src-tauri/lixh-stream-stack/lixh-stream-resolver/src/lib.rs": {
-    "mtime": 1791644325.6977775,
-    "seen": 1791644336.3481867,
+    "mtime": 1791644868.0304415,
+    "seen": 1791644879.8423061,
     "ast_hash": "2b086651eaa9ced51dfd323e96c07379",
     "semantic_hash": "2b086651eaa9ced51dfd323e96c07379"
   },
   "src-tauri/lixh-stream-stack/lixh-stream-supervisor/Cargo.toml": {
-    "mtime": 1791644325.6977775,
-    "seen": 1791644336.3481877,
+    "mtime": 1791644868.0304415,
+    "seen": 1791644879.8423069,
     "ast_hash": "2876e3a35edc0fdb58245a294832d0fc",
     "semantic_hash": "2876e3a35edc0fdb58245a294832d0fc"
   },
   "src-tauri/lixh-stream-stack/lixh-stream-supervisor/src/lib.rs": {
-    "mtime": 1791644325.6980114,
-    "seen": 1791644336.3481889,
+    "mtime": 1791644868.0306025,
+    "seen": 1791644879.8423078,
     "ast_hash": "9ae09521b31ccf873adbbb7055493435",
     "semantic_hash": "9ae09521b31ccf873adbbb7055493435"
   },
   "src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-from-actions.sh": {
-    "mtime": 1791644325.6980114,
-    "seen": 1791644336.34819,
+    "mtime": 1791644868.0306025,
+    "seen": 1791644879.8423085,
     "ast_hash": "f9db45b102fd7010965893c65fcbf61b",
     "semantic_hash": "f9db45b102fd7010965893c65fcbf61b"
   },
   "src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-runtime.sh": {
-    "mtime": 1791644325.698155,
-    "seen": 1791644336.348191,
+    "mtime": 1791644868.0307136,
+    "seen": 1791644879.8423095,
     "ast_hash": "483c72c792948dd23c40fbc7a4f334fb",
     "semantic_hash": "483c72c792948dd23c40fbc7a4f334fb"
   },
   "src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh": {
-    "mtime": 1791644325.698155,
-    "seen": 1791644336.3481922,
+    "mtime": 1791644868.0307136,
+    "seen": 1791644879.8423102,
     "ast_hash": "48bcb7aee65509606ccfbfefdfa34f50",
     "semantic_hash": "48bcb7aee65509606ccfbfefdfa34f50"
   },
   "src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg.ps1": {
-    "mtime": 1791644325.698155,
-    "seen": 1791644336.3481932,
+    "mtime": 1791644868.0307136,
+    "seen": 1791644879.842311,
     "ast_hash": "680c775d1416763395b544b10fb8eae5",
     "semantic_hash": "680c775d1416763395b544b10fb8eae5"
   },
   "src-tauri/lixh-stream-stack/scripts/list-ffmpeg-platforms.sh": {
-    "mtime": 1791644325.698155,
-    "seen": 1791644336.3481944,
+    "mtime": 1791644868.0307136,
+    "seen": 1791644879.8423116,
     "ast_hash": "6f4fbc1801bf06646fc40a073e03673e",
     "semantic_hash": "6f4fbc1801bf06646fc40a073e03673e"
   },
   "src-tauri/lixh-stream-stack/scripts/normalize-ffmpeg-macos.sh": {
-    "mtime": 1791644325.698155,
-    "seen": 1791644336.3481956,
+    "mtime": 1791644868.0307136,
+    "seen": 1791644879.842313,
     "ast_hash": "9616cd6abbdc42a8734c61033c8aaad6",
     "semantic_hash": "9616cd6abbdc42a8734c61033c8aaad6"
   },
   "src-tauri/lixh-stream-stack/scripts/prepare-runtime.sh": {
-    "mtime": 1791644325.698155,
-    "seen": 1791644336.3481965,
+    "mtime": 1791644868.0307136,
+    "seen": 1791644879.842314,
     "ast_hash": "b693eb8d4f7610a52e3fb255ed27abea",
     "semantic_hash": "b693eb8d4f7610a52e3fb255ed27abea"
   },
   "src-tauri/lixh-stream-stack/scripts/verify-ffmpeg-consume.sh": {
-    "mtime": 1791644325.698155,
-    "seen": 1791644336.3481977,
+    "mtime": 1791644868.0307136,
+    "seen": 1791644879.8423147,
     "ast_hash": "a54207ea769d593cb7031a28eb90bdf6",
     "semantic_hash": "a54207ea769d593cb7031a28eb90bdf6"
   },
   "src-tauri/src/main.rs": {
-    "mtime": 1791644325.698155,
-    "seen": 1791644336.348199,
+    "mtime": 1791644868.0307136,
+    "seen": 1791644879.8423154,
     "ast_hash": "8f9d369030d8350accc8c6c196db3d13",
     "semantic_hash": "8f9d369030d8350accc8c6c196db3d13"
   },
   "src-tauri/src/player/mod.rs": {
-    "mtime": 1791644325.6985657,
-    "seen": 1791644336.3481998,
+    "mtime": 1791644868.0310972,
+    "seen": 1791644879.8423164,
     "ast_hash": "65b9ff985d1616386d3e9aff302a1851",
     "semantic_hash": "65b9ff985d1616386d3e9aff302a1851"
   },
   "src-tauri/tauri.conf.json": {
-    "mtime": 1791644325.6985657,
-    "seen": 1791644336.348201,
+    "mtime": 1791644868.0310972,
+    "seen": 1791644879.8423173,
     "ast_hash": "e7bca6aaf769e5db92a4f7d899e85309",
     "semantic_hash": "e7bca6aaf769e5db92a4f7d899e85309"
   },
   "src.js": {
-    "mtime": 1791644325.6985657,
-    "seen": 1791644336.348202,
+    "mtime": 1791644868.0310972,
+    "seen": 1791644879.842318,
     "ast_hash": "23e24222ca58548aea9ff63aa37401f8",
     "semantic_hash": "23e24222ca58548aea9ff63aa37401f8"
   },
   "vite.config.js": {
-    "mtime": 1791644325.6985657,
-    "seen": 1791644336.348203,
+    "mtime": 1791644868.0310972,
+    "seen": 1791644879.8423188,
     "ast_hash": "e0ccc99c112709f41e3464d57cf5e0ec",
     "semantic_hash": "e0ccc99c112709f41e3464d57cf5e0ec"
   },
   "packages/lixh_player/ios/sync_ffmpeg_ios.sh": {
-    "mtime": 1791644325.6931589,
-    "seen": 1791644336.3481348,
+    "mtime": 1791644868.026869,
+    "seen": 1791644879.8422613,
     "ast_hash": "21c6ba7c57f8bfd057b6fd1451e61bb1",
     "semantic_hash": "21c6ba7c57f8bfd057b6fd1451e61bb1"
   }
