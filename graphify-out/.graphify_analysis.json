@@ -10,6 +10,8 @@
       "oncelock",
       "refcell",
       "serialize",
+      "src_tauri_lixh_stream_stack_lixh_player_core_src_lib_lixhstats",
+      "src_tauri_lixh_stream_stack_lixh_player_host_src_lib_coreplayeradapter_stats",
       "src_tauri_src_main_player_video_debug",
       "src_tauri_src_player_mod",
       "src_tauri_src_player_mod_alive",
@@ -41,7 +43,6 @@
       "src_tauri_src_player_mod_now_ms",
       "src_tauri_src_player_mod_on_audio",
       "src_tauri_src_player_mod_on_video",
-      "src_tauri_src_player_mod_poll",
       "src_tauri_src_player_mod_present_err",
       "src_tauri_src_player_mod_present_ok",
       "src_tauri_src_player_mod_push_audio_resampled",
@@ -143,7 +144,6 @@
       "idcompositiontarget",
       "idcompositionvisual",
       "matrix3x2",
-      "ptr",
       "src_tauri_lixh_stream_stack_lixh_player_core_src_surface_windows",
       "src_tauri_lixh_stream_stack_lixh_player_core_src_surface_windows_av_pix_fmt_nv12",
       "src_tauri_lixh_stream_stack_lixh_player_core_src_surface_windows_av_pix_fmt_nv21",
@@ -242,57 +242,111 @@
       "vite_config"
     ],
     "4": [
-      "algorithm",
-      "audioclient",
-      "cstring",
-      "mmdeviceapi",
-      "mmreg",
-      "packages_lixh_player_windows_audio_output_audiooutput",
-      "packages_lixh_player_windows_audio_output_audiooutput_audiooutput",
-      "packages_lixh_player_windows_audio_output_audiooutput_buffer_frames",
-      "packages_lixh_player_windows_audio_output_audiooutput_clearqueue",
-      "packages_lixh_player_windows_audio_output_audiooutput_client",
-      "packages_lixh_player_windows_audio_output_audiooutput_count",
-      "packages_lixh_player_windows_audio_output_audiooutput_event",
-      "packages_lixh_player_windows_audio_output_audiooutput_flush",
-      "packages_lixh_player_windows_audio_output_audiooutput_last_error",
-      "packages_lixh_player_windows_audio_output_audiooutput_lifecycle_mu",
-      "packages_lixh_player_windows_audio_output_audiooutput_max_queue",
-      "packages_lixh_player_windows_audio_output_audiooutput_mu",
-      "packages_lixh_player_windows_audio_output_audiooutput_out_channels",
-      "packages_lixh_player_windows_audio_output_audiooutput_out_kind",
-      "packages_lixh_player_windows_audio_output_audiooutput_out_rate",
-      "packages_lixh_player_windows_audio_output_audiooutput_push",
-      "packages_lixh_player_windows_audio_output_audiooutput_queued_ms",
-      "packages_lixh_player_windows_audio_output_audiooutput_r",
-      "packages_lixh_player_windows_audio_output_audiooutput_render",
-      "packages_lixh_player_windows_audio_output_audiooutput_renderloop",
-      "packages_lixh_player_windows_audio_output_audiooutput_ring",
-      "packages_lixh_player_windows_audio_output_audiooutput_ring_cap",
-      "packages_lixh_player_windows_audio_output_audiooutput_ringcount",
-      "packages_lixh_player_windows_audio_output_audiooutput_ringread",
-      "packages_lixh_player_windows_audio_output_audiooutput_ringspace",
-      "packages_lixh_player_windows_audio_output_audiooutput_ringwrite",
-      "packages_lixh_player_windows_audio_output_audiooutput_running",
-      "packages_lixh_player_windows_audio_output_audiooutput_seterror",
-      "packages_lixh_player_windows_audio_output_audiooutput_src_channels",
-      "packages_lixh_player_windows_audio_output_audiooutput_src_rate",
-      "packages_lixh_player_windows_audio_output_audiooutput_start",
-      "packages_lixh_player_windows_audio_output_audiooutput_stop",
-      "packages_lixh_player_windows_audio_output_audiooutput_thread",
-      "packages_lixh_player_windows_audio_output_audiooutput_w",
-      "packages_lixh_player_windows_audio_output_cpp_packages_lixh_player_windows_audio_output",
-      "packages_lixh_player_windows_audio_output_cpp_string",
-      "packages_lixh_player_windows_audio_output_isfloatformat",
-      "packages_lixh_player_windows_audio_output_ispcm16format",
-      "packages_lixh_player_windows_audio_output_saferelease",
-      "packages_lixh_player_windows_audio_output_samplekind",
-      "packages_lixh_player_windows_audio_output_samplekind_float32",
-      "packages_lixh_player_windows_audio_output_samplekind_pcm16",
-      "t",
-      "waveformatex"
+      "dwmapi",
+      "flutter_app_windows_runner_flutter_window_flutterwindow_oncreate",
+      "flutter_app_windows_runner_resource",
+      "flutter_app_windows_runner_win32_window_cpp_flutter_app_windows_runner_win32_window",
+      "flutter_app_windows_runner_win32_window_cpp_hwnd",
+      "flutter_app_windows_runner_win32_window_cpp_lparam",
+      "flutter_app_windows_runner_win32_window_cpp_lresult",
+      "flutter_app_windows_runner_win32_window_cpp_point",
+      "flutter_app_windows_runner_win32_window_cpp_rect",
+      "flutter_app_windows_runner_win32_window_cpp_size",
+      "flutter_app_windows_runner_win32_window_cpp_uint",
+      "flutter_app_windows_runner_win32_window_cpp_wchar_t",
+      "flutter_app_windows_runner_win32_window_cpp_win32window",
+      "flutter_app_windows_runner_win32_window_cpp_wparam",
+      "flutter_app_windows_runner_win32_window_cpp_wstring",
+      "flutter_app_windows_runner_win32_window_enablefulldpisupportifavailable",
+      "flutter_app_windows_runner_win32_window_h_hwnd",
+      "flutter_app_windows_runner_win32_window_point",
+      "flutter_app_windows_runner_win32_window_point_point",
+      "flutter_app_windows_runner_win32_window_point_x",
+      "flutter_app_windows_runner_win32_window_point_y",
+      "flutter_app_windows_runner_win32_window_scale",
+      "flutter_app_windows_runner_win32_window_size",
+      "flutter_app_windows_runner_win32_window_size_height",
+      "flutter_app_windows_runner_win32_window_size_size",
+      "flutter_app_windows_runner_win32_window_size_width",
+      "flutter_app_windows_runner_win32_window_win32window",
+      "flutter_app_windows_runner_win32_window_win32window_child_content",
+      "flutter_app_windows_runner_win32_window_win32window_create",
+      "flutter_app_windows_runner_win32_window_win32window_destroy",
+      "flutter_app_windows_runner_win32_window_win32window_getclientarea",
+      "flutter_app_windows_runner_win32_window_win32window_gethandle",
+      "flutter_app_windows_runner_win32_window_win32window_getthisfromhandle",
+      "flutter_app_windows_runner_win32_window_win32window_messagehandler",
+      "flutter_app_windows_runner_win32_window_win32window_oncreate",
+      "flutter_app_windows_runner_win32_window_win32window_ondestroy",
+      "flutter_app_windows_runner_win32_window_win32window_quit_on_close",
+      "flutter_app_windows_runner_win32_window_win32window_setchildcontent",
+      "flutter_app_windows_runner_win32_window_win32window_setquitonclose",
+      "flutter_app_windows_runner_win32_window_win32window_show",
+      "flutter_app_windows_runner_win32_window_win32window_updatetheme",
+      "flutter_app_windows_runner_win32_window_win32window_win32window",
+      "flutter_app_windows_runner_win32_window_win32window_window_handle",
+      "flutter_app_windows_runner_win32_window_win32window_wndproc",
+      "flutter_app_windows_runner_win32_window_windowclassregistrar",
+      "flutter_app_windows_runner_win32_window_windowclassregistrar_class_registered",
+      "flutter_app_windows_runner_win32_window_windowclassregistrar_getinstance",
+      "flutter_app_windows_runner_win32_window_windowclassregistrar_getwindowclass",
+      "flutter_app_windows_runner_win32_window_windowclassregistrar_instance",
+      "flutter_app_windows_runner_win32_window_windowclassregistrar_unregisterwindowclass",
+      "flutter_app_windows_runner_win32_window_windowclassregistrar_windowclassregistrar"
     ],
     "5": [
+      "packages_lixh_player_example_windows_runner_flutter_window_flutterwindow_oncreate",
+      "packages_lixh_player_example_windows_runner_resource",
+      "packages_lixh_player_example_windows_runner_win32_window_cpp_hwnd",
+      "packages_lixh_player_example_windows_runner_win32_window_cpp_lparam",
+      "packages_lixh_player_example_windows_runner_win32_window_cpp_lresult",
+      "packages_lixh_player_example_windows_runner_win32_window_cpp_packages_lixh_player_example_windows_runner_win32_window",
+      "packages_lixh_player_example_windows_runner_win32_window_cpp_point",
+      "packages_lixh_player_example_windows_runner_win32_window_cpp_rect",
+      "packages_lixh_player_example_windows_runner_win32_window_cpp_size",
+      "packages_lixh_player_example_windows_runner_win32_window_cpp_uint",
+      "packages_lixh_player_example_windows_runner_win32_window_cpp_wchar_t",
+      "packages_lixh_player_example_windows_runner_win32_window_cpp_win32window",
+      "packages_lixh_player_example_windows_runner_win32_window_cpp_wparam",
+      "packages_lixh_player_example_windows_runner_win32_window_cpp_wstring",
+      "packages_lixh_player_example_windows_runner_win32_window_enablefulldpisupportifavailable",
+      "packages_lixh_player_example_windows_runner_win32_window_h_hwnd",
+      "packages_lixh_player_example_windows_runner_win32_window_point",
+      "packages_lixh_player_example_windows_runner_win32_window_point_point",
+      "packages_lixh_player_example_windows_runner_win32_window_point_x",
+      "packages_lixh_player_example_windows_runner_win32_window_point_y",
+      "packages_lixh_player_example_windows_runner_win32_window_scale",
+      "packages_lixh_player_example_windows_runner_win32_window_size",
+      "packages_lixh_player_example_windows_runner_win32_window_size_height",
+      "packages_lixh_player_example_windows_runner_win32_window_size_size",
+      "packages_lixh_player_example_windows_runner_win32_window_size_width",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window_child_content",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window_create",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window_destroy",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window_getclientarea",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window_gethandle",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window_getthisfromhandle",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window_messagehandler",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window_oncreate",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window_ondestroy",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window_quit_on_close",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window_setchildcontent",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window_setquitonclose",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window_show",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window_updatetheme",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window_win32window",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window_window_handle",
+      "packages_lixh_player_example_windows_runner_win32_window_win32window_wndproc",
+      "packages_lixh_player_example_windows_runner_win32_window_windowclassregistrar",
+      "packages_lixh_player_example_windows_runner_win32_window_windowclassregistrar_class_registered",
+      "packages_lixh_player_example_windows_runner_win32_window_windowclassregistrar_getinstance",
+      "packages_lixh_player_example_windows_runner_win32_window_windowclassregistrar_getwindowclass",
+      "packages_lixh_player_example_windows_runner_win32_window_windowclassregistrar_instance",
+      "packages_lixh_player_example_windows_runner_win32_window_windowclassregistrar_unregisterwindowclass",
+      "packages_lixh_player_example_windows_runner_win32_window_windowclassregistrar_windowclassregistrar"
+    ],
+    "6": [
       "dxgi_format",
       "id3d11videocontext",
       "id3d11videodevice",
@@ -342,7 +396,7 @@
       "packages_lixh_player_windows_shared_texture_sharedtexturebridge_vp_stream_configured",
       "packages_lixh_player_windows_shared_texture_sharedtexturebridge_write_index"
     ],
-    "6": [
+    "7": [
       "apphandle",
       "raw_window_handle",
       "src_tauri_src_main",
@@ -390,9 +444,10 @@
       "syncsender",
       "tauri"
     ],
-    "7": [
+    "8": [
       "c_char",
       "ffi",
+      "ptr",
       "src_tauri_lixh_stream_stack_lixh_player_core_src_lib",
       "src_tauri_lixh_stream_stack_lixh_player_core_src_lib_callback_stub",
       "src_tauri_lixh_stream_stack_lixh_player_core_src_lib_lixh_player_create",
@@ -403,7 +458,6 @@
       "src_tauri_lixh_stream_stack_lixh_player_core_src_lib_lixh_player_stop",
       "src_tauri_lixh_stream_stack_lixh_player_core_src_lib_lixhcallbacks",
       "src_tauri_lixh_stream_stack_lixh_player_core_src_lib_lixhnativeframe",
-      "src_tauri_lixh_stream_stack_lixh_player_core_src_lib_lixhstats",
       "src_tauri_lixh_stream_stack_lixh_player_core_src_lib_player",
       "src_tauri_lixh_stream_stack_lixh_player_core_src_lib_player_drop",
       "src_tauri_lixh_stream_stack_lixh_player_core_src_lib_player_is_playing",
@@ -436,7 +490,7 @@
       "src_tauri_lixh_stream_stack_lixh_player_core_src_surface_surfacerect",
       "w"
     ],
-    "8": [
+    "9": [
       "dart_convert",
       "dart_io",
       "flutter_app_lib_room_resolve",
@@ -479,48 +533,6 @@
       "package_path_path_dart",
       "return",
       "string_get"
-    ],
-    "9": [
-      "condition_variable",
-      "cstdio",
-      "packages_lixh_player_windows_player_session_clamp8",
-      "packages_lixh_player_windows_player_session_cpp_avframe",
-      "packages_lixh_player_windows_player_session_cpp_framereadyfn",
-      "packages_lixh_player_windows_player_session_cpp_packages_lixh_player_windows_player_session",
-      "packages_lixh_player_windows_player_session_cpp_string",
-      "packages_lixh_player_windows_player_session_cpp_vector",
-      "packages_lixh_player_windows_player_session_h_atomic",
-      "packages_lixh_player_windows_player_session_h_framereadyfn",
-      "packages_lixh_player_windows_player_session_h_mutex",
-      "packages_lixh_player_windows_player_session_h_thread",
-      "packages_lixh_player_windows_player_session_playersession",
-      "packages_lixh_player_windows_player_session_playersession_attachtexture",
-      "packages_lixh_player_windows_player_session_playersession_audio",
-      "packages_lixh_player_windows_player_session_playersession_audio_frames",
-      "packages_lixh_player_windows_player_session_playersession_bridge",
-      "packages_lixh_player_windows_player_session_playersession_decode_hw",
-      "packages_lixh_player_windows_player_session_playersession_detach",
-      "packages_lixh_player_windows_player_session_playersession_ensurepresentthread",
-      "packages_lixh_player_windows_player_session_playersession_handleaudio",
-      "packages_lixh_player_windows_player_session_playersession_last_error",
-      "packages_lixh_player_windows_player_session_playersession_mu",
-      "packages_lixh_player_windows_player_session_playersession_on_frame",
-      "packages_lixh_player_windows_player_session_playersession_play",
-      "packages_lixh_player_windows_player_session_playersession_play_thread",
-      "packages_lixh_player_windows_player_session_playersession_player",
-      "packages_lixh_player_windows_player_session_playersession_playersession",
-      "packages_lixh_player_windows_player_session_playersession_present_cv",
-      "packages_lixh_player_windows_player_session_playersession_present_mu",
-      "packages_lixh_player_windows_player_session_playersession_present_ok",
-      "packages_lixh_player_windows_player_session_playersession_present_pending",
-      "packages_lixh_player_windows_player_session_playersession_present_running",
-      "packages_lixh_player_windows_player_session_playersession_present_thread",
-      "packages_lixh_player_windows_player_session_playersession_presentloop",
-      "packages_lixh_player_windows_player_session_playersession_seterror",
-      "packages_lixh_player_windows_player_session_playersession_stoppresentthread",
-      "packages_lixh_player_windows_player_session_playersession_video_enabled",
-      "packages_lixh_player_windows_player_session_playersession_video_frames",
-      "packages_lixh_player_windows_player_session_yuv420tobgra"
     ],
     "10": [
       "datetime",
@@ -642,39 +654,41 @@
       "src_tauri_src_main_run_command_timeout"
     ],
     "13": [
-      "avcodec",
-      "avformat",
-      "avpacket",
-      "avrational",
-      "avstream",
-      "avutil",
-      "channel_layout",
-      "hwcontext",
-      "hwcontext_d3d11va",
-      "hwcontext_videotoolbox",
-      "inttypes",
-      "lixhplayer",
-      "opt",
-      "packages_lixh_player_ios_lixh_player_sources_lixh_player_corec_lixh_player_unity",
-      "packages_lixh_player_macos_lixh_player_sources_lixh_player_corec_lixh_player_unity",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_c_avframe",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_decode_packet",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_deliver_audio",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_deliver_video",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_emit",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_frame_pts_ms",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_free_player_media",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_interrupt_cb",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_live_chase_should_drop",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_lixh_player_open",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_lixh_player_play",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_now_ms",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_open_decoder",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_open_input",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_setup_hw",
-      "stdlib",
-      "swresample"
+      "flutter_app_windows_runner_flutter_window_cpp_dartproject",
+      "flutter_app_windows_runner_flutter_window_cpp_flutter_app_windows_runner_flutter_window",
+      "flutter_app_windows_runner_flutter_window_cpp_hwnd",
+      "flutter_app_windows_runner_flutter_window_cpp_lparam",
+      "flutter_app_windows_runner_flutter_window_cpp_lresult",
+      "flutter_app_windows_runner_flutter_window_cpp_uint",
+      "flutter_app_windows_runner_flutter_window_cpp_wparam",
+      "flutter_app_windows_runner_flutter_window_flutterwindow",
+      "flutter_app_windows_runner_flutter_window_flutterwindow_flutter_controller",
+      "flutter_app_windows_runner_flutter_window_flutterwindow_flutterwindow",
+      "flutter_app_windows_runner_flutter_window_flutterwindow_messagehandler",
+      "flutter_app_windows_runner_flutter_window_flutterwindow_ondestroy",
+      "flutter_app_windows_runner_flutter_window_flutterwindow_project",
+      "flutter_app_windows_runner_flutter_window_h_dartproject",
+      "flutter_app_windows_runner_flutter_window_h_flutterviewcontroller",
+      "flutter_app_windows_runner_flutter_window_h_unique_ptr",
+      "flutter_app_windows_runner_flutter_window_h_win32window",
+      "generated_plugin_registrant",
+      "packages_lixh_player_example_windows_runner_flutter_window_cpp_dartproject",
+      "packages_lixh_player_example_windows_runner_flutter_window_cpp_hwnd",
+      "packages_lixh_player_example_windows_runner_flutter_window_cpp_lparam",
+      "packages_lixh_player_example_windows_runner_flutter_window_cpp_lresult",
+      "packages_lixh_player_example_windows_runner_flutter_window_cpp_packages_lixh_player_example_windows_runner_flutter_window",
+      "packages_lixh_player_example_windows_runner_flutter_window_cpp_uint",
+      "packages_lixh_player_example_windows_runner_flutter_window_cpp_wparam",
+      "packages_lixh_player_example_windows_runner_flutter_window_flutterwindow",
+      "packages_lixh_player_example_windows_runner_flutter_window_flutterwindow_flutter_controller",
+      "packages_lixh_player_example_windows_runner_flutter_window_flutterwindow_flutterwindow",
+      "packages_lixh_player_example_windows_runner_flutter_window_flutterwindow_messagehandler",
+      "packages_lixh_player_example_windows_runner_flutter_window_flutterwindow_ondestroy",
+      "packages_lixh_player_example_windows_runner_flutter_window_flutterwindow_project",
+      "packages_lixh_player_example_windows_runner_flutter_window_h_dartproject",
+      "packages_lixh_player_example_windows_runner_flutter_window_h_flutterviewcontroller",
+      "packages_lixh_player_example_windows_runner_flutter_window_h_unique_ptr",
+      "packages_lixh_player_example_windows_runner_flutter_window_h_win32window"
     ],
     "14": [
       "lixh_player_method_channel_dart",
@@ -744,6 +758,37 @@
       "textureregistry"
     ],
     "16": [
+      "packages_lixh_player_windows_audio_output_audiooutput",
+      "packages_lixh_player_windows_audio_output_audiooutput_audiooutput",
+      "packages_lixh_player_windows_audio_output_audiooutput_buffer_frames",
+      "packages_lixh_player_windows_audio_output_audiooutput_client",
+      "packages_lixh_player_windows_audio_output_audiooutput_count",
+      "packages_lixh_player_windows_audio_output_audiooutput_event",
+      "packages_lixh_player_windows_audio_output_audiooutput_last_error",
+      "packages_lixh_player_windows_audio_output_audiooutput_lifecycle_mu",
+      "packages_lixh_player_windows_audio_output_audiooutput_max_queue",
+      "packages_lixh_player_windows_audio_output_audiooutput_mu",
+      "packages_lixh_player_windows_audio_output_audiooutput_out_channels",
+      "packages_lixh_player_windows_audio_output_audiooutput_out_kind",
+      "packages_lixh_player_windows_audio_output_audiooutput_out_rate",
+      "packages_lixh_player_windows_audio_output_audiooutput_queued_ms",
+      "packages_lixh_player_windows_audio_output_audiooutput_r",
+      "packages_lixh_player_windows_audio_output_audiooutput_render",
+      "packages_lixh_player_windows_audio_output_audiooutput_ring",
+      "packages_lixh_player_windows_audio_output_audiooutput_ring_cap",
+      "packages_lixh_player_windows_audio_output_audiooutput_ringcount",
+      "packages_lixh_player_windows_audio_output_audiooutput_running",
+      "packages_lixh_player_windows_audio_output_audiooutput_seterror",
+      "packages_lixh_player_windows_audio_output_audiooutput_src_channels",
+      "packages_lixh_player_windows_audio_output_audiooutput_src_rate",
+      "packages_lixh_player_windows_audio_output_audiooutput_thread",
+      "packages_lixh_player_windows_audio_output_audiooutput_w",
+      "packages_lixh_player_windows_audio_output_cpp_string",
+      "packages_lixh_player_windows_audio_output_samplekind",
+      "packages_lixh_player_windows_audio_output_samplekind_float32",
+      "packages_lixh_player_windows_audio_output_samplekind_pcm16"
+    ],
+    "17": [
       "arc",
       "joinhandle",
       "p",
@@ -752,7 +797,6 @@
       "src_tauri_lixh_stream_stack_lixh_player_host_src_lib_coreplayeradapter_new",
       "src_tauri_lixh_stream_stack_lixh_player_host_src_lib_coreplayeradapter_open",
       "src_tauri_lixh_stream_stack_lixh_player_host_src_lib_coreplayeradapter_play_blocking",
-      "src_tauri_lixh_stream_stack_lixh_player_host_src_lib_coreplayeradapter_stats",
       "src_tauri_lixh_stream_stack_lixh_player_host_src_lib_coreplayeradapter_stop",
       "src_tauri_lixh_stream_stack_lixh_player_host_src_lib_hosterror",
       "src_tauri_lixh_stream_stack_lixh_player_host_src_lib_hosterror_alreadyplaying",
@@ -772,35 +816,6 @@
       "src_tauri_lixh_stream_stack_lixh_player_host_src_lib_playerhost_p_player",
       "src_tauri_lixh_stream_stack_lixh_player_host_src_lib_playerhost_p_start",
       "src_tauri_lixh_stream_stack_lixh_player_host_src_lib_playerhost_p_stop_and_join"
-    ],
-    "17": [
-      "anativewindow",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_cpp_atomic",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_cpp_string",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_cpp_thread",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_audio",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_audio_frames",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_detachsurface",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_last_error",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_last_present",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_mu",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_play",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_play_thread",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_player",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_present_ok",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_session",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_seterror",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_sws",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_sws_fmt",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_sws_h",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_sws_w",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_video_enabled",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_video_frames",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_win_mu",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_window",
-      "swscontext",
-      "time_point"
     ],
     "18": [
       "audiotoolbox",
@@ -829,33 +844,8 @@
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_lixhaudiooutput_lixhaudiooutput_stopunlocked"
     ],
     "19": [
-      "flutter_app_windows_runner_main_cpp_in",
-      "flutter_app_windows_runner_main_cpp_in_opt",
-      "flutter_app_windows_runner_main_wwinmain",
-      "flutter_app_windows_runner_utils_cpp_flutter_app_windows_runner_utils",
-      "flutter_app_windows_runner_utils_cpp_string",
-      "flutter_app_windows_runner_utils_cpp_vector",
-      "flutter_app_windows_runner_utils_cpp_wchar_t",
-      "flutter_app_windows_runner_utils_createandattachconsole",
-      "flutter_app_windows_runner_utils_getcommandlinearguments",
-      "flutter_app_windows_runner_utils_utf8fromutf16",
-      "flutter_windows",
-      "io",
-      "iostream",
-      "packages_lixh_player_example_windows_runner_main_cpp_in",
-      "packages_lixh_player_example_windows_runner_main_cpp_in_opt",
-      "packages_lixh_player_example_windows_runner_main_wwinmain",
-      "packages_lixh_player_example_windows_runner_utils_cpp_packages_lixh_player_example_windows_runner_utils",
-      "packages_lixh_player_example_windows_runner_utils_cpp_string",
-      "packages_lixh_player_example_windows_runner_utils_cpp_vector",
-      "packages_lixh_player_example_windows_runner_utils_cpp_wchar_t",
-      "packages_lixh_player_example_windows_runner_utils_createandattachconsole",
-      "packages_lixh_player_example_windows_runner_utils_getcommandlinearguments",
-      "packages_lixh_player_example_windows_runner_utils_utf8fromutf16",
-      "stdio"
-    ],
-    "20": [
       "client",
+      "condition_variable",
       "cstdint",
       "d3d11",
       "dxgi1_2",
@@ -879,7 +869,58 @@
       "plugin_registrar_windows",
       "texture_registrar"
     ],
+    "20": [
+      "packages_lixh_player_windows_player_session_h_atomic",
+      "packages_lixh_player_windows_player_session_h_framereadyfn",
+      "packages_lixh_player_windows_player_session_h_mutex",
+      "packages_lixh_player_windows_player_session_h_thread",
+      "packages_lixh_player_windows_player_session_playersession",
+      "packages_lixh_player_windows_player_session_playersession_audio",
+      "packages_lixh_player_windows_player_session_playersession_audio_frames",
+      "packages_lixh_player_windows_player_session_playersession_bridge",
+      "packages_lixh_player_windows_player_session_playersession_decode_hw",
+      "packages_lixh_player_windows_player_session_playersession_detach",
+      "packages_lixh_player_windows_player_session_playersession_mu",
+      "packages_lixh_player_windows_player_session_playersession_on_frame",
+      "packages_lixh_player_windows_player_session_playersession_play_thread",
+      "packages_lixh_player_windows_player_session_playersession_player",
+      "packages_lixh_player_windows_player_session_playersession_playersession",
+      "packages_lixh_player_windows_player_session_playersession_present_cv",
+      "packages_lixh_player_windows_player_session_playersession_present_mu",
+      "packages_lixh_player_windows_player_session_playersession_present_ok",
+      "packages_lixh_player_windows_player_session_playersession_present_pending",
+      "packages_lixh_player_windows_player_session_playersession_present_running",
+      "packages_lixh_player_windows_player_session_playersession_present_thread",
+      "packages_lixh_player_windows_player_session_playersession_stoppresentthread",
+      "packages_lixh_player_windows_player_session_playersession_video_enabled",
+      "packages_lixh_player_windows_player_session_playersession_video_frames"
+    ],
     "21": [
+      "anativewindow",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_cpp_atomic",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_cpp_thread",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_audio",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_audio_frames",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_detachsurface",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_last_present",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_mu",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_play_thread",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_player",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_present_ok",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_session",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_sws",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_sws_fmt",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_sws_h",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_sws_w",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_video_enabled",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_video_frames",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_win_mu",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_window",
+      "swscontext",
+      "time_point"
+    ],
+    "22": [
       "src_tauri_tauri_conf",
       "src_tauri_tauri_conf_app",
       "src_tauri_tauri_conf_app_macosprivateapi",
@@ -904,7 +945,7 @@
       "src_tauri_tauri_conf_version",
       "src_tauri_tauri_conf_windows_nsis"
     ],
-    "22": [
+    "23": [
       "collections",
       "mediainfo",
       "platforms_parser",
@@ -928,7 +969,7 @@
       "streaminfo",
       "value"
     ],
-    "23": [
+    "24": [
       "serde",
       "src_tauri_lixh_stream_stack_lixh_stream_supervisor_src_lib",
       "src_tauri_lixh_stream_stack_lixh_stream_supervisor_src_lib_candidate",
@@ -951,7 +992,7 @@
       "src_tauri_lixh_stream_stack_lixh_stream_supervisor_src_lib_telemetry",
       "super"
     ],
-    "24": [
+    "25": [
       "class_mocklixhplayerplatform_with",
       "package_lixh_player_lixh_player_platform_interface_dart",
       "package_plugin_platform_interface_plugin_platform_interface_dart",
@@ -973,7 +1014,29 @@
       "packages_lixh_player_test_lixh_player_test_stop",
       "platforminterface"
     ],
-    "25": [
+    "26": [
+      "cstdio",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_setvideoenabled",
+      "packages_lixh_player_windows_player_session_clamp8",
+      "packages_lixh_player_windows_player_session_cpp_avframe",
+      "packages_lixh_player_windows_player_session_cpp_framereadyfn",
+      "packages_lixh_player_windows_player_session_cpp_packages_lixh_player_windows_player_session",
+      "packages_lixh_player_windows_player_session_cpp_string",
+      "packages_lixh_player_windows_player_session_cpp_vector",
+      "packages_lixh_player_windows_player_session_playersession_attachtexture",
+      "packages_lixh_player_windows_player_session_playersession_ensurepresentthread",
+      "packages_lixh_player_windows_player_session_playersession_handleaudio",
+      "packages_lixh_player_windows_player_session_playersession_last_error",
+      "packages_lixh_player_windows_player_session_playersession_onaudio",
+      "packages_lixh_player_windows_player_session_playersession_onevent",
+      "packages_lixh_player_windows_player_session_playersession_open",
+      "packages_lixh_player_windows_player_session_playersession_presentloop",
+      "packages_lixh_player_windows_player_session_playersession_seterror",
+      "packages_lixh_player_windows_player_session_playersession_setvideoenabled",
+      "packages_lixh_player_windows_player_session_yuv420tobgra",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_lixh_player_set_video_sink"
+    ],
+    "27": [
       "packages_lixh_player_ios_lixh_player_sources_lixh_player_lixhplayerengine_lixhplayerengine",
       "packages_lixh_player_ios_lixh_player_sources_lixh_player_lixhplayerengine_lixhplayerengine_createvideotexturewidthheightfailure",
       "packages_lixh_player_ios_lixh_player_sources_lixh_player_lixhplayerengine_lixhplayerengine_dealloc",
@@ -995,7 +1058,7 @@
       "packages_lixh_player_ios_lixh_player_sources_lixh_player_lixhplayerengine_m_nsstring",
       "packages_lixh_player_ios_lixh_player_sources_lixh_player_lixhplayerengine_m_nsthread"
     ],
-    "26": [
+    "28": [
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_lixhplayerengine_lixhplayerengine",
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_lixhplayerengine_lixhplayerengine_createvideotexturewidthheightfailure",
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_lixhplayerengine_lixhplayerengine_dealloc",
@@ -1017,69 +1080,49 @@
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_lixhplayerengine_m_nsstring",
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_lixhplayerengine_m_nsthread"
     ],
-    "27": [
-      "jboolean",
-      "jlong",
-      "jnienv",
-      "jniexport",
-      "jobject",
-      "jstring",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_audioout_queuedms",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativeattachsurface",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativecreate",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativedestroy",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativedetachsurface",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativefillstats",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativelasterror",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativeopen",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativeplay",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativesetvideoenabled",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativestop",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_attachsurface",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_fillstats"
-    ],
-    "28": [
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_audioout_ensure",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_audioout_push",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_cpp_lixhnativeframe",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_onvideo",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_open",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_setvideoenabled",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_stop",
-      "packages_lixh_player_windows_player_session_playersession_onaudio",
-      "packages_lixh_player_windows_player_session_playersession_onevent",
-      "packages_lixh_player_windows_player_session_playersession_open",
-      "packages_lixh_player_windows_player_session_playersession_setvideoenabled",
-      "packages_lixh_player_windows_player_session_playersession_stop",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_c_lixhcallbacks",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_lixh_player_create",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_lixh_player_destroy",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_lixh_player_set_headers",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_lixh_player_set_latency",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_lixh_player_set_video_sink",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_lixh_player_stop"
-    ],
     "29": [
-      "dwmapi",
-      "flutter_app_windows_runner_resource",
-      "flutter_app_windows_runner_win32_window_cpp_flutter_app_windows_runner_win32_window",
-      "flutter_app_windows_runner_win32_window_cpp_point",
-      "flutter_app_windows_runner_win32_window_cpp_size",
-      "flutter_app_windows_runner_win32_window_cpp_wchar_t",
-      "flutter_app_windows_runner_win32_window_cpp_wstring",
-      "flutter_app_windows_runner_win32_window_scale",
-      "flutter_app_windows_runner_win32_window_win32window_create",
-      "flutter_app_windows_runner_win32_window_win32window_destroy",
-      "flutter_app_windows_runner_win32_window_win32window_win32window",
-      "flutter_app_windows_runner_win32_window_windowclassregistrar",
-      "flutter_app_windows_runner_win32_window_windowclassregistrar_class_registered",
-      "flutter_app_windows_runner_win32_window_windowclassregistrar_getinstance",
-      "flutter_app_windows_runner_win32_window_windowclassregistrar_getwindowclass",
-      "flutter_app_windows_runner_win32_window_windowclassregistrar_instance",
-      "flutter_app_windows_runner_win32_window_windowclassregistrar_unregisterwindowclass",
-      "flutter_app_windows_runner_win32_window_windowclassregistrar_windowclassregistrar"
+      "algorithm",
+      "audioclient",
+      "mmdeviceapi",
+      "mmreg",
+      "packages_lixh_player_windows_audio_output_audiooutput_clearqueue",
+      "packages_lixh_player_windows_audio_output_audiooutput_flush",
+      "packages_lixh_player_windows_audio_output_audiooutput_push",
+      "packages_lixh_player_windows_audio_output_audiooutput_renderloop",
+      "packages_lixh_player_windows_audio_output_audiooutput_ringread",
+      "packages_lixh_player_windows_audio_output_audiooutput_ringspace",
+      "packages_lixh_player_windows_audio_output_audiooutput_ringwrite",
+      "packages_lixh_player_windows_audio_output_audiooutput_start",
+      "packages_lixh_player_windows_audio_output_audiooutput_stop",
+      "packages_lixh_player_windows_audio_output_cpp_packages_lixh_player_windows_audio_output",
+      "packages_lixh_player_windows_audio_output_isfloatformat",
+      "packages_lixh_player_windows_audio_output_ispcm16format",
+      "packages_lixh_player_windows_audio_output_saferelease",
+      "t",
+      "waveformatex"
     ],
     "30": [
+      "avpacket",
+      "avrational",
+      "avstream",
+      "lixhplayer",
+      "packages_lixh_player_windows_player_session_playersession_play",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_c_avframe",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_decode_packet",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_deliver_audio",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_deliver_video",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_emit",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_frame_pts_ms",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_free_player_media",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_live_chase_should_drop",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_lixh_player_open",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_lixh_player_play",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_now_ms",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_open_decoder",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_open_input",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_setup_hw"
+    ],
+    "31": [
       "aaudio_data_callback_result_t",
       "aaudiostream",
       "packages_lixh_player_android_src_main_cpp_lixh_player_jni_audioout",
@@ -1098,7 +1141,26 @@
       "packages_lixh_player_android_src_main_cpp_lixh_player_jni_cpp_mutex",
       "packages_lixh_player_android_src_main_cpp_lixh_player_jni_cpp_vector"
     ],
-    "31": [
+    "32": [
+      "avcodec",
+      "avcodeccontext",
+      "avformat",
+      "avutil",
+      "channel_layout",
+      "hwcontext",
+      "hwcontext_d3d11va",
+      "hwcontext_videotoolbox",
+      "inttypes",
+      "opt",
+      "packages_lixh_player_ios_lixh_player_sources_lixh_player_corec_lixh_player_unity",
+      "packages_lixh_player_macos_lixh_player_sources_lixh_player_corec_lixh_player_unity",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_choose_hw_format",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_interrupt_cb",
+      "stdlib",
+      "swresample"
+    ],
+    "33": [
       "flutterplugin",
       "nsobject",
       "packages_lixh_player_ios_lixh_player_sources_lixh_player_lixhplayerplugin_lixhplayerplugin",
@@ -1117,26 +1179,26 @@
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_lixhplayerplugin_swift_flutterresult",
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_lixhplayerplugin_swift_lixhplayerengine"
     ],
-    "32": [
-      "packages_lixh_player_example_windows_runner_resource",
-      "packages_lixh_player_example_windows_runner_win32_window_cpp_packages_lixh_player_example_windows_runner_win32_window",
-      "packages_lixh_player_example_windows_runner_win32_window_cpp_point",
-      "packages_lixh_player_example_windows_runner_win32_window_cpp_size",
-      "packages_lixh_player_example_windows_runner_win32_window_cpp_wchar_t",
-      "packages_lixh_player_example_windows_runner_win32_window_cpp_wstring",
-      "packages_lixh_player_example_windows_runner_win32_window_scale",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window_create",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window_destroy",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window_win32window",
-      "packages_lixh_player_example_windows_runner_win32_window_windowclassregistrar",
-      "packages_lixh_player_example_windows_runner_win32_window_windowclassregistrar_class_registered",
-      "packages_lixh_player_example_windows_runner_win32_window_windowclassregistrar_getinstance",
-      "packages_lixh_player_example_windows_runner_win32_window_windowclassregistrar_getwindowclass",
-      "packages_lixh_player_example_windows_runner_win32_window_windowclassregistrar_instance",
-      "packages_lixh_player_example_windows_runner_win32_window_windowclassregistrar_unregisterwindowclass",
-      "packages_lixh_player_example_windows_runner_win32_window_windowclassregistrar_windowclassregistrar"
+    "34": [
+      "jboolean",
+      "jlong",
+      "jnienv",
+      "jniexport",
+      "jobject",
+      "jstring",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_audioout_queuedms",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativeattachsurface",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativecreate",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativedestroy",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativedetachsurface",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativefillstats",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativeopen",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativesetvideoenabled",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativestop",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_attachsurface",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_fillstats"
     ],
-    "33": [
+    "35": [
       "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_engineerror",
       "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_engineerror_backend",
       "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_engineerror_nocandidate",
@@ -1155,7 +1217,43 @@
       "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_playbackengine_b_start_candidate_with_reason",
       "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_playbackengine_b_stop"
     ],
-    "34": [
+    "36": [
+      "b",
+      "lixh_stream_resolver",
+      "lixh_stream_supervisor",
+      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib",
+      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_enginestate",
+      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_enginestate_idle",
+      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_enginestate_playing",
+      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_enginestate_reresolving",
+      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_enginestate_stopped",
+      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_playbackengine",
+      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_playbackengine_b_backend",
+      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_playbackengine_b_backend_mut",
+      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_playbackengine_b_state",
+      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_unix_ms",
+      "src_tauri_src_player_mod_poll",
+      "time"
+    ],
+    "37": [
+      "flutter_app_windows_runner_main_cpp_in",
+      "flutter_app_windows_runner_main_cpp_in_opt",
+      "flutter_app_windows_runner_main_wwinmain",
+      "flutter_app_windows_runner_utils_cpp_flutter_app_windows_runner_utils",
+      "flutter_app_windows_runner_utils_cpp_string",
+      "flutter_app_windows_runner_utils_cpp_vector",
+      "flutter_app_windows_runner_utils_cpp_wchar_t",
+      "flutter_app_windows_runner_utils_createandattachconsole",
+      "flutter_app_windows_runner_utils_getcommandlinearguments",
+      "flutter_app_windows_runner_utils_utf8fromutf16",
+      "flutter_windows",
+      "io",
+      "iostream",
+      "packages_lixh_player_example_windows_runner_utils_cpp_packages_lixh_player_example_windows_runner_utils",
+      "stdio",
+      "windows"
+    ],
+    "38": [
       "packages_lixh_player_windows_player_session_h_string",
       "packages_lixh_player_windows_player_session_playersession_getstats",
       "packages_lixh_player_windows_player_session_stats",
@@ -1173,24 +1271,7 @@
       "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_c_lixhstats",
       "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_lixh_player_get_stats"
     ],
-    "35": [
-      "b",
-      "lixh_stream_resolver",
-      "lixh_stream_supervisor",
-      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib",
-      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_enginestate",
-      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_enginestate_idle",
-      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_enginestate_playing",
-      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_enginestate_reresolving",
-      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_enginestate_stopped",
-      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_playbackengine",
-      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_playbackengine_b_backend",
-      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_playbackengine_b_backend_mut",
-      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_playbackengine_b_state",
-      "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_unix_ms",
-      "time"
-    ],
-    "36": [
+    "39": [
       "dart_async",
       "package_integration_test_integration_test_dart",
       "package_lixh_player_lixh_player_dart",
@@ -1207,24 +1288,7 @@
       "packages_lixh_player_example_lib_main_myappstate",
       "packages_lixh_player_example_lib_main_platformversion"
     ],
-    "37": [
-      "flutter_app_windows_runner_flutter_window_cpp_dartproject",
-      "flutter_app_windows_runner_flutter_window_cpp_flutter_app_windows_runner_flutter_window",
-      "flutter_app_windows_runner_flutter_window_flutterwindow",
-      "flutter_app_windows_runner_flutter_window_flutterwindow_flutter_controller",
-      "flutter_app_windows_runner_flutter_window_flutterwindow_flutterwindow",
-      "flutter_app_windows_runner_flutter_window_flutterwindow_oncreate",
-      "flutter_app_windows_runner_flutter_window_flutterwindow_ondestroy",
-      "flutter_app_windows_runner_flutter_window_flutterwindow_project",
-      "flutter_app_windows_runner_flutter_window_h_dartproject",
-      "flutter_app_windows_runner_flutter_window_h_flutterviewcontroller",
-      "flutter_app_windows_runner_flutter_window_h_unique_ptr",
-      "flutter_app_windows_runner_flutter_window_h_win32window",
-      "flutter_app_windows_runner_win32_window_cpp_rect",
-      "flutter_app_windows_runner_win32_window_win32window_getclientarea",
-      "flutter_app_windows_runner_win32_window_win32window_setchildcontent"
-    ],
-    "38": [
+    "40": [
       "packages_lixh_player_windows_shared_texture_cpp_id3d11device",
       "packages_lixh_player_windows_shared_texture_cpp_packages_lixh_player_windows_shared_texture",
       "packages_lixh_player_windows_shared_texture_sharedtexturebridge_createpair",
@@ -1241,7 +1305,7 @@
       "packages_lixh_player_windows_shared_texture_sharedtexturebridge_retirecurrentpair",
       "packages_lixh_player_windows_shared_texture_sharedtexturebridge_sharedtexturebridge"
     ],
-    "39": [
+    "41": [
       "flutter",
       "flutter_app_ios_runner_scenedelegate",
       "flutter_app_ios_runner_scenedelegate_scenedelegate",
@@ -1257,7 +1321,7 @@
       "uikit",
       "xctest"
     ],
-    "40": [
+    "42": [
       "corevideo",
       "packages_lixh_player_ios_lixh_player_sources_lixh_player_include_lixhpixeltexture",
       "packages_lixh_player_ios_lixh_player_sources_lixh_player_include_lixhpixeltexture_h_fluttertexture",
@@ -1272,7 +1336,7 @@
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_include_lixhpixeltexture_lixhpixeltexture_presentcolorrgbwidthheight",
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_include_lixhpixeltexture_lixhpixeltexture_setpixelbuffer"
     ],
-    "41": [
+    "43": [
       "flutter_app_test_abr_supervisor_test",
       "flutter_app_test_abr_supervisor_test_main",
       "flutter_app_test_abr_supervisor_test_pick",
@@ -1287,7 +1351,7 @@
       "packages_lixh_player_example_test_widget_test",
       "packages_lixh_player_example_test_widget_test_main"
     ],
-    "42": [
+    "44": [
       "lixhpixeltexture",
       "packages_lixh_player_ios_lixh_player_sources_lixh_player_lixhpixeltexture",
       "packages_lixh_player_ios_lixh_player_sources_lixh_player_lixhpixeltexture_lixhpixeltexture",
@@ -1302,22 +1366,22 @@
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_lixhpixeltexture_lixhpixeltexture_presentcolorrgbwidthheight",
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_lixhpixeltexture_lixhpixeltexture_setpixelbuffer"
     ],
-    "43": [
-      "packages_lixh_player_example_windows_runner_flutter_window_cpp_hwnd",
-      "packages_lixh_player_example_windows_runner_flutter_window_cpp_lparam",
-      "packages_lixh_player_example_windows_runner_flutter_window_cpp_lresult",
-      "packages_lixh_player_example_windows_runner_flutter_window_cpp_uint",
-      "packages_lixh_player_example_windows_runner_flutter_window_cpp_wparam",
-      "packages_lixh_player_example_windows_runner_flutter_window_flutterwindow",
-      "packages_lixh_player_example_windows_runner_flutter_window_flutterwindow_flutter_controller",
-      "packages_lixh_player_example_windows_runner_flutter_window_flutterwindow_messagehandler",
-      "packages_lixh_player_example_windows_runner_flutter_window_flutterwindow_project",
-      "packages_lixh_player_example_windows_runner_flutter_window_h_dartproject",
-      "packages_lixh_player_example_windows_runner_flutter_window_h_flutterviewcontroller",
-      "packages_lixh_player_example_windows_runner_flutter_window_h_unique_ptr",
-      "packages_lixh_player_example_windows_runner_flutter_window_h_win32window"
+    "45": [
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_audioout_ensure",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_audioout_push",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_cpp_lixhnativeframe",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_onvideo",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_open",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_stop",
+      "packages_lixh_player_windows_player_session_playersession_stop",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_c_lixhcallbacks",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_lixh_player_create",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_lixh_player_destroy",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_lixh_player_set_headers",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_lixh_player_set_latency",
+      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_lixh_player_stop"
     ],
-    "44": [
+    "46": [
       "src_tauri_lixh_stream_stack_lixh_playback_engine_src_native_surface",
       "src_tauri_lixh_stream_stack_lixh_playback_engine_src_native_surface_nativeframekind",
       "src_tauri_lixh_stream_stack_lixh_playback_engine_src_native_surface_nativeframekind_d3d11",
@@ -1332,7 +1396,7 @@
       "src_tauri_lixh_stream_stack_lixh_playback_engine_src_native_surface_rs_c_void",
       "src_tauri_lixh_stream_stack_lixh_playback_engine_src_native_surface_surfacerect"
     ],
-    "45": [
+    "47": [
       "cocoa",
       "flutter_app_macos_runner_appdelegate",
       "flutter_app_macos_runner_mainflutterwindow",
@@ -1346,7 +1410,7 @@
       "packages_lixh_player_example_macos_runner_mainflutterwindow_mainflutterwindow_awakefromnib",
       "packages_lixh_player_example_macos_runnertests_runnertests"
     ],
-    "46": [
+    "48": [
       "flutter_app_windows_flutter_generated_plugin_registrant_cc_flutter_app_windows_flutter_generated_plugin_registrant",
       "flutter_app_windows_flutter_generated_plugin_registrant_cc_pluginregistry",
       "flutter_app_windows_flutter_generated_plugin_registrant_h_flutter_app_windows_flutter_generated_plugin_registrant",
@@ -1360,21 +1424,7 @@
       "packages_lixh_player_windows_lixh_player_plugin_c_api_lixhplayerplugincapiregisterwithregistrar",
       "plugin_registry"
     ],
-    "47": [
-      "flutter_app_windows_runner_win32_window_cpp_hwnd",
-      "flutter_app_windows_runner_win32_window_cpp_lparam",
-      "flutter_app_windows_runner_win32_window_cpp_lresult",
-      "flutter_app_windows_runner_win32_window_cpp_uint",
-      "flutter_app_windows_runner_win32_window_cpp_win32window",
-      "flutter_app_windows_runner_win32_window_cpp_wparam",
-      "flutter_app_windows_runner_win32_window_enablefulldpisupportifavailable",
-      "flutter_app_windows_runner_win32_window_win32window_gethandle",
-      "flutter_app_windows_runner_win32_window_win32window_getthisfromhandle",
-      "flutter_app_windows_runner_win32_window_win32window_messagehandler",
-      "flutter_app_windows_runner_win32_window_win32window_updatetheme",
-      "flutter_app_windows_runner_win32_window_win32window_wndproc"
-    ],
-    "48": [
+    "49": [
       "lixh_player_platform_interface_dart",
       "packages_lixh_player_lib_lixh_player",
       "packages_lixh_player_lib_lixh_player_createvideotexture",
@@ -1388,7 +1438,7 @@
       "packages_lixh_player_lib_lixh_player_setvideoenabled",
       "packages_lixh_player_lib_lixh_player_stop"
     ],
-    "49": [
+    "50": [
       "package_flutter_foundation_dart",
       "packages_lixh_player_lib_lixh_player_method_channel",
       "packages_lixh_player_lib_lixh_player_method_channel_createvideotexture",
@@ -1401,20 +1451,6 @@
       "packages_lixh_player_lib_lixh_player_method_channel_presenttestframe",
       "packages_lixh_player_lib_lixh_player_method_channel_setvideoenabled",
       "packages_lixh_player_lib_lixh_player_method_channel_stop"
-    ],
-    "50": [
-      "packages_lixh_player_example_windows_runner_win32_window_cpp_hwnd",
-      "packages_lixh_player_example_windows_runner_win32_window_cpp_lparam",
-      "packages_lixh_player_example_windows_runner_win32_window_cpp_lresult",
-      "packages_lixh_player_example_windows_runner_win32_window_cpp_uint",
-      "packages_lixh_player_example_windows_runner_win32_window_cpp_win32window",
-      "packages_lixh_player_example_windows_runner_win32_window_cpp_wparam",
-      "packages_lixh_player_example_windows_runner_win32_window_enablefulldpisupportifavailable",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window_gethandle",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window_getthisfromhandle",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window_messagehandler",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window_updatetheme",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window_wndproc"
     ],
     "51": [
       "packages_lixh_player_ios_lixh_player_sources_lixh_player_include_lixhplayerengine",
@@ -1445,6 +1481,18 @@
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_include_lixhplayerengine_lixhplayerengine_stop"
     ],
     "53": [
+      "aaudio",
+      "chrono",
+      "cstring",
+      "imgutils",
+      "jni",
+      "log",
+      "native_window",
+      "native_window_jni",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni",
+      "swscale"
+    ],
+    "54": [
       "dart_project",
       "flutter_app_windows_runner_flutter_window_h_flutter_app_windows_runner_flutter_window",
       "flutter_app_windows_runner_main",
@@ -1454,10 +1502,9 @@
       "memory",
       "packages_lixh_player_example_windows_runner_flutter_window_h_packages_lixh_player_example_windows_runner_flutter_window",
       "packages_lixh_player_example_windows_runner_main",
-      "packages_lixh_player_example_windows_runner_win32_window_h_packages_lixh_player_example_windows_runner_win32_window",
-      "windows"
+      "packages_lixh_player_example_windows_runner_win32_window_h_packages_lixh_player_example_windows_runner_win32_window"
     ],
-    "54": [
+    "55": [
       "getplatformversion",
       "gtest",
       "lixh_player_plugin",
@@ -1468,17 +1515,6 @@
       "packages_lixh_player_windows_test_lixh_player_plugin_test_test",
       "standard_method_codec",
       "variant"
-    ],
-    "55": [
-      "aaudio",
-      "chrono",
-      "imgutils",
-      "jni",
-      "log",
-      "native_window",
-      "native_window_jni",
-      "packages_lixh_player_android_src_main_cpp_lixh_player_jni",
-      "swscale"
     ],
     "56": [
       "avfoundation",
@@ -1514,39 +1550,17 @@
       "flutterimplicitenginedelegate"
     ],
     "59": [
-      "flutter_app_windows_runner_win32_window_h_hwnd",
-      "flutter_app_windows_runner_win32_window_win32window",
-      "flutter_app_windows_runner_win32_window_win32window_child_content",
-      "flutter_app_windows_runner_win32_window_win32window_oncreate",
-      "flutter_app_windows_runner_win32_window_win32window_ondestroy",
-      "flutter_app_windows_runner_win32_window_win32window_quit_on_close",
-      "flutter_app_windows_runner_win32_window_win32window_setquitonclose",
-      "flutter_app_windows_runner_win32_window_win32window_show",
-      "flutter_app_windows_runner_win32_window_win32window_window_handle"
+      "packages_lixh_player_example_windows_runner_main_cpp_in",
+      "packages_lixh_player_example_windows_runner_main_cpp_in_opt",
+      "packages_lixh_player_example_windows_runner_main_wwinmain",
+      "packages_lixh_player_example_windows_runner_utils_cpp_string",
+      "packages_lixh_player_example_windows_runner_utils_cpp_vector",
+      "packages_lixh_player_example_windows_runner_utils_cpp_wchar_t",
+      "packages_lixh_player_example_windows_runner_utils_createandattachconsole",
+      "packages_lixh_player_example_windows_runner_utils_getcommandlinearguments",
+      "packages_lixh_player_example_windows_runner_utils_utf8fromutf16"
     ],
     "60": [
-      "generated_plugin_registrant",
-      "packages_lixh_player_example_windows_runner_flutter_window_cpp_dartproject",
-      "packages_lixh_player_example_windows_runner_flutter_window_cpp_packages_lixh_player_example_windows_runner_flutter_window",
-      "packages_lixh_player_example_windows_runner_flutter_window_flutterwindow_flutterwindow",
-      "packages_lixh_player_example_windows_runner_flutter_window_flutterwindow_oncreate",
-      "packages_lixh_player_example_windows_runner_flutter_window_flutterwindow_ondestroy",
-      "packages_lixh_player_example_windows_runner_win32_window_cpp_rect",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window_getclientarea",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window_setchildcontent"
-    ],
-    "61": [
-      "packages_lixh_player_example_windows_runner_win32_window_h_hwnd",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window_child_content",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window_oncreate",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window_ondestroy",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window_quit_on_close",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window_setquitonclose",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window_show",
-      "packages_lixh_player_example_windows_runner_win32_window_win32window_window_handle"
-    ],
-    "62": [
       "packages_lixh_player_windows_shared_texture_cpp_id3d11texture2d",
       "packages_lixh_player_windows_shared_texture_cpp_uint",
       "packages_lixh_player_windows_shared_texture_sharedtexturebridge_capturefromtexture",
@@ -1557,7 +1571,7 @@
       "packages_lixh_player_windows_shared_texture_sharedtexturebridge_presentnv12viavideoprocessor",
       "packages_lixh_player_windows_shared_texture_sharedtexturebridge_tickretired"
     ],
-    "63": [
+    "61": [
       "flutter_app_ios_runnertests_runnertests_runnertests",
       "flutter_app_ios_runnertests_runnertests_runnertests_testexample",
       "flutter_app_macos_runnertests_runnertests",
@@ -1567,7 +1581,7 @@
       "packages_lixh_player_example_macos_runnertests_runnertests_runnertests_testgetplatformversion",
       "xctestcase"
     ],
-    "64": [
+    "62": [
       "flutter_app_lib_main_dock",
       "flutter_app_lib_main_header",
       "flutter_app_lib_main_hudcard",
@@ -1577,7 +1591,7 @@
       "flutter_app_lib_main_stage",
       "statelesswidget"
     ],
-    "65": [
+    "63": [
       "foundation",
       "packagedescription",
       "packages_lixh_player_ios_lixh_player_package",
@@ -1587,7 +1601,7 @@
       "packages_lixh_player_macos_lixh_player_package_findreporoot",
       "packages_lixh_player_macos_lixh_player_package_swift_url"
     ],
-    "66": [
+    "64": [
       "packages_lixh_player_ios_lixh_player_sources_lixh_player_include_lixhaudiooutput",
       "packages_lixh_player_ios_lixh_player_sources_lixh_player_include_lixhaudiooutput_h_nsobject",
       "packages_lixh_player_ios_lixh_player_sources_lixh_player_include_lixhaudiooutput_lixhaudiooutput",
@@ -1597,7 +1611,7 @@
       "packages_lixh_player_ios_lixh_player_sources_lixh_player_include_lixhaudiooutput_lixhaudiooutput_start",
       "packages_lixh_player_ios_lixh_player_sources_lixh_player_include_lixhaudiooutput_lixhaudiooutput_stop"
     ],
-    "67": [
+    "65": [
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_include_lixhaudiooutput",
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_include_lixhaudiooutput_h_nsobject",
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_include_lixhaudiooutput_lixhaudiooutput",
@@ -1607,7 +1621,7 @@
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_include_lixhaudiooutput_lixhaudiooutput_start",
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_include_lixhaudiooutput_lixhaudiooutput_stop"
     ],
-    "68": [
+    "66": [
       "packages_lixh_player_windows_player_session_playersession_handlevideo",
       "packages_lixh_player_windows_player_session_playersession_signalpresent",
       "packages_lixh_player_windows_shared_texture_h_id3d11device",
@@ -1617,7 +1631,7 @@
       "packages_lixh_player_windows_shared_texture_sharedtexturebridge_ready",
       "packages_lixh_player_windows_shared_texture_sharedtexturebridge_width"
     ],
-    "69": [
+    "67": [
       "flutterappdelegate",
       "packages_lixh_player_example_macos_runner_appdelegate",
       "packages_lixh_player_example_macos_runner_appdelegate_appdelegate",
@@ -1626,7 +1640,7 @@
       "packages_lixh_player_example_macos_runner_appdelegate_swift_bool",
       "packages_lixh_player_example_macos_runner_appdelegate_swift_nsapplication"
     ],
-    "70": [
+    "68": [
       "packages_lixh_player_example_ios_runner_appdelegate_appdelegate",
       "packages_lixh_player_example_ios_runner_appdelegate_appdelegate_application",
       "packages_lixh_player_example_ios_runner_appdelegate_appdelegate_didinitializeimplicitflutterengine",
@@ -1635,7 +1649,7 @@
       "packages_lixh_player_example_ios_runner_appdelegate_swift_flutterimplicitenginebridge",
       "packages_lixh_player_example_ios_runner_appdelegate_swift_uiapplication"
     ],
-    "71": [
+    "69": [
       "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_playbackbackend",
       "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_playbackbackend_open",
       "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_playbackbackend_start",
@@ -1644,15 +1658,7 @@
       "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_playbackbackend_to_supervisor_telemetry",
       "src_tauri_lixh_stream_stack_lixh_playback_engine_src_lib_rs_telemetry"
     ],
-    "72": [
-      "flutter_app_windows_runner_flutter_window_cpp_hwnd",
-      "flutter_app_windows_runner_flutter_window_cpp_lparam",
-      "flutter_app_windows_runner_flutter_window_cpp_lresult",
-      "flutter_app_windows_runner_flutter_window_cpp_uint",
-      "flutter_app_windows_runner_flutter_window_cpp_wparam",
-      "flutter_app_windows_runner_flutter_window_flutterwindow_messagehandler"
-    ],
-    "73": [
+    "70": [
       "package_flutter_services_dart",
       "package_lixh_player_lixh_player_method_channel_dart",
       "packages_lixh_player_test_lixh_player_method_channel_test",
@@ -1660,7 +1666,15 @@
       "packages_lixh_player_test_lixh_player_method_channel_test_main",
       "packages_lixh_player_test_lixh_player_method_channel_test_platform"
     ],
-    "74": [
+    "71": [
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_cpp_string",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativelasterror",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_java_com_livecatch_lixh_1player_lixhplayerplugin_nativeplay",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_last_error",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_play",
+      "packages_lixh_player_android_src_main_cpp_lixh_player_jni_session_seterror"
+    ],
+    "72": [
       "pkg_livecatch_desk",
       "pkg_lixh_playback_engine",
       "pkg_lixh_player_core",
@@ -1668,7 +1682,7 @@
       "pkg_lixh_stream_resolver",
       "pkg_lixh_stream_supervisor"
     ],
-    "75": [
+    "73": [
       "src_tauri_capabilities_default",
       "src_tauri_capabilities_default_description",
       "src_tauri_capabilities_default_identifier",
@@ -1676,240 +1690,216 @@
       "src_tauri_capabilities_default_schema",
       "src_tauri_capabilities_default_windows"
     ],
-    "76": [
+    "74": [
       "anyhow",
       "exitcode",
       "src_tauri_lixh_stream_stack_lixh_stream_resolver_src_bin_lixh_resolve",
       "src_tauri_lixh_stream_stack_lixh_stream_resolver_src_bin_lixh_resolve_main",
       "src_tauri_lixh_stream_stack_lixh_stream_resolver_src_bin_lixh_resolve_run"
     ],
-    "77": [
+    "75": [
       "flutter_app_macos_runner_appdelegate_appdelegate",
       "flutter_app_macos_runner_appdelegate_appdelegate_applicationshouldterminateafterlastwindowclosed",
       "flutter_app_macos_runner_appdelegate_appdelegate_applicationsupportssecurerestorablestate",
       "flutter_app_macos_runner_appdelegate_swift_bool",
       "flutter_app_macos_runner_appdelegate_swift_nsapplication"
     ],
-    "78": [
+    "76": [
       "flutter_app_lib_main_playerpage",
       "flutter_app_lib_main_playerpagestate",
       "singletickerproviderstatemixin",
       "statefulwidget"
     ],
-    "79": [
-      "flutter_app_windows_runner_win32_window_point",
-      "flutter_app_windows_runner_win32_window_point_point",
-      "flutter_app_windows_runner_win32_window_point_x",
-      "flutter_app_windows_runner_win32_window_point_y"
-    ],
-    "80": [
-      "flutter_app_windows_runner_win32_window_size",
-      "flutter_app_windows_runner_win32_window_size_height",
-      "flutter_app_windows_runner_win32_window_size_size",
-      "flutter_app_windows_runner_win32_window_size_width"
-    ],
-    "81": [
-      "packages_lixh_player_example_windows_runner_win32_window_point",
-      "packages_lixh_player_example_windows_runner_win32_window_point_point",
-      "packages_lixh_player_example_windows_runner_win32_window_point_x",
-      "packages_lixh_player_example_windows_runner_win32_window_point_y"
-    ],
-    "82": [
-      "packages_lixh_player_example_windows_runner_win32_window_size",
-      "packages_lixh_player_example_windows_runner_win32_window_size_height",
-      "packages_lixh_player_example_windows_runner_win32_window_size_size",
-      "packages_lixh_player_example_windows_runner_win32_window_size_width"
-    ],
-    "83": [
+    "77": [
       "file",
       "packages_lixh_player_android_build_gradle",
       "packages_lixh_player_android_build_gradle_findreporoot"
     ],
-    "84": [
+    "78": [
       "flutter_app_android_app_src_main_kotlin_com_example_livecatch_app_mainactivity",
       "flutter_app_android_app_src_main_kotlin_com_example_livecatch_app_mainactivity_kt_flutteractivity",
       "flutter_app_android_app_src_main_kotlin_com_example_livecatch_app_mainactivity_mainactivity"
     ],
-    "85": [
+    "79": [
       "flutter_app_ios_runner_runner_bridging_header",
       "generatedpluginregistrant",
       "packages_lixh_player_example_ios_runner_runner_bridging_header"
     ],
-    "86": [
+    "80": [
       "packages_lixh_player_example_android_app_src_main_kotlin_com_livecatch_lixh_player_example_mainactivity",
       "packages_lixh_player_example_android_app_src_main_kotlin_com_livecatch_lixh_player_example_mainactivity_kt_flutteractivity",
       "packages_lixh_player_example_android_app_src_main_kotlin_com_livecatch_lixh_player_example_mainactivity_mainactivity"
     ],
-    "87": [
+    "81": [
       "src_tauri_lixh_stream_stack_lixh_player_core_include_lixh_player",
       "src_tauri_lixh_stream_stack_lixh_player_core_include_lixh_surface",
       "stdint"
     ],
-    "88": [
+    "82": [
       "src_tauri_lixh_stream_stack_scripts_verify_ffmpeg_consume",
       "src_tauri_lixh_stream_stack_scripts_verify_ffmpeg_consume_probe",
       "src_tauri_lixh_stream_stack_scripts_verify_ffmpeg_consume_sh__entry"
     ],
-    "89": [
-      "avcodeccontext",
-      "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_choose_hw_format"
+    "83": [
+      "packages_lixh_player_ios_sync_ffmpeg_ios",
+      "packages_lixh_player_ios_sync_ffmpeg_ios_sh__entry"
     ],
-    "90": [
+    "84": [
       "packages_lixh_player_windows_shared_texture_cpp_flutterdesktopgpusurfacedescriptor",
       "packages_lixh_player_windows_shared_texture_sharedtexturebridge_descriptor"
     ],
-    "91": [
+    "85": [
       "src_tauri_lixh_stream_stack_scripts_fetch_ffmpeg",
       "src_tauri_lixh_stream_stack_scripts_fetch_ffmpeg_get_zip"
     ],
-    "92": [
+    "86": [
       "src_tauri_lixh_stream_stack_scripts_fetch_ffmpeg_from_actions",
       "src_tauri_lixh_stream_stack_scripts_fetch_ffmpeg_from_actions_sh__entry"
     ],
-    "93": [
+    "87": [
       "src_tauri_lixh_stream_stack_scripts_fetch_ffmpeg_runtime",
       "src_tauri_lixh_stream_stack_scripts_fetch_ffmpeg_runtime_sh__entry"
     ],
-    "94": [
+    "88": [
       "src_tauri_lixh_stream_stack_scripts_fetch_ffmpeg_sdk",
       "src_tauri_lixh_stream_stack_scripts_fetch_ffmpeg_sdk_sh__entry"
     ],
-    "95": [
+    "89": [
       "src_tauri_lixh_stream_stack_scripts_list_ffmpeg_platforms",
       "src_tauri_lixh_stream_stack_scripts_list_ffmpeg_platforms_sh__entry"
     ],
-    "96": [
+    "90": [
       "src_tauri_lixh_stream_stack_scripts_normalize_ffmpeg_macos",
       "src_tauri_lixh_stream_stack_scripts_normalize_ffmpeg_macos_sh__entry"
     ],
-    "97": [
+    "91": [
       "src_tauri_lixh_stream_stack_scripts_prepare_runtime",
       "src_tauri_lixh_stream_stack_scripts_prepare_runtime_sh__entry"
     ],
-    "98": [
+    "92": [
       "flutter_app_android_app_build_gradle"
     ],
-    "99": [
+    "93": [
       "flutter_app_android_build_gradle"
     ],
-    "100": [
+    "94": [
       "flutter_app_android_settings_gradle"
     ],
-    "101": [
+    "95": [
       "java"
     ],
-    "102": [
+    "96": [
       "none_state"
     ],
-    "103": [
+    "97": [
       "none_string"
     ],
-    "104": [
+    "98": [
       "packages_lixh_player_android_settings_gradle"
     ],
-    "105": [
+    "99": [
       "packages_lixh_player_example_android_app_build_gradle"
     ],
-    "106": [
+    "100": [
       "packages_lixh_player_example_android_build_gradle"
     ],
-    "107": [
+    "101": [
       "packages_lixh_player_example_android_settings_gradle"
     ],
-    "108": [
+    "102": [
       "packages_lixh_player_ios_lixh_player_sources_lixh_player_corec_include_lixh_player_corec"
     ],
-    "109": [
+    "103": [
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_corec_include_lixh_player_corec"
     ]
   },
   "cohesion": {
-    "0": 0.05658381808566896,
+    "0": 0.055299539170506916,
     "1": 0.03333333333333333,
-    "2": 0.05263157894736842,
+    "2": 0.05388471177944862,
     "3": 0.06458635703918723,
-    "4": 0.06377551020408163,
-    "5": 0.041666666666666664,
-    "6": 0.1072463768115942,
-    "7": 0.08985200845665962,
-    "8": 0.047619047619047616,
-    "9": 0.06923076923076923,
+    "4": 0.06823529411764706,
+    "5": 0.07020408163265306,
+    "6": 0.041666666666666664,
+    "7": 0.1072463768115942,
+    "8": 0.08773784355179703,
+    "9": 0.047619047619047616,
     "10": 0.05263157894736842,
     "11": 0.09815078236130868,
     "12": 0.08558558558558559,
-    "13": 0.12121212121212122,
+    "13": 0.06050420168067227,
     "14": 0.06060606060606061,
     "15": 0.11954022988505747,
-    "16": 0.11904761904761904,
-    "17": 0.08547008547008547,
+    "16": 0.07142857142857142,
+    "17": 0.12535612535612536,
     "18": 0.11594202898550725,
-    "19": 0.11594202898550725,
-    "20": 0.14624505928853754,
-    "21": 0.08695652173913043,
-    "22": 0.1774891774891775,
-    "23": 0.14761904761904762,
-    "24": 0.11578947368421053,
-    "25": 0.16842105263157894,
-    "26": 0.16842105263157894,
-    "27": 0.2807017543859649,
-    "28": 0.14619883040935672,
-    "29": 0.1568627450980392,
-    "30": 0.14705882352941177,
-    "31": 0.125,
-    "32": 0.16911764705882354,
-    "33": 0.22794117647058823,
-    "34": 0.125,
-    "35": 0.14285714285714285,
-    "36": 0.14285714285714285,
-    "37": 0.1523809523809524,
-    "38": 0.3142857142857143,
-    "39": 0.21978021978021978,
-    "40": 0.15384615384615385,
-    "41": 0.15384615384615385,
-    "42": 0.1794871794871795,
+    "19": 0.13768115942028986,
+    "20": 0.09057971014492754,
+    "21": 0.09090909090909091,
+    "22": 0.08695652173913043,
+    "23": 0.1774891774891775,
+    "24": 0.14761904761904762,
+    "25": 0.11578947368421053,
+    "26": 0.14210526315789473,
+    "27": 0.16842105263157894,
+    "28": 0.16842105263157894,
+    "29": 0.18128654970760233,
+    "30": 0.2222222222222222,
+    "31": 0.14705882352941177,
+    "32": 0.11764705882352941,
+    "33": 0.125,
+    "34": 0.29411764705882354,
+    "35": 0.22794117647058823,
+    "36": 0.13333333333333333,
+    "37": 0.18333333333333332,
+    "38": 0.125,
+    "39": 0.14285714285714285,
+    "40": 0.3142857142857143,
+    "41": 0.21978021978021978,
+    "42": 0.15384615384615385,
     "43": 0.15384615384615385,
-    "44": 0.21794871794871795,
-    "45": 0.22727272727272727,
-    "46": 0.19696969696969696,
-    "47": 0.2727272727272727,
-    "48": 0.16666666666666666,
+    "44": 0.1794871794871795,
+    "45": 0.19230769230769232,
+    "46": 0.21794871794871795,
+    "47": 0.22727272727272727,
+    "48": 0.19696969696969696,
     "49": 0.16666666666666666,
-    "50": 0.2727272727272727,
+    "50": 0.16666666666666666,
     "51": 0.16666666666666666,
     "52": 0.16666666666666666,
-    "53": 0.4,
-    "54": 0.2,
-    "55": 0.2222222222222222,
+    "53": 0.2,
+    "54": 0.4,
+    "55": 0.2,
     "56": 0.3611111111111111,
     "57": 0.2222222222222222,
     "58": 0.2222222222222222,
-    "59": 0.2222222222222222,
-    "60": 0.25,
-    "61": 0.2222222222222222,
-    "62": 0.3888888888888889,
-    "63": 0.25,
+    "59": 0.25,
+    "60": 0.3888888888888889,
+    "61": 0.25,
+    "62": 0.25,
+    "63": 0.2857142857142857,
     "64": 0.25,
-    "65": 0.2857142857142857,
+    "65": 0.25,
     "66": 0.25,
-    "67": 0.25,
-    "68": 0.25,
-    "69": 0.38095238095238093,
-    "70": 0.2857142857142857,
+    "67": 0.38095238095238093,
+    "68": 0.2857142857142857,
+    "69": 0.3333333333333333,
+    "70": 0.3333333333333333,
     "71": 0.3333333333333333,
-    "72": 0.3333333333333333,
+    "72": 0.6666666666666666,
     "73": 0.3333333333333333,
-    "74": 0.6666666666666666,
-    "75": 0.3333333333333333,
-    "76": 0.6,
-    "77": 0.6,
-    "78": 0.5,
-    "79": 0.5,
-    "80": 0.5,
-    "81": 0.5,
-    "82": 0.5,
-    "83": 0.6666666666666666,
+    "74": 0.6,
+    "75": 0.6,
+    "76": 0.5,
+    "77": 0.6666666666666666,
+    "78": 1.0,
+    "79": 0.6666666666666666,
+    "80": 1.0,
+    "81": 1.0,
+    "82": 1.0,
+    "83": 1.0,
     "84": 1.0,
-    "85": 0.6666666666666666,
+    "85": 1.0,
     "86": 1.0,
     "87": 1.0,
     "88": 1.0,
@@ -1927,13 +1917,7 @@
     "100": 1.0,
     "101": 1.0,
     "102": 1.0,
-    "103": 1.0,
-    "104": 1.0,
-    "105": 1.0,
-    "106": 1.0,
-    "107": 1.0,
-    "108": 1.0,
-    "109": 1.0
+    "103": 1.0
   },
   "gods": [
     {
