@@ -188,8 +188,8 @@ static void OnEvent(void *opaque, int type, int code, const char *message) {
 
 - (NSDictionary *)createVideoTextureWidth:(int)width
                                    height:(int)height
-                                  failure:(NSError **)failure {
-  (void)failure;
+                                  error:(NSError **)error {
+  (void)error;
   [self disposeVideoTexture];
   if (width < 2) width = 1280;
   if (height < 2) height = 720;
@@ -209,10 +209,10 @@ static void OnEvent(void *opaque, int type, int code, const char *message) {
   };
 }
 
-- (BOOL)presentTestFrameR:(float)r g:(float)g b:(float)b failure:(NSError **)failure {
+- (BOOL)presentTestFrameR:(float)r g:(float)g b:(float)b error:(NSError **)error {
   if (!self.texture || self.textureId < 0) {
-    if (failure)
-      *failure = [NSError errorWithDomain:@"lixh_player"
+    if (error)
+      *error = [NSError errorWithDomain:@"lixh_player"
                                      code:1
                                  userInfo:@{NSLocalizedDescriptionKey : @"No texture"}];
     return NO;
@@ -222,7 +222,7 @@ static void OnEvent(void *opaque, int type, int code, const char *message) {
   return YES;
 }
 
-- (BOOL)openUrl:(NSString *)url headers:(NSString *)headers failure:(NSError **)failure {
+- (BOOL)openUrl:(NSString *)url headers:(NSString *)headers error:(NSError **)error {
   [self stop];
   LixhCallbacks cb = {0};
   cb.opaque = (__bridge void *)self;
@@ -232,8 +232,8 @@ static void OnEvent(void *opaque, int type, int code, const char *message) {
   void *player = lixh_player_create(&cb);
   if (!player) {
     [self setErr:@"lixh_player_create failed"];
-    if (failure)
-      *failure = [NSError errorWithDomain:@"lixh_player"
+    if (error)
+      *error = [NSError errorWithDomain:@"lixh_player"
                                      code:2
                                  userInfo:@{NSLocalizedDescriptionKey : (self.lastError ?: @"")}];
     return NO;
@@ -244,8 +244,8 @@ static void OnEvent(void *opaque, int type, int code, const char *message) {
   if (lixh_player_open(player, url.UTF8String) < 0) {
     [self setErr:@"lixh_player_open failed"];
     lixh_player_destroy(player);
-    if (failure)
-      *failure = [NSError errorWithDomain:@"lixh_player"
+    if (error)
+      *error = [NSError errorWithDomain:@"lixh_player"
                                      code:3
                                  userInfo:@{NSLocalizedDescriptionKey : (self.lastError ?: @"")}];
     return NO;
@@ -257,21 +257,21 @@ static void OnEvent(void *opaque, int type, int code, const char *message) {
   return YES;
 }
 
-- (BOOL)startPlayback:(NSError **)failure {
+- (BOOL)startPlayback:(NSError **)error {
   void *player = NULL;
   @synchronized(self) { player = _player; }
   if (!player) {
     [self setErr:@"player not open"];
-    if (failure)
-      *failure = [NSError errorWithDomain:@"lixh_player"
+    if (error)
+      *error = [NSError errorWithDomain:@"lixh_player"
                                      code:4
                                  userInfo:@{NSLocalizedDescriptionKey : (self.lastError ?: @"")}];
     return NO;
   }
   if (self.playThread) {
     [self setErr:@"already playing"];
-    if (failure)
-      *failure = [NSError errorWithDomain:@"lixh_player"
+    if (error)
+      *error = [NSError errorWithDomain:@"lixh_player"
                                      code:5
                                  userInfo:@{NSLocalizedDescriptionKey : (self.lastError ?: @"")}];
     return NO;

@@ -28,26 +28,26 @@ public class LixhPlayerPlugin: NSObject, FlutterPlugin {
       let args = call.arguments as? [String: Any]
       let w = (args?["width"] as? NSNumber)?.intValue ?? 1280
       let h = (args?["height"] as? NSNumber)?.intValue ?? 720
-      var err: NSError?
-      if let map = engine.createVideoTextureWidth(Int32(w), height: Int32(h), failure: &err) {
+      do {
+        let map = try engine.createVideoTextureWidth(Int32(w), height: Int32(h))
         result(map)
-      } else {
+      } catch {
         result(
           FlutterError(
-            code: "texture_failed", message: err?.localizedDescription, details: nil))
+            code: "texture_failed", message: error.localizedDescription, details: nil))
       }
     case "presentTestFrame":
       let args = call.arguments as? [String: Any]
       let r = (args?["r"] as? NSNumber)?.floatValue ?? 0.1
       let g = (args?["g"] as? NSNumber)?.floatValue ?? 0.5
       let b = (args?["b"] as? NSNumber)?.floatValue ?? 0.9
-      var err: NSError?
-      if engine.presentTestFrameR(r, g: g, b: b, failure: &err) {
+      do {
+        try engine.presentTestFrameR(r, g: g, b: b)
         result(true)
-      } else {
+      } catch {
         result(
           FlutterError(
-            code: "present_failed", message: err?.localizedDescription, details: nil))
+            code: "present_failed", message: error.localizedDescription, details: nil))
       }
     case "open":
       let args = call.arguments as? [String: Any]
@@ -56,22 +56,22 @@ public class LixhPlayerPlugin: NSObject, FlutterPlugin {
         return
       }
       let headers = args?["headers"] as? String
-      var err: NSError?
-      if engine.openUrl(url, headers: headers, failure: &err) {
+      do {
+        try engine.openUrl(url, headers: headers)
         result(true)
-      } else {
+      } catch {
         result(
           FlutterError(
-            code: "open_failed", message: err?.localizedDescription, details: nil))
+            code: "open_failed", message: error.localizedDescription, details: nil))
       }
     case "play":
-      var err: NSError?
-      if engine.startPlayback(&err) {
+      do {
+        try engine.startPlayback()
         result(true)
-      } else {
+      } catch {
         result(
           FlutterError(
-            code: "play_failed", message: err?.localizedDescription, details: nil))
+            code: "play_failed", message: error.localizedDescription, details: nil))
       }
     case "stop":
       engine.stop()
