@@ -1,0 +1,33 @@
+# Build outputs and dependency trees
+node_modules/
+dist/
+target/
+**/target/
+**/build/
+**/.dart_tool/
+**/ephemeral/
+**/GeneratedPluginRegistrant.*
+**/Pods/
+**/.gradle/
+**/CMakeFiles/
+**/CMakeCache.txt/
+
+# Generated or downloaded native dependencies
+src-tauri/lixh-stream-stack/sdk/
+src-tauri/lixh-stream-stack/runtime/
+src-tauri/gen/
+src-tauri/resources/ffmpeg/
+*.lock
+
+# Logs, dumps, binaries and IDE metadata
+*.log
+dumps/
+*.obj
+*.o
+*.exe
+*.pdb
+*.ilk
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
