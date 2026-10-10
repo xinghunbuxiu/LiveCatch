@@ -4,7 +4,8 @@ set -euo pipefail
 REPO="${LIXH_FFMPEG_REPO:-xinghunbuxiu/LiveCatchFfmpeg}"
 VERSION="${LIXH_FFMPEG_VERSION:-9.0.2}"
 PLATFORM="${1:?platform required}"
-OUT="${2:?output directory required}"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+OUT="${2:-$ROOT/src-tauri/lixh-stream-stack/runtime/$PLATFORM}"
 TAG="${LIXH_FFMPEG_TAG:-ffmpeg-${VERSION}-lc1}"
 ASSET="LiveCatch-ffmpeg-${VERSION}-${PLATFORM}.zip"
 
@@ -30,3 +31,4 @@ cat > "$OUT/runtime-manifest.json" <<EOF
   "consumed_from_release": true
 }
 EOF
+echo "OK: FFmpeg runtime $PLATFORM -> $OUT"

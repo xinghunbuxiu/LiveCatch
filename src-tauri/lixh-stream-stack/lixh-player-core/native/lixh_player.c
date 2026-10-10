@@ -21,7 +21,7 @@
 #include <libavutil/hwcontext_d3d11va.h>
 #include <d3d11.h>
 #endif
-#ifdef LIXH_MACOS
+#if defined(LIXH_MACOS) || defined(LIXH_IOS)
 #include <libavutil/hwcontext_videotoolbox.h>
 #endif
 
@@ -45,8 +45,13 @@ typedef struct LixhPlayer {
     atomic_int playing;
     /* 0 = probe direct D3D11 presentation, 1 = working, -1 = use transfer fallback. */
     atomic_int direct_d3d11;
+    /* 1 = decode+deliver video; 0 = drop video packets (listen-only). */
+    atomic_int video_sink;
+    /* Set from UI thread; consumed only on the play/decode thread. */
+    atomic_int flush_video_req;
     int opened;
     char *url;
+    char *http_headers;
     atomic_int_fast64_t base_wall_ms;
     atomic_int_fast64_t first_pts_ms;
     atomic_int_fast64_t last_video_pts_ms;
@@ -55,8 +60,12 @@ typedef struct LixhPlayer {
     atomic_uint_fast64_t audio_frames;
     atomic_uint_fast64_t dropped_frames;
     atomic_uint_fast64_t reconnects;
+    atomic_uint_fast64_t bytes_read;
+    atomic_int video_width;
+    atomic_int video_height;
     int64_t target_latency_ms;
     int64_t max_latency_ms;
+    int chase_drop_streak;
     int sample_rate;
     int channels;
 } LixhPlayer;
@@ -100,26 +109,28 @@ static int setup_hw(LixhPlayer *p) {
     enum AVHWDeviceType type = AV_HWDEVICE_TYPE_D3D11VA;
     p->hw_pix_fmt = AV_PIX_FMT_D3D11;
     p->hw_kind = LIXH_VIDEO_D3D11;
-#elif defined(LIXH_MACOS)
-    /* VideoToolbox disabled: douyin live H264 streams fail VT decode
-       (-12909 on every frame). Force software decode; 720p/1080p is
-       trivial for modern CPUs and still presents via the native layer. */
-    p->hw_device = NULL;
-    p->hw_kind = LIXH_VIDEO_SOFTWARE;
-    return 0;
-#else
-    return AVERROR(ENOSYS);
-#endif
-#if defined(LIXH_MACOS)
-    /* VideoToolbox disabled (see above): no device to create. */
-    return 0;
-#else
     int rc = av_hwdevice_ctx_create(&p->hw_device, type, NULL, NULL, 0);
     if (rc < 0) {
         p->hw_device = NULL;
         p->hw_kind = LIXH_VIDEO_SOFTWARE;
         return rc;
     }
+    return 0;
+#elif defined(LIXH_ANDROID)
+    /* MediaCodec decode → CPU transfer → SurfaceTexture present. */
+    p->hw_pix_fmt = AV_PIX_FMT_MEDIACODEC;
+    p->hw_kind = LIXH_VIDEO_MEDIACODEC;
+    int rc = av_hwdevice_ctx_create(&p->hw_device, AV_HWDEVICE_TYPE_MEDIACODEC, NULL, NULL, 0);
+    if (rc < 0) {
+        p->hw_device = NULL;
+        p->hw_kind = LIXH_VIDEO_SOFTWARE;
+        return rc;
+    }
+    return 0;
+#else
+    /* macOS/iOS: software first; VT wired in platform engines when available. */
+    p->hw_device = NULL;
+    p->hw_kind = LIXH_VIDEO_SOFTWARE;
     return 0;
 #endif
 }
@@ -161,14 +172,20 @@ static int open_input(LixhPlayer *p) {
     av_dict_set(&opts, "fflags", "nobuffer+discardcorrupt+flush_packets", 0);
     av_dict_set(&opts, "max_delay", "0", 0);
     av_dict_set(&opts, "flags", "low_delay", 0);
-    av_dict_set(&opts, "probesize", "1048576", 0);
-    av_dict_set(&opts, "analyzeduration", "2000000", 0);
-    av_dict_set(&opts, "rw_timeout", "3000000", 0);
+    /* Tight probe for faster join. */
+    av_dict_set(&opts, "probesize", "327680", 0);
+    av_dict_set(&opts, "analyzeduration", "300000", 0);
+    av_dict_set(&opts, "rw_timeout", "2000000", 0);
+    av_dict_set(&opts, "timeout", "2000000", 0);
     /* Live CDN edge nodes (e.g. douyincdn) throttle/reset bare Lavf
        clients mid-stream, which desyncs the FLV demuxer. Pose as a
        browser to get a stable connection. */
     av_dict_set(&opts, "user_agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", 0);
-    av_dict_set(&opts, "headers", "Referer: https://live.douyin.com/\r\nAccept: */*\r\n", 0);
+    if (p->http_headers && p->http_headers[0]) {
+        av_dict_set(&opts, "headers", p->http_headers, 0);
+    } else {
+        av_dict_set(&opts, "headers", "Referer: https://live.douyin.com/\r\nAccept: */*\r\n", 0);
+    }
     av_dict_set(&opts, "reconnect", "1", 0);
     av_dict_set(&opts, "reconnect_streamed", "1", 0);
     av_dict_set(&opts, "reconnect_delay_max", "2", 0);
@@ -216,21 +233,55 @@ static int64_t frame_pts_ms(const AVFrame *f, AVRational tb) {
     return av_rescale_q(f->pts, tb, (AVRational){1,1000});
 }
 
-static void deliver_video(LixhPlayer *p, AVFrame *f, AVRational tb) {
-    int64_t pts = frame_pts_ms(f, tb);
-    if (pts == AV_NOPTS_VALUE) return;
-    if (atomic_load_explicit(&p->first_pts_ms, memory_order_acquire) == AV_NOPTS_VALUE) atomic_store_explicit(&p->first_pts_ms, pts, memory_order_release);
-    int64_t last_pts = atomic_load_explicit(&p->last_video_pts_ms, memory_order_acquire);
-    if (last_pts != AV_NOPTS_VALUE && pts < last_pts - 1000) return;
+/* Video-only chase. Soft-drop skips GPU present (keeps demux/audio moving);
+   hard re-anchor when lag exceeds max. Audio never uses this. */
+static int live_chase_should_drop(LixhPlayer *p, int64_t pts, int is_key) {
+    if (atomic_load_explicit(&p->first_pts_ms, memory_order_acquire) == AV_NOPTS_VALUE) {
+        atomic_store_explicit(&p->first_pts_ms, pts, memory_order_release);
+        atomic_store_explicit(&p->base_wall_ms, now_ms(), memory_order_release);
+        p->chase_drop_streak = 0;
+        return 0;
+    }
     int64_t wall_elapsed = now_ms() - atomic_load_explicit(&p->base_wall_ms, memory_order_acquire);
     int64_t media_elapsed = pts - atomic_load_explicit(&p->first_pts_ms, memory_order_acquire);
     int64_t live_lag = wall_elapsed - media_elapsed;
     if (live_lag > p->max_latency_ms) {
+        atomic_store_explicit(&p->first_pts_ms, pts, memory_order_release);
+        atomic_store_explicit(&p->base_wall_ms, now_ms(), memory_order_release);
+        p->chase_drop_streak = 0;
         atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
-        return;
+        return 1;
     }
+    if (p->target_latency_ms > 0 && live_lag > p->target_latency_ms) {
+        /* Prefer dropping non-keyframes so we snap to the next IDR near live. */
+        if (!is_key || p->chase_drop_streak < 8) {
+            p->chase_drop_streak++;
+            atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
+            return 1;
+        }
+    }
+    p->chase_drop_streak = 0;
+    return 0;
+}
+
+static void deliver_video(LixhPlayer *p, AVFrame *f, AVRational tb) {
+    int64_t pts = frame_pts_ms(f, tb);
+    if (pts == AV_NOPTS_VALUE) return;
+    int64_t last_pts = atomic_load_explicit(&p->last_video_pts_ms, memory_order_acquire);
+    if (last_pts != AV_NOPTS_VALUE && pts < last_pts - 1000) return;
+    int is_key = 0;
+#if LIBAVUTIL_VERSION_MAJOR >= 58
+    is_key = (f->flags & AV_FRAME_FLAG_KEY) != 0;
+#else
+    is_key = f->key_frame;
+#endif
+    if (live_chase_should_drop(p, pts, is_key)) return;
     atomic_store_explicit(&p->last_video_pts_ms, pts, memory_order_release);
     atomic_fetch_add_explicit(&p->video_frames, 1, memory_order_relaxed);
+    if (f->width > 0 && f->height > 0) {
+        atomic_store_explicit(&p->video_width, f->width, memory_order_relaxed);
+        atomic_store_explicit(&p->video_height, f->height, memory_order_relaxed);
+    }
     if (!p->cb.on_video) return;
     if (f->format == AV_PIX_FMT_D3D11) {
 #ifdef LIXH_WINDOWS
@@ -274,9 +325,30 @@ static void deliver_video(LixhPlayer *p, AVFrame *f, AVRational tb) {
         }
 #endif
     } else if (f->format == AV_PIX_FMT_VIDEOTOOLBOX) {
-#ifdef LIXH_MACOS
+#if defined(LIXH_MACOS) || defined(LIXH_IOS)
         LixhNativeFrame nf = { LIXH_VIDEO_VIDEOTOOLBOX, f->width, f->height, f->data[3], 0, f };
         p->cb.on_video(p->cb.opaque, nf.kind, nf.width, nf.height, pts, 0, &nf);
+#endif
+#if defined(LIXH_ANDROID)
+    } else if (f->format == AV_PIX_FMT_MEDIACODEC) {
+        /* Transfer to SW for ANativeWindow/RGBA present (direct Surface later). */
+        if (!p->transfer_frame) p->transfer_frame = av_frame_alloc();
+        AVFrame *sw = p->transfer_frame;
+        if (!sw) {
+            atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
+            return;
+        }
+        av_frame_unref(sw);
+        int rc = av_hwframe_transfer_data(sw, f, 0);
+        if (rc >= 0) rc = av_frame_copy_props(sw, f);
+        if (rc >= 0) {
+            LixhNativeFrame fallback = { LIXH_VIDEO_SOFTWARE, sw->width, sw->height, sw, 0, sw };
+            p->cb.on_video(p->cb.opaque, fallback.kind, fallback.width, fallback.height, pts, 0, &fallback);
+        } else {
+            atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
+            emit(p, LIXH_EVT_ERROR, rc, av_err2str(rc));
+        }
+        av_frame_unref(sw);
 #endif
     } else {
         LixhNativeFrame nf = { LIXH_VIDEO_SOFTWARE, f->width, f->height, f, 0, f };
@@ -287,6 +359,12 @@ static void deliver_video(LixhPlayer *p, AVFrame *f, AVRational tb) {
 static void deliver_audio(LixhPlayer *p, AVFrame *f, AVRational tb) {
     int64_t pts = frame_pts_ms(f, tb);
     if (pts == AV_NOPTS_VALUE || !p->cb.on_audio) return;
+    /* Never soft-chase audio: video soft-drops were starving PCM and freezing
+       listen-only / return-from-video. Live edge is trimmed in WASAPI queue. */
+    if (atomic_load_explicit(&p->first_pts_ms, memory_order_acquire) == AV_NOPTS_VALUE) {
+        atomic_store_explicit(&p->first_pts_ms, pts, memory_order_release);
+        atomic_store_explicit(&p->base_wall_ms, now_ms(), memory_order_release);
+    }
     atomic_store_explicit(&p->last_audio_pts_ms, pts, memory_order_release);
     atomic_fetch_add_explicit(&p->audio_frames, 1, memory_order_relaxed);
     if (!p->swr) return;
@@ -334,10 +412,15 @@ void *lixh_player_create(const LixhCallbacks *cb) {
     atomic_init(&p->stop, 0);
     atomic_init(&p->playing, 0);
     atomic_init(&p->direct_d3d11, 0);
+    atomic_init(&p->video_sink, 1);
+    atomic_init(&p->flush_video_req, 0);
     atomic_init(&p->video_frames, 0);
     atomic_init(&p->audio_frames, 0);
     atomic_init(&p->dropped_frames, 0);
     atomic_init(&p->reconnects, 0);
+    atomic_init(&p->bytes_read, 0);
+    atomic_init(&p->video_width, 0);
+    atomic_init(&p->video_height, 0);
     atomic_init(&p->first_pts_ms, AV_NOPTS_VALUE);
     atomic_init(&p->last_video_pts_ms, AV_NOPTS_VALUE);
     atomic_init(&p->last_audio_pts_ms, AV_NOPTS_VALUE);
@@ -352,6 +435,7 @@ void lixh_player_destroy(void *opaque) {
     lixh_player_stop(p);
     free_player_media(p);
     free(p->url);
+    free(p->http_headers);
     free(p);
 }
 
@@ -410,6 +494,18 @@ int lixh_player_play(void *opaque) {
             }
             break;
         }
+        if (atomic_exchange_explicit(&p->flush_video_req, 0, memory_order_acq_rel)) {
+            if (p->vdec) avcodec_flush_buffers(p->vdec);
+            atomic_store_explicit(&p->direct_d3d11, 0, memory_order_release);
+        }
+        if (pkt->size > 0) {
+            atomic_fetch_add_explicit(&p->bytes_read, (uint64_t)pkt->size, memory_order_relaxed);
+        }
+        if (pkt->stream_index == p->vstream &&
+            !atomic_load_explicit(&p->video_sink, memory_order_acquire)) {
+            av_packet_unref(pkt);
+            continue;
+        }
         if (pkt->stream_index == p->vstream || pkt->stream_index == p->astream) decode_packet(p, pkt);
         av_packet_unref(pkt);
     }
@@ -428,6 +524,37 @@ void lixh_player_stop(void *opaque) {
     if (atomic_load_explicit(&p->state, memory_order_acquire) == LIXH_STATE_PLAYING) atomic_store_explicit(&p->state, LIXH_STATE_STOPPED, memory_order_release);
 }
 
+void lixh_player_set_latency(void *opaque, int64_t target_ms, int64_t max_ms) {
+    LixhPlayer *p = (LixhPlayer *)opaque;
+    if (!p) return;
+    if (target_ms > 0) p->target_latency_ms = target_ms;
+    if (max_ms > 0) p->max_latency_ms = max_ms;
+}
+
+void lixh_player_set_headers(void *opaque, const char *headers) {
+    LixhPlayer *p = (LixhPlayer *)opaque;
+    if (!p) return;
+    free(p->http_headers);
+    p->http_headers = NULL;
+    if (!headers || !headers[0]) return;
+#ifdef LIXH_WINDOWS
+    p->http_headers = _strdup(headers);
+#else
+    p->http_headers = strdup(headers);
+#endif
+}
+
+void lixh_player_set_video_sink(void *opaque, int enabled) {
+    LixhPlayer *p = (LixhPlayer *)opaque;
+    if (!p) return;
+    int on = enabled ? 1 : 0;
+    int prev = atomic_exchange_explicit(&p->video_sink, on, memory_order_acq_rel);
+    /* Never touch AVCodecContext from the UI thread — play loop will flush. */
+    if (on && !prev) {
+        atomic_store_explicit(&p->flush_video_req, 1, memory_order_release);
+    }
+}
+
 int lixh_player_get_stats(void *opaque, LixhStats *out) {
     LixhPlayer *p = (LixhPlayer *)opaque;
     if (!p || !out) return AVERROR(EINVAL);
@@ -439,13 +566,20 @@ int lixh_player_get_stats(void *opaque, LixhStats *out) {
     out->reconnects = atomic_load_explicit(&p->reconnects, memory_order_relaxed);
     out->last_video_pts_ms = atomic_load_explicit(&p->last_video_pts_ms, memory_order_acquire);
     out->last_audio_pts_ms = atomic_load_explicit(&p->last_audio_pts_ms, memory_order_acquire);
+    out->bytes_read = atomic_load_explicit(&p->bytes_read, memory_order_relaxed);
+    out->video_width = atomic_load_explicit(&p->video_width, memory_order_relaxed);
+    out->video_height = atomic_load_explicit(&p->video_height, memory_order_relaxed);
     int64_t first_pts = atomic_load_explicit(&p->first_pts_ms, memory_order_acquire);
-    int64_t last_video_pts = atomic_load_explicit(&p->last_video_pts_ms, memory_order_acquire);
-    if (first_pts != AV_NOPTS_VALUE && last_video_pts != AV_NOPTS_VALUE) {
+    int64_t last_pts = out->last_video_pts_ms;
+    if (last_pts == AV_NOPTS_VALUE) last_pts = out->last_audio_pts_ms;
+    if (first_pts != AV_NOPTS_VALUE && last_pts != AV_NOPTS_VALUE) {
         int64_t wall_elapsed = now_ms() - atomic_load_explicit(&p->base_wall_ms, memory_order_acquire);
-        int64_t media_elapsed = last_video_pts - first_pts;
+        int64_t media_elapsed = last_pts - first_pts;
         int64_t lag = wall_elapsed - media_elapsed;
-        out->input_buffer_ms = lag > 0 ? lag : 0;
+        /* Clamp: after re-anchor lag≈0; negative = clock skew. */
+        if (lag < 0) lag = 0;
+        if (lag > 60000) lag = 60000;
+        out->input_buffer_ms = lag;
     }
     out->decode_hw = p->hw_kind;
     return 0;

@@ -1,0 +1,116 @@
+name: Verify Flutter
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "flutter_app/**"
+      - "packages/lixh_player/**"
+      - "src-tauri/lixh-stream-stack/lixh-player-core/**"
+      - "src-tauri/lixh-stream-stack/scripts/**"
+      - ".github/workflows/verify-flutter.yml"
+  pull_request:
+    paths:
+      - "flutter_app/**"
+      - "packages/lixh_player/**"
+      - "src-tauri/lixh-stream-stack/lixh-player-core/**"
+      - "src-tauri/lixh-stream-stack/scripts/**"
+      - ".github/workflows/verify-flutter.yml"
+
+concurrency:
+  group: livecatch-flutter-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: analyze
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Pub get (plugin)
+        working-directory: packages/lixh_player
+        run: flutter pub get
+      - name: Analyze plugin
+        working-directory: packages/lixh_player
+        run: flutter analyze --no-fatal-infos
+      - name: Pub get (app)
+        working-directory: flutter_app
+        run: flutter pub get
+      - name: Analyze app
+        working-directory: flutter_app
+        run: flutter analyze --no-fatal-infos
+      - name: Unit tests (ABR)
+        working-directory: flutter_app
+        run: flutter test test/abr_supervisor_test.dart
+
+  windows:
+    name: windows build
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Fetch FFmpeg windows-x64
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x src-tauri/lixh-stream-stack/scripts/*.sh
+          bash src-tauri/lixh-stream-stack/scripts/prepare-runtime.sh windows-x64
+          bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh windows-x64 \
+            "src-tauri/lixh-stream-stack/sdk/windows-x64"
+      - name: Pub get
+        working-directory: flutter_app
+        run: flutter pub get
+      - name: Build Windows release
+        working-directory: flutter_app
+        run: flutter build windows --release
+
+  android:
+    name: android build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install unzip
+        run: sudo apt-get update && sudo apt-get install -y unzip
+      - name: Fetch FFmpeg android-arm64
+        run: |
+          set -euo pipefail
+          chmod +x src-tauri/lixh-stream-stack/scripts/*.sh
+          bash src-tauri/lixh-stream-stack/scripts/prepare-runtime.sh android-arm64
+          bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh android-arm64 \
+            "src-tauri/lixh-stream-stack/sdk/android-arm64"
+      - name: Accept Android licenses
+        run: yes | flutter doctor --android-licenses || true
+      - name: Pub get
+        working-directory: flutter_app
+        run: flutter pub get
+      - name: Build Android APK (arm64)
+        working-directory: flutter_app
+        run: flutter build apk --release --target-platform android-arm64
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: livecatch-android-arm64
+          path: flutter_app/build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: error

@@ -1,0 +1,31 @@
+name: lixh_player
+description: LiveCatch native player (FFmpeg + GPU texture). Windows playable; macOS/iOS/Android stubs.
+version: 0.0.1
+homepage: https://github.com/xinghunbuxiu/liveCatch
+
+environment:
+  sdk: ^3.13.5
+  flutter: '>=3.3.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  plugin_platform_interface: ^2.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  plugin:
+    platforms:
+      windows:
+        pluginClass: LixhPlayerPluginCApi
+      android:
+        package: com.livecatch.lixh_player
+        pluginClass: LixhPlayerPlugin
+      ios:
+        pluginClass: LixhPlayerPlugin
+      macos:
+        pluginClass: LixhPlayerPlugin

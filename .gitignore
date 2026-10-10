@@ -1,0 +1,48 @@
+# Dependencies / build
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/resources/ffmpeg/
+*.obj
+*.o
+*.exe
+*.pdb
+*.ilk
+
+# Local logs / probes
+dumps/
+*.log
+PORTABLEPLACEHOLDER/
+
+# Flutter
+flutter_app/.dart_tool/
+flutter_app/.flutter-plugins
+flutter_app/.flutter-plugins-dependencies
+flutter_app/build/
+flutter_app/**/GeneratedPluginRegistrant.*
+flutter_app/**/ephemeral/
+packages/lixh_player/.dart_tool/
+packages/lixh_player/build/
+packages/lixh_player/example/build/
+packages/lixh_player/example/.dart_tool/
+packages/lixh_player/android/src/main/jniLibs/
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Env / secrets
+.env
+.env.*
+
+# FFmpeg SDK/runtime (fetched by CI/scripts; keep manifests for local sanity)
+src-tauri/lixh-stream-stack/sdk/**
+src-tauri/lixh-stream-stack/runtime/**
+!src-tauri/lixh-stream-stack/sdk/**/manifest/
+!src-tauri/lixh-stream-stack/sdk/**/manifest/**
+!src-tauri/lixh-stream-stack/runtime/**/manifest/
+!src-tauri/lixh-stream-stack/runtime/**/manifest/**

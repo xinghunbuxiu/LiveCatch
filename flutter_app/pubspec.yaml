@@ -1,0 +1,23 @@
+name: livecatch_app
+description: LiveCatch Flutter desktop shell (native decode + GPU Texture).
+publish_to: "none"
+version: 0.48.0+1
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  path: ^1.9.1
+  lixh_player:
+    path: ../packages/lixh_player
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
