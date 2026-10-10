@@ -420,7 +420,7 @@
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
-      "community": 83,
+      "community": 84,
       "file_type": "code",
       "norm_label": "mainactivity",
       "source_file": "flutter_app/android/app/src/main/kotlin/com/example/livecatch_app/MainActivity.kt",
@@ -3446,11 +3446,11 @@
       "label": "findRepoRoot()",
       "_callable": true,
       "_origin": "ast",
-      "community": 85,
+      "community": 83,
       "file_type": "code",
       "norm_label": "findreporoot()",
       "source_file": "packages/lixh_player/android/build.gradle.kts",
-      "source_location": "L28"
+      "source_location": "L34"
     },
     {
       "id": "src_tauri_lixh_stream_stack_lixh_player_core_native_lixh_player_choose_hw_format",
@@ -5635,10 +5635,20 @@
       "source_location": "L1"
     },
     {
+      "id": "java",
+      "label": "java",
+      "_origin": "ast",
+      "community": 101,
+      "file_type": "code",
+      "norm_label": "java",
+      "source_file": "",
+      "source_location": ""
+    },
+    {
       "id": "none_state",
       "label": "State",
       "_origin": "ast",
-      "community": 101,
+      "community": 102,
       "file_type": "code",
       "norm_label": "state",
       "source_file": null,
@@ -5648,7 +5658,7 @@
       "id": "none_string",
       "label": "String?",
       "_origin": "ast",
-      "community": 102,
+      "community": 103,
       "file_type": "code",
       "norm_label": "string?",
       "source_file": null,
@@ -5658,7 +5668,7 @@
       "id": "packages_lixh_player_android_settings_gradle",
       "label": "lixh_player/android/settings.gradle.kts",
       "_origin": "ast",
-      "community": 103,
+      "community": 104,
       "file_type": "code",
       "norm_label": "lixh_player/android/settings.gradle.kts",
       "source_file": "packages/lixh_player/android/settings.gradle.kts",
@@ -5668,7 +5678,7 @@
       "id": "packages_lixh_player_example_android_app_build_gradle",
       "label": "example/android/app/build.gradle.kts",
       "_origin": "ast",
-      "community": 104,
+      "community": 105,
       "file_type": "code",
       "norm_label": "example/android/app/build.gradle.kts",
       "source_file": "packages/lixh_player/example/android/app/build.gradle.kts",
@@ -5678,7 +5688,7 @@
       "id": "packages_lixh_player_example_android_build_gradle",
       "label": "example/android/build.gradle.kts",
       "_origin": "ast",
-      "community": 105,
+      "community": 106,
       "file_type": "code",
       "norm_label": "example/android/build.gradle.kts",
       "source_file": "packages/lixh_player/example/android/build.gradle.kts",
@@ -5688,7 +5698,7 @@
       "id": "packages_lixh_player_example_android_settings_gradle",
       "label": "example/android/settings.gradle.kts",
       "_origin": "ast",
-      "community": 106,
+      "community": 107,
       "file_type": "code",
       "norm_label": "example/android/settings.gradle.kts",
       "source_file": "packages/lixh_player/example/android/settings.gradle.kts",
@@ -5698,7 +5708,7 @@
       "id": "packages_lixh_player_ios_lixh_player_sources_lixh_player_corec_include_lixh_player_corec",
       "label": "ios/lixh_player/Sources/lixh_player_corec/include/lixh_player_corec.h",
       "_origin": "ast",
-      "community": 107,
+      "community": 108,
       "file_type": "code",
       "norm_label": "ios/lixh_player/sources/lixh_player_corec/include/lixh_player_corec.h",
       "source_file": "packages/lixh_player/ios/lixh_player/Sources/lixh_player_corec/include/lixh_player_corec.h",
@@ -5708,7 +5718,7 @@
       "id": "packages_lixh_player_macos_lixh_player_sources_lixh_player_corec_include_lixh_player_corec",
       "label": "macos/lixh_player/Sources/lixh_player_corec/include/lixh_player_corec.h",
       "_origin": "ast",
-      "community": 108,
+      "community": 109,
       "file_type": "code",
       "norm_label": "macos/lixh_player/sources/lixh_player_corec/include/lixh_player_corec.h",
       "source_file": "packages/lixh_player/macos/lixh_player/Sources/lixh_player_corec/include/lixh_player_corec.h",
@@ -15241,10 +15251,20 @@
       "source_location": "L22"
     },
     {
+      "id": "packages_lixh_player_android_build_gradle",
+      "label": "lixh_player/android/build.gradle.kts",
+      "_origin": "ast",
+      "community": 83,
+      "file_type": "code",
+      "norm_label": "lixh_player/android/build.gradle.kts",
+      "source_file": "packages/lixh_player/android/build.gradle.kts",
+      "source_location": "L1"
+    },
+    {
       "id": "flutter_app_android_app_src_main_kotlin_com_example_livecatch_app_mainactivity",
       "label": "livecatch_app/MainActivity.kt",
       "_origin": "ast",
-      "community": 83,
+      "community": 84,
       "file_type": "code",
       "norm_label": "livecatch_app/mainactivity.kt",
       "source_file": "flutter_app/android/app/src/main/kotlin/com/example/livecatch_app/MainActivity.kt",
@@ -15254,7 +15274,7 @@
       "id": "flutter_app_android_app_src_main_kotlin_com_example_livecatch_app_mainactivity_kt_flutteractivity",
       "label": "FlutterActivity",
       "_origin": "ast",
-      "community": 83,
+      "community": 84,
       "file_type": "code",
       "norm_label": "flutteractivity",
       "source_file": "",
@@ -15264,7 +15284,7 @@
       "id": "flutter_app_ios_runner_runner_bridging_header",
       "label": "flutter_app/ios/Runner/Runner-Bridging-Header.h",
       "_origin": "ast",
-      "community": 84,
+      "community": 85,
       "file_type": "code",
       "norm_label": "flutter_app/ios/runner/runner-bridging-header.h",
       "source_file": "flutter_app/ios/Runner/Runner-Bridging-Header.h",
@@ -15274,30 +15294,10 @@
       "id": "packages_lixh_player_example_ios_runner_runner_bridging_header",
       "label": "example/ios/Runner/Runner-Bridging-Header.h",
       "_origin": "ast",
-      "community": 84,
+      "community": 85,
       "file_type": "code",
       "norm_label": "example/ios/runner/runner-bridging-header.h",
       "source_file": "packages/lixh_player/example/ios/Runner/Runner-Bridging-Header.h",
-      "source_location": "L1"
-    },
-    {
-      "id": "java",
-      "label": "java",
-      "_origin": "ast",
-      "community": 85,
-      "file_type": "code",
-      "norm_label": "java",
-      "source_file": "",
-      "source_location": ""
-    },
-    {
-      "id": "packages_lixh_player_android_build_gradle",
-      "label": "lixh_player/android/build.gradle.kts",
-      "_origin": "ast",
-      "community": 85,
-      "file_type": "code",
-      "norm_label": "lixh_player/android/build.gradle.kts",
-      "source_file": "packages/lixh_player/android/build.gradle.kts",
       "source_location": "L1"
     },
     {
@@ -16851,9 +16851,19 @@
       "type": "external"
     },
     {
+      "id": "file",
+      "label": "file",
+      "community": 83,
+      "external": true,
+      "file_type": "concept",
+      "norm_label": "file",
+      "source_file": "",
+      "type": "external"
+    },
+    {
       "id": "generatedpluginregistrant",
       "label": "generatedpluginregistrant",
-      "community": 84,
+      "community": 85,
       "external": true,
       "file_type": "concept",
       "norm_label": "generatedpluginregistrant",
@@ -19867,7 +19877,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "packages/lixh_player/android/build.gradle.kts",
-      "source_location": "L28",
+      "source_location": "L34",
       "weight": 1.0
     },
     {
@@ -24521,6 +24531,21 @@
       },
       "source_file": "packages/lixh_player/android/src/main/kotlin/com/livecatch/lixh_player/LixhPlayerPlugin.kt",
       "source_location": "L9",
+      "weight": 1.0
+    },
+    {
+      "source": "packages_lixh_player_android_build_gradle",
+      "target": "file",
+      "relation": "imports",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "import",
+      "metadata": {
+        "target_fqn": "java.io.File"
+      },
+      "source_file": "packages/lixh_player/android/build.gradle.kts",
+      "source_location": "L1",
       "weight": 1.0
     },
     {
@@ -31439,18 +31464,6 @@
       "context": "return_type",
       "source_file": "flutter_app/windows/runner/win32_window.cpp",
       "source_location": "L89",
-      "weight": 1.0
-    },
-    {
-      "source": "packages_lixh_player_android_build_gradle_findreporoot",
-      "target": "java",
-      "relation": "references",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "return_type",
-      "source_file": "packages/lixh_player/android/build.gradle.kts",
-      "source_location": "L28",
       "weight": 1.0
     },
     {
@@ -46100,5 +46113,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "c97fe74108bdc53bf50355dc1500eb2a6530e019"
+  "built_at_commit": "27cf987b9242edcbf7195f7cc26590a1398aa127"
 }

@@ -1721,19 +1721,19 @@
       "packages_lixh_player_example_windows_runner_win32_window_size_width"
     ],
     "83": [
+      "file",
+      "packages_lixh_player_android_build_gradle",
+      "packages_lixh_player_android_build_gradle_findreporoot"
+    ],
+    "84": [
       "flutter_app_android_app_src_main_kotlin_com_example_livecatch_app_mainactivity",
       "flutter_app_android_app_src_main_kotlin_com_example_livecatch_app_mainactivity_kt_flutteractivity",
       "flutter_app_android_app_src_main_kotlin_com_example_livecatch_app_mainactivity_mainactivity"
     ],
-    "84": [
+    "85": [
       "flutter_app_ios_runner_runner_bridging_header",
       "generatedpluginregistrant",
       "packages_lixh_player_example_ios_runner_runner_bridging_header"
-    ],
-    "85": [
-      "java",
-      "packages_lixh_player_android_build_gradle",
-      "packages_lixh_player_android_build_gradle_findreporoot"
     ],
     "86": [
       "packages_lixh_player_example_android_app_src_main_kotlin_com_livecatch_lixh_player_example_mainactivity",
@@ -1796,27 +1796,30 @@
       "flutter_app_android_settings_gradle"
     ],
     "101": [
-      "none_state"
+      "java"
     ],
     "102": [
-      "none_string"
+      "none_state"
     ],
     "103": [
-      "packages_lixh_player_android_settings_gradle"
+      "none_string"
     ],
     "104": [
-      "packages_lixh_player_example_android_app_build_gradle"
+      "packages_lixh_player_android_settings_gradle"
     ],
     "105": [
-      "packages_lixh_player_example_android_build_gradle"
+      "packages_lixh_player_example_android_app_build_gradle"
     ],
     "106": [
-      "packages_lixh_player_example_android_settings_gradle"
+      "packages_lixh_player_example_android_build_gradle"
     ],
     "107": [
-      "packages_lixh_player_ios_lixh_player_sources_lixh_player_corec_include_lixh_player_corec"
+      "packages_lixh_player_example_android_settings_gradle"
     ],
     "108": [
+      "packages_lixh_player_ios_lixh_player_sources_lixh_player_corec_include_lixh_player_corec"
+    ],
+    "109": [
       "packages_lixh_player_macos_lixh_player_sources_lixh_player_corec_include_lixh_player_corec"
     ]
   },
@@ -1904,8 +1907,8 @@
     "80": 0.5,
     "81": 0.5,
     "82": 0.5,
-    "83": 1.0,
-    "84": 0.6666666666666666,
+    "83": 0.6666666666666666,
+    "84": 1.0,
     "85": 0.6666666666666666,
     "86": 1.0,
     "87": 1.0,
@@ -1929,7 +1932,8 @@
     "105": 1.0,
     "106": 1.0,
     "107": 1.0,
-    "108": 1.0
+    "108": 1.0,
+    "109": 1.0
   },
   "gods": [
     {
@@ -1968,13 +1972,13 @@
       "degree": 21
     },
     {
-      "id": "flutter_app_windows_runner_win32_window_win32window",
-      "label": "Win32Window",
+      "id": "packages_lixh_player_android_src_main_cpp_lixh_player_jni_audioout",
+      "label": "AudioOut",
       "degree": 20
     },
     {
-      "id": "packages_lixh_player_android_src_main_cpp_lixh_player_jni_audioout",
-      "label": "AudioOut",
+      "id": "flutter_app_windows_runner_win32_window_win32window",
+      "label": "Win32Window",
       "degree": 20
     },
     {
@@ -2018,17 +2022,6 @@
       "why": "inferred connection - not explicitly stated in source; peripheral node `CreateAndAttachConsole()` unexpectedly reaches hub `wWinMain()`"
     },
     {
-      "source": "run()",
-      "target": "resolve()",
-      "source_files": [
-        "src-tauri/lixh-stream-stack/lixh-stream-resolver/src/bin/lixh_resolve.rs",
-        "src-tauri/lixh-stream-stack/lixh-stream-resolver/src/lib.rs"
-      ],
-      "confidence": "INFERRED",
-      "relation": "calls",
-      "why": "inferred connection - not explicitly stated in source; bridges separate communities"
-    },
-    {
       "source": "candidate()",
       "target": "StreamCandidate",
       "source_files": [
@@ -2038,6 +2031,17 @@
       "confidence": "EXTRACTED",
       "relation": "references",
       "why": "bridges separate communities; peripheral node `candidate()` unexpectedly reaches hub `StreamCandidate`"
+    },
+    {
+      "source": "run()",
+      "target": "resolve()",
+      "source_files": [
+        "src-tauri/lixh-stream-stack/lixh-stream-resolver/src/bin/lixh_resolve.rs",
+        "src-tauri/lixh-stream-stack/lixh-stream-resolver/src/lib.rs"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; bridges separate communities"
     }
   ],
   "tokens": {
