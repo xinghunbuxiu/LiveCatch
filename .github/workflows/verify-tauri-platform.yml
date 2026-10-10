@@ -51,7 +51,45 @@ jobs:
           rm -rf src-tauri/resources/ffmpeg
           mkdir -p src-tauri/resources/ffmpeg
           cp -R "src-tauri/lixh-stream-stack/runtime/${{ inputs.platform }}/." src-tauri/resources/ffmpeg/
-      - run: cargo check --manifest-path src-tauri/lixh-stream-stack/Cargo.toml
-      - run: cargo check --manifest-path src-tauri/Cargo.toml
-      - run: cargo test --manifest-path src-tauri/lixh-stream-stack/Cargo.toml
+          # Fail fast if the SDK layout is incomplete (avoids opaque cargo exit 101).
+          test -f "src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}/include/libavcodec/avcodec.h"
+          if [[ "${{ inputs.platform }}" == macos-* ]]; then
+            ls "src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}/lib"/libavutil*.dylib
+          elif [[ "${{ inputs.platform }}" == windows-* ]]; then
+            ls "src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}/lib"/avutil*.def \
+              "src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}/lib"/libavutil.dll.a
+          fi
+      - name: cargo check (stream-stack)
+        env:
+          RUST_BACKTRACE: "1"
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo check --manifest-path src-tauri/lixh-stream-stack/Cargo.toml 2>&1 | tee "${RUNNER_TEMP}/cargo-stack.log"
+      - name: cargo check (src-tauri)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo check --manifest-path src-tauri/Cargo.toml 2>&1 | tee "${RUNNER_TEMP}/cargo-tauri.log"
+      - name: cargo test (stream-stack)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --manifest-path src-tauri/lixh-stream-stack/Cargo.toml 2>&1 | tee "${RUNNER_TEMP}/cargo-test.log"
       - run: npm run build
+      - name: Surface cargo errors
+        if: failure()
+        shell: bash
+        run: |
+          set -uo pipefail
+          for f in cargo-stack.log cargo-tauri.log cargo-test.log; do
+            log="${RUNNER_TEMP}/${f}"
+            [[ -f "$log" ]] || continue
+            echo "===== ${f} (tail) ====="
+            tail -n 120 "$log" || true
+            grep -E 'error(\[E[0-9]+\])?:|error:|FAILED|panic|assert|undefined reference|ld:|clang:|fatal' "$log" \
+              | head -n 40 \
+              | while IFS= read -r line; do
+                  echo "::error::${line}"
+                done || true
+          done
