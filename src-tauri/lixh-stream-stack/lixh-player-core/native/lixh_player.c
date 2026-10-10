@@ -32,6 +32,10 @@ typedef struct LixhPlayer {
     AVCodecContext *adec;
     AVBufferRef *hw_device;
     SwrContext *swr;
+    AVFrame *decode_frame;
+    AVFrame *transfer_frame;
+    float *audio_out;
+    size_t audio_out_capacity;
     int vstream;
     int astream;
     enum AVPixelFormat hw_pix_fmt;
@@ -39,6 +43,8 @@ typedef struct LixhPlayer {
     atomic_int state;
     atomic_int stop;
     atomic_int playing;
+    /* 0 = probe direct D3D11 presentation, 1 = working, -1 = use transfer fallback. */
+    atomic_int direct_d3d11;
     int opened;
     char *url;
     atomic_int_fast64_t base_wall_ms;
@@ -72,6 +78,10 @@ static void free_player_media(LixhPlayer *p) {
     if (p->adec) avcodec_free_context(&p->adec);
     if (p->fmt) avformat_close_input(&p->fmt);
     if (p->hw_device) av_buffer_unref(&p->hw_device);
+    if (p->decode_frame) av_frame_free(&p->decode_frame);
+    if (p->transfer_frame) av_frame_free(&p->transfer_frame);
+    av_freep(&p->audio_out);
+    p->audio_out_capacity = 0;
     p->vstream = p->astream = -1;
     p->opened = 0;
 }
@@ -224,8 +234,44 @@ static void deliver_video(LixhPlayer *p, AVFrame *f, AVRational tb) {
     if (!p->cb.on_video) return;
     if (f->format == AV_PIX_FMT_D3D11) {
 #ifdef LIXH_WINDOWS
-        LixhNativeFrame nf = { LIXH_VIDEO_D3D11, f->width, f->height, f->data[0], (intptr_t)f->data[1], f };
-        p->cb.on_video(p->cb.opaque, nf.kind, nf.width, nf.height, pts, 0, &nf);
+        int direct = atomic_load_explicit(&p->direct_d3d11, memory_order_acquire);
+        int presented = -1;
+        if (direct >= 0) {
+            ID3D11DeviceContext *frame_context = NULL;
+            if (f->hw_frames_ctx) {
+                AVHWFramesContext *frames = (AVHWFramesContext *)f->hw_frames_ctx->data;
+                if (frames && frames->device_ctx) {
+                    AVD3D11VADeviceContext *device = (AVD3D11VADeviceContext *)frames->device_ctx->hwctx;
+                    if (device) frame_context = device->device_context;
+                }
+            }
+            LixhNativeFrame nf = { LIXH_VIDEO_D3D11, f->width, f->height, f->data[0], (intptr_t)f->data[1], frame_context };
+            presented = p->cb.on_video(p->cb.opaque, nf.kind, nf.width, nf.height, pts, 0, &nf);
+            if (presented == 0) atomic_store_explicit(&p->direct_d3d11, 1, memory_order_release);
+            else if (presented < 0) atomic_store_explicit(&p->direct_d3d11, -1, memory_order_release);
+        }
+        if (presented < 0) {
+            /* Cache an unsupported direct path for the rest of this open.
+               Return code 1 means no video surface is attached, so audio-only
+               mode skips both GPU presentation and the expensive CPU download. */
+            if (!p->transfer_frame) p->transfer_frame = av_frame_alloc();
+            AVFrame *sw = p->transfer_frame;
+            if (!sw) {
+                atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
+                return;
+            }
+            av_frame_unref(sw);
+            int rc = av_hwframe_transfer_data(sw, f, 0);
+            if (rc >= 0) rc = av_frame_copy_props(sw, f);
+            if (rc >= 0) {
+                LixhNativeFrame fallback = { LIXH_VIDEO_SOFTWARE, sw->width, sw->height, sw, 0, sw };
+                p->cb.on_video(p->cb.opaque, fallback.kind, fallback.width, fallback.height, pts, 0, &fallback);
+            } else {
+                atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
+                emit(p, LIXH_EVT_ERROR, rc, av_err2str(rc));
+            }
+            av_frame_unref(sw);
+        }
 #endif
     } else if (f->format == AV_PIX_FMT_VIDEOTOOLBOX) {
 #ifdef LIXH_MACOS
@@ -246,12 +292,16 @@ static void deliver_audio(LixhPlayer *p, AVFrame *f, AVRational tb) {
     if (!p->swr) return;
     int out_samples = av_rescale_rnd(swr_get_delay(p->swr, p->sample_rate) + f->nb_samples,
                                      p->sample_rate, p->sample_rate, AV_ROUND_UP);
-    float *out = (float *)av_malloc_array((size_t)out_samples * (size_t)p->channels, sizeof(float));
-    if (!out) return;
-    uint8_t *dst[1] = { (uint8_t *)out };
+    size_t needed = (size_t)out_samples * (size_t)p->channels;
+    if (needed > p->audio_out_capacity) {
+        float *grown = (float *)av_realloc_array(p->audio_out, needed, sizeof(float));
+        if (!grown) return;
+        p->audio_out = grown;
+        p->audio_out_capacity = needed;
+    }
+    uint8_t *dst[1] = { (uint8_t *)p->audio_out };
     int n = swr_convert(p->swr, dst, out_samples, (const uint8_t **)f->extended_data, f->nb_samples);
-    if (n > 0) p->cb.on_audio(p->cb.opaque, p->sample_rate, p->channels, AV_SAMPLE_FMT_FLT, pts, out, n);
-    av_free(out);
+    if (n > 0) p->cb.on_audio(p->cb.opaque, p->sample_rate, p->channels, AV_SAMPLE_FMT_FLT, pts, p->audio_out, n);
 }
 
 static int decode_packet(LixhPlayer *p, AVPacket *pkt) {
@@ -259,18 +309,19 @@ static int decode_packet(LixhPlayer *p, AVPacket *pkt) {
     if (!dec) return 0;
     int rc = avcodec_send_packet(dec, pkt);
     if (rc < 0 && rc != AVERROR(EAGAIN)) return rc;
-    AVFrame *f = av_frame_alloc();
+    if (!p->decode_frame) p->decode_frame = av_frame_alloc();
+    AVFrame *f = p->decode_frame;
     if (!f) return AVERROR(ENOMEM);
     AVRational tb = p->fmt->streams[pkt->stream_index]->time_base;
     while (!atomic_load_explicit(&p->stop, memory_order_acquire)) {
+        av_frame_unref(f);
         rc = avcodec_receive_frame(dec, f);
         if (rc == AVERROR(EAGAIN) || rc == AVERROR_EOF) break;
-        if (rc < 0) { av_frame_unref(f); break; }
+        if (rc < 0) break;
         if (pkt->stream_index == p->vstream) deliver_video(p, f, tb);
         else deliver_audio(p, f, tb);
-        av_frame_unref(f);
     }
-    av_frame_free(&f);
+    av_frame_unref(f);
     return 0;
 }
 
@@ -282,6 +333,7 @@ void *lixh_player_create(const LixhCallbacks *cb) {
     atomic_init(&p->state, LIXH_STATE_IDLE);
     atomic_init(&p->stop, 0);
     atomic_init(&p->playing, 0);
+    atomic_init(&p->direct_d3d11, 0);
     atomic_init(&p->video_frames, 0);
     atomic_init(&p->audio_frames, 0);
     atomic_init(&p->dropped_frames, 0);
@@ -316,6 +368,7 @@ int lixh_player_open(void *opaque, const char *url) {
 #endif
     if (!p->url) return AVERROR(ENOMEM);
     atomic_store_explicit(&p->stop, 0, memory_order_release);
+    atomic_store_explicit(&p->direct_d3d11, 0, memory_order_release);
     atomic_store_explicit(&p->first_pts_ms, AV_NOPTS_VALUE, memory_order_release);
     atomic_store_explicit(&p->last_video_pts_ms, AV_NOPTS_VALUE, memory_order_release);
     atomic_store_explicit(&p->last_audio_pts_ms, AV_NOPTS_VALUE, memory_order_release);
@@ -349,6 +402,7 @@ int lixh_player_play(void *opaque) {
                 if (open_input(p) == 0) { recovered = 1; break; }
             }
             if (recovered) {
+                atomic_store_explicit(&p->direct_d3d11, 0, memory_order_release);
                 atomic_store_explicit(&p->first_pts_ms, AV_NOPTS_VALUE, memory_order_release);
                 atomic_store_explicit(&p->last_video_pts_ms, AV_NOPTS_VALUE, memory_order_release);
                 atomic_store_explicit(&p->base_wall_ms, now_ms(), memory_order_release);

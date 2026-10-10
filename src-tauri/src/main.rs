@@ -153,6 +153,9 @@ fn player_ffmpeg_status(state: State<AppState>) -> player::FfmpegStatus {
 }
 
 #[tauri::command]
+fn player_video_debug() -> player::VideoDebug { player::video_debug() }
+
+#[tauri::command]
 fn player_embed_tick(app: tauri::AppHandle, state: State<AppState>) {
     static LAST_HEALTH_MS: Mutex<u128> = Mutex::new(0);
     let (stats_opt, task_id, generation) = {
@@ -333,4 +336,7 @@ fn player_alive(state:State<AppState>)->bool{ let g=state.0.lock().unwrap(); let
 
 #[tauri::command]fn environment()->String{if cfg!(target_os="macos"){"macOS".into()}else if cfg!(windows){"Windows".into()}else{"Other".into()}}
 #[tauri::command]fn app_version()->String{"0.47.8".into()}
-fn main(){tauri::Builder::default().manage(AppState(Arc::new(Mutex::new(RuntimeState{room_url:None,last_stream_url:None,live_tx:None,live_seq:0,live_generation:0,live_active:None,live_retry:0,playback:Arc::new(Mutex::new(None))})))).plugin(tauri_plugin_global_shortcut::Builder::new().build()).invoke_handler(tauri::generate_handler![start_live,stop_player,player_alive,current_room,clear_room,environment,app_version,player_backend,player_ffmpeg_status,player_embed_tick,dock_native_player,undock_native_player,]).run(tauri::generate_context!()).expect("error while running application");}
+fn main(){tauri::Builder::default().manage(AppState(Arc::new(Mutex::new(RuntimeState{room_url:None,last_stream_url:None,live_tx:None,live_seq:0,live_generation:0,live_active:None,live_retry:0,playback:Arc::new(Mutex::new(None))})))).plugin(tauri_plugin_global_shortcut::Builder::new().build()).invoke_handler(tauri::generate_handler![start_live,stop_player,player_alive,current_room,clear_room,environment,app_version,player_backend,player_ffmpeg_status,player_embed_tick,player_video_debug,dock_native_player,undock_native_player,]).run(tauri::generate_context!()).expect("error while running application");}
+
+
+

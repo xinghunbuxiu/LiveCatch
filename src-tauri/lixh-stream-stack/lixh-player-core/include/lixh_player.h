@@ -19,7 +19,7 @@ typedef struct LixhNativeFrame {
 
 typedef struct LixhCallbacks {
     void *opaque;
-    void (*on_video)(void *opaque, int kind, int width, int height, int64_t pts_ms, int64_t duration_ms, const LixhNativeFrame *frame);
+    int (*on_video)(void *opaque, int kind, int width, int height, int64_t pts_ms, int64_t duration_ms, const LixhNativeFrame *frame);
     void (*on_audio)(void *opaque, int sample_rate, int channels, int format, int64_t pts_ms, const float *samples, int sample_count);
     void (*on_event)(void *opaque, int type, int code, const char *message);
 } LixhCallbacks;

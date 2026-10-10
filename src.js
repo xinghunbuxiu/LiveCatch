@@ -8,7 +8,7 @@ const app=document.querySelector('#app');
 const state={
   roomUrl:'',liveTaskId:null,liveGeneration:0,livePhase:'idle',playing:false,busy:false,
   streamUrl:'',protocol:'-',cdn:'-',health:'待连接',latency:null,playback:null,
-  events:[],maxEvents:80,playerError:'',backend:'ffmpeg',videoMode:false
+  events:[],maxEvents:80,playerError:'',dockError:'',backend:'ffmpeg',videoMode:false
 };
 let dockTimer=null,pumpRaf=null;
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -23,7 +23,7 @@ function buffer(){return state.playback?.buffer_sec==null?'-':`${Number(state.pl
 function playbackSpeed(){return state.playback?.speed==null?'-':`${Number(state.playback.speed).toFixed(2)}x`;}
 function latencyMode(){const m=state.playback?.latency_mode;return m==='catchup'?'追赶':m==='recovery'?'恢复':m==='ipc-degraded'?'IPC降级':m==='seek'?'跳边缘':'低延迟';}
 function stopDockLoop(){if(dockTimer){clearInterval(dockTimer);dockTimer=null;}if(pumpRaf){cancelAnimationFrame(pumpRaf);pumpRaf=null;}window.removeEventListener('resize',syncNativeDock);}
-function startEmbedPump(){if(pumpRaf)return;const loop=()=>{pumpRaf=requestAnimationFrame(loop);if(state.playing)invoke('player_embed_tick').catch(()=>{});};pumpRaf=requestAnimationFrame(loop);}
+function startEmbedPump(){if(pumpRaf)return;let lastDbg=0;const loop=()=>{pumpRaf=requestAnimationFrame(loop);if(!state.playing)return;invoke('player_embed_tick').catch(()=>{});const now=Date.now();if(now-lastDbg>1000){lastDbg=now;invoke('player_video_debug').then(d=>{const el=document.querySelector('#vdbg');const path=d.present_path===1?'DComp上传':d.present_path===2?'GDI':d.present_path===3?'GPU直显':'无';const decode=d.decode_kind===1?'D3D11硬解':d.decode_kind===2?'VideoToolbox硬解':d.decode_kind===0?'CPU软解':'等待解码';const pipeline=d.decode_kind===1&&d.present_path===3?'硬解+GPU直显':d.decode_kind===1?'硬解+软件回退':d.decode_kind===0?'软解码':'等待画面';if(el)el.textContent=`${pipeline} · ${decode} · 视频帧:${d.frames} 显示:${d.present_ok} 失败:${d.present_err} err:${d.last_err} ${d.last_w}x${d.last_h} 显示:${path} dc:${d.dcomp_stage} 洞:${d.surface_docked?'已贴':'未贴'}${state.dockError?' 贴洞失败:'+state.dockError:''}`;}).catch(()=>{});}};pumpRaf=requestAnimationFrame(loop);}
 function destroyEmbedPlayer(){const screen=document.querySelector('.screen');if(screen){screen.style.removeProperty('--src-ar');screen.style.removeProperty('--screen-w');}}
 async function fitAppWindow(mode){const target=mode==='force-landscape'||mode==='landscape'?'landscape':'portrait';const size=target==='landscape'?{width:1100,height:760}:{width:820,height:760};try{await getCurrentWindow().setMinSize(new LogicalSize(640,560));await getCurrentWindow().setSize(new LogicalSize(size.width,size.height));}catch(_){}}
 async function syncNativeDock(){
@@ -34,7 +34,7 @@ async function syncNativeDock(){
   let x=Math.max(sr.left,r.left),y=Math.max(sr.top,r.top,56),right=Math.min(sr.right,r.right),bottom=Math.min(sr.bottom,r.bottom);
   const w=Math.round(Math.max(0,right-x)),h=Math.round(Math.max(0,bottom-y));
   if(w<80||h<120)return;
-  try{await invoke('dock_native_player',{x:Math.round(x),y:Math.round(y),w,h});}catch(_){}
+  try{await invoke('dock_native_player',{x:Math.round(x),y:Math.round(y),w,h});state.dockError='';}catch(e){state.dockError=String(e&&e.message||e);throw e;}
 }
 function startDockLoop(){stopDockLoop();if(!state.playing)return;startEmbedPump();if(!state.videoMode)return;syncNativeDock();dockTimer=setInterval(()=>void syncNativeDock(),250);window.addEventListener('resize',syncNativeDock);}
 function screenHtml(){if(!state.playing){if(isEnded())return `<div class="empty"><div class="empty-mark">⏹</div><div class="empty-title">直播已结束</div><div class="empty-sub">主播已下播或信号中断 · 更换链接可重新播放</div></div>`;return `<div class="empty"><div class="empty-mark">▶</div><div class="empty-title">粘贴链接开始播放</div><div class="empty-sub">${esc(state.playerError||state.health||'低延迟 FFmpeg 播放器')}</div></div>`;}return `<div class="native-stage"><div class="native-veil"><span class="live-pill"><span class="dot"></span> LIVE</span><span>${esc(state.protocol)} · 源延迟 ${state.latency??'-'} ms</span><span>缓冲 ${buffer()} · ${latencyMode()} · ${playbackSpeed()}</span></div></div>`;}
@@ -46,12 +46,21 @@ function render(){
       <div class="status"><span class="dot ${state.playing?'live':''}"></span>${statusText()}</div>
     </header>
     <main class="stage"><section class="player-wrap"><div class="screen">${screenHtml()}</div></section>
-      <footer class="player-bar"><span>🔊 声音：开启</span><span class="lat-chip">延迟：${state.latency==null?'—':esc(state.latency+' ms')}</span><span class="buf-chip">缓冲：${buffer()}</span><span class="drop-chip">丢帧：${state.playback?.frame_drops==null?'—':esc(state.playback.frame_drops)}</span><span class="play-chip">播放：${playbackText()}</span><button id="video-mode" class="mode-btn ${state.videoMode?'on':''}">${state.videoMode?'音频模式':'视频模式'}</button></footer>
+      <footer class="player-bar"><span>🔊 声音：开启</span><span class="lat-chip">延迟：${state.latency==null?'—':esc(state.latency+' ms')}</span><span class="buf-chip">缓冲：${buffer()}</span><span class="drop-chip">丢帧：${state.playback?.frame_drops==null?'—':esc(state.playback.frame_drops)}</span><span class="play-chip">播放：${playbackText()}</span><span class="vdbg-chip" id="vdbg"></span><button id="video-mode" class="mode-btn ${state.videoMode?'on':''}">${state.videoMode?'音频模式':'视频模式'}</button></footer>
     </main>
   </div>`;
   const u=document.querySelector('#url');u?.addEventListener('input',e=>state.roomUrl=e.target.value);u?.addEventListener('keydown',e=>{if(e.key==='Enter')start();});
   document.querySelector('#start')?.addEventListener('click',start);document.querySelector('#stop')?.addEventListener('click',stop);
-  document.querySelector('#video-mode')?.addEventListener('click',async()=>{state.videoMode=!state.videoMode;if(!state.videoMode){try{await invoke('undock_native_player')}catch(_){}}await fitAppWindow(state.videoMode?'force-landscape':'force-portrait');render();});
+  document.querySelector('#video-mode')?.addEventListener('click',async()=>{
+    state.videoMode=!state.videoMode;
+    if(!state.videoMode){try{await invoke('undock_native_player')}catch(_){}}
+    await fitAppWindow(state.videoMode?'force-landscape':'force-portrait');
+    render();
+    // Wait for the landscape layout to settle before punching the native hole.
+    if(state.videoMode&&state.playing){
+      requestAnimationFrame(()=>requestAnimationFrame(()=>void syncNativeDock()));
+    }
+  });
   if(state.playing)queueMicrotask(startDockLoop);else stopDockLoop();
 }
 async function start(){

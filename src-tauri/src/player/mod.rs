@@ -19,15 +19,74 @@ use std::time::{SystemTime, UNIX_EPOCH};
 static SURFACE: OnceLock<Mutex<Option<NativeSurface>>> = OnceLock::new();
 fn surface_slot() -> &'static Mutex<Option<NativeSurface>> { SURFACE.get_or_init(|| Mutex::new(None)) }
 
-extern "C" fn on_video(_opaque:*mut c_void, kind:i32, width:i32, height:i32, pts_ms:i64, _duration_ms:i64, frame:*const LixhNativeFrame) {
-    if frame.is_null() { return; }
-    let Ok(slot)=surface_slot().lock() else { return; };
-    let Some(surface)=slot.as_ref() else { return; };
-    if let Err(e)=surface.present(unsafe{&*frame}, pts_ms) {
-        static DROPPED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let n=DROPPED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if n<5 || n%300==0 {
-            eprintln!("[livecatch] native present failed (kind={kind} {width}x{height}): {e}");
+static VIDEO_FRAMES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static PRESENT_OK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static PRESENT_ERR: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static LAST_ERR_CODE: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+static LAST_KIND: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(-1);
+static DECODE_KIND: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(-1);
+static LAST_W: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+static LAST_H: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+
+#[derive(Debug, Clone, Serialize)]
+pub struct VideoDebug {
+    pub frames: u64,
+    pub present_ok: u64,
+    pub present_err: u64,
+    pub last_err: i64,
+    pub last_kind: i64,
+    pub decode_kind: i64,
+    pub last_w: i64,
+    pub last_h: i64,
+    pub present_path: i32,
+    pub dcomp_stage: i32,
+    pub surface_docked: bool,
+}
+
+pub fn video_debug() -> VideoDebug {
+    use std::sync::atomic::Ordering::Relaxed;
+    VideoDebug {
+        frames: VIDEO_FRAMES.load(Relaxed),
+        present_ok: PRESENT_OK.load(Relaxed),
+        present_err: PRESENT_ERR.load(Relaxed),
+        last_err: LAST_ERR_CODE.load(Relaxed),
+        last_kind: LAST_KIND.load(Relaxed),
+        decode_kind: DECODE_KIND.load(Relaxed),
+        last_w: LAST_W.load(Relaxed),
+        last_h: LAST_H.load(Relaxed),
+        present_path: lixh_player_core::surface::surface_present_path(),
+        dcomp_stage: lixh_player_core::surface::surface_dcomp_stage(),
+        surface_docked: surface_slot().lock().map(|s| s.is_some()).unwrap_or(false),
+    }
+}
+
+extern "C" fn on_video(_opaque:*mut c_void, kind:i32, width:i32, height:i32, pts_ms:i64, _duration_ms:i64, frame:*const LixhNativeFrame) -> i32 {
+    use std::sync::atomic::Ordering::Relaxed;
+    if frame.is_null() { return -1; }
+    VIDEO_FRAMES.fetch_add(1, Relaxed);
+    LAST_KIND.store(kind as i64, Relaxed);
+    if kind != 0 || DECODE_KIND.load(Relaxed) < 0 {
+        DECODE_KIND.store(kind as i64, Relaxed);
+    }
+    LAST_W.store(width as i64, Relaxed);
+    LAST_H.store(height as i64, Relaxed);
+    let Ok(slot)=surface_slot().lock() else { return 1; };
+    let Some(surface)=slot.as_ref() else { return 1; };
+    match surface.present(unsafe{&*frame}, pts_ms) {
+        Ok(()) => {
+            PRESENT_OK.fetch_add(1, Relaxed);
+            0
+        }
+        Err(e) => {
+            PRESENT_ERR.fetch_add(1, Relaxed);
+            let code=e.split(':').next_back().and_then(|s| s.trim().parse::<i64>().ok()).unwrap_or(-999);
+            LAST_ERR_CODE.store(code, Relaxed);
+            static DROPPED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let n=DROPPED.fetch_add(1, Relaxed);
+            if n<5 || n%300==0 {
+                eprintln!("[livecatch] native present failed (kind={kind} {width}x{height}): {e}");
+            }
+            -1
         }
     }
 }
@@ -164,6 +223,10 @@ pub struct LiveCatchBackend {
 
 impl LiveCatchBackend {
     pub fn new() -> Result<Self, String> {
+        use std::sync::atomic::Ordering::Relaxed;
+        DECODE_KIND.store(-1, Relaxed);
+        LAST_KIND.store(-1, Relaxed);
+        LAST_ERR_CODE.store(0, Relaxed);
         let core = CorePlayerAdapter::new(callbacks())
             .map_err(|e| format!("player core: {e:?}"))?;
         Ok(Self { host: PlayerHost::new(core) })
