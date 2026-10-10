@@ -36,3 +36,6 @@ Icon?
 /Flutter/Generated.xcconfig
 /Flutter/ephemeral/
 /Flutter/flutter_export_environment.sh
+
+# Synced from src-tauri/.../sdk/ios-arm64 by sync_ffmpeg_ios.sh (not committed)
+/Frameworks/

@@ -1,3 +1,5 @@
+require 'pathname'
+
 Pod::Spec.new do |s|
   s.name             = 'lixh_player'
   s.version          = '0.0.1'
@@ -14,17 +16,22 @@ LiveCatch lixh_player iOS plugin: lixh-player-core + sdk/ios-arm64.
   s.public_header_files = 'lixh_player/Sources/lixh_player/include/**/*.h',
                           'lixh_player/Sources/lixh_player_corec/include/**/*.h'
 
-  core = File.expand_path('../../../src-tauri/lixh-stream-stack/lixh-player-core', __dir__)
-  sdk = File.expand_path('../../../src-tauri/lixh-stream-stack/sdk/ios-arm64', __dir__)
+  pod_root = Pathname.new(__dir__)
+  # In-pod copy produced by packages/lixh_player/ios/sync_ffmpeg_ios.sh
+  # (CocoaPods cannot vendor libraries outside the pod root).
+  sdk = pod_root + 'Frameworks'
+  core = pod_root + '../../../src-tauri/lixh-stream-stack/lixh-player-core'
 
-  unless File.exist?(File.join(sdk, 'include/libavcodec/avcodec.h'))
-    raise "FFmpeg ios-arm64 SDK missing at #{sdk}. Run: bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh ios-arm64"
+  unless (sdk + 'include/libavcodec/avcodec.h').exist?
+    raise "FFmpeg ios-arm64 not synced into #{sdk}. Run: bash packages/lixh_player/ios/sync_ffmpeg_ios.sh"
   end
 
-  # Static archives from LiveCatchFfmpeg (device arm64).
-  s.vendored_libraries = %w[avformat avcodec avutil swresample].map { |n|
-    File.join(sdk, "lib/lib#{n}.a")
-  }
+  av_names = %w[avformat avcodec avutil swresample]
+  av_names.each do |n|
+    lib = sdk + "lib/lib#{n}.a"
+    raise "Missing #{lib} — run sync_ffmpeg_ios.sh" unless lib.exist?
+  end
+  s.vendored_libraries = av_names.map { |n| "Frameworks/lib/lib#{n}.a" }
 
   s.dependency 'Flutter'
   s.platform = :ios, '15.0'
@@ -34,7 +41,6 @@ LiveCatch lixh_player iOS plugin: lixh-player-core + sdk/ios-arm64.
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
     'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386 arm64',
-    'ONLY_ACTIVE_ARCH[sdk=iphonesimulator*]' => 'YES',
     'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) LIXH_IOS=1',
     'HEADER_SEARCH_PATHS' => "\"#{core}/include\" \"#{sdk}/include\" $(inherited)",
     'LIBRARY_SEARCH_PATHS' => "\"#{sdk}/lib\" $(inherited)",
@@ -44,6 +50,5 @@ LiveCatch lixh_player iOS plugin: lixh-player-core + sdk/ios-arm64.
   }
   s.user_target_xcconfig = {
     'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'i386 arm64',
-    'LIBRARY_SEARCH_PATHS' => "\"#{sdk}/lib\" $(inherited)",
   }
 end
