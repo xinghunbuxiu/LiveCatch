@@ -1,0 +1,93 @@
+name: Build Graphify code graph
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly refresh; code-only extraction does not require an LLM API key.
+    - cron: "23 3 * * 1"
+  push:
+    branches: [main]
+    paths:
+      - "**.py"
+      - "**.js"
+      - "**.jsx"
+      - "**.ts"
+      - "**.tsx"
+      - "**.mjs"
+      - "**.cjs"
+      - "**.dart"
+      - "**.rs"
+      - "**.go"
+      - "**.java"
+      - "**.kt"
+      - "**.swift"
+      - "**.c"
+      - "**.h"
+      - "**.cpp"
+      - "**.hpp"
+      - "**.cs"
+      - "**.php"
+      - "**.rb"
+      - "**.sh"
+      - "**.sql"
+      - "**.md"
+      - "**.yaml"
+      - "**.yml"
+      - "**.json"
+      - "**.toml"
+      - ".graphifyignore"
+      - "AGENTS.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: graphify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-graph:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Graphify
+        run: python -m pip install --upgrade graphifyy
+
+      - name: Build code knowledge graph
+        # Code-only graph extraction works without a model/API key.
+        # --no-viz avoids committing a large generated HTML visualization.
+        run: graphify . --no-viz
+
+      - name: Commit graph outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -s graphify-out/graph.json ]; then
+            echo "::error::Graphify did not produce graphify-out/graph.json"
+            exit 1
+          fi
+
+          # Never commit local usage/cost records or extraction caches.
+          git add graphify-out/
+          git reset -- graphify-out/cost.json graphify-out/cache/ 2>/dev/null || true
+
+          if git diff --cached --quiet; then
+            echo "Graphify output is already up to date."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(graphify): refresh code knowledge graph"
+          git push
