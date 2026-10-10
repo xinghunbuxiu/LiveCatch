@@ -126,6 +126,9 @@ jobs:
         with:
           channel: stable
           cache: true
+      # Monorepo FFmpeg paths + static .a link more reliably via CocoaPods than SPM unsafeFlags.
+      - name: Prefer CocoaPods over SPM
+        run: flutter config --no-enable-swift-package-manager
       - name: Fetch FFmpeg ios-arm64
         run: |
           set -euo pipefail
@@ -133,9 +136,16 @@ jobs:
           bash src-tauri/lixh-stream-stack/scripts/prepare-runtime.sh ios-arm64
           bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh ios-arm64 \
             "src-tauri/lixh-stream-stack/sdk/ios-arm64"
+          test -f src-tauri/lixh-stream-stack/sdk/ios-arm64/include/libavcodec/avcodec.h
+          test -f src-tauri/lixh-stream-stack/sdk/ios-arm64/lib/libavcodec.a
       - name: Pub get
         working-directory: flutter_app
         run: flutter pub get
       - name: Build iOS (no codesign)
         working-directory: flutter_app
-        run: flutter build ios --release --no-codesign
+        run: |
+          set -euo pipefail
+          flutter build ios --release --no-codesign 2>&1 | tee "${RUNNER_TEMP}/ios-build.log"
+      - name: Dump iOS build log on failure
+        if: failure()
+        run: tail -n 250 "${RUNNER_TEMP}/ios-build.log" || true
