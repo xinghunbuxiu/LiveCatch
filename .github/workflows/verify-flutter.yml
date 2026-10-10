@@ -77,6 +77,21 @@ jobs:
       - name: Build Windows release
         working-directory: flutter_app
         run: flutter build windows --release
+      - name: Package Windows release zip
+        shell: pwsh
+        run: |
+          $src = "flutter_app/build/windows/x64/runner/Release"
+          if (-not (Test-Path $src)) { throw "Windows release output missing: $src" }
+          $out = "livecatch-flutter-windows-x64.zip"
+          if (Test-Path $out) { Remove-Item $out -Force }
+          Compress-Archive -Path (Join-Path $src '*') -DestinationPath $out -Force
+          Get-Item $out | Format-List FullName, Length
+      - name: Upload Windows zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: livecatch-flutter-windows-x64
+          path: livecatch-flutter-windows-x64.zip
+          if-no-files-found: error
 
   android:
     name: android build
