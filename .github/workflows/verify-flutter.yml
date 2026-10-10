@@ -58,6 +58,7 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -114,3 +115,27 @@ jobs:
           name: livecatch-android-arm64
           path: flutter_app/build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error
+
+  ios:
+    name: ios build
+    runs-on: macos-15
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Fetch FFmpeg ios-arm64
+        run: |
+          set -euo pipefail
+          chmod +x src-tauri/lixh-stream-stack/scripts/*.sh
+          bash src-tauri/lixh-stream-stack/scripts/prepare-runtime.sh ios-arm64
+          bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh ios-arm64 \
+            "src-tauri/lixh-stream-stack/sdk/ios-arm64"
+      - name: Pub get
+        working-directory: flutter_app
+        run: flutter pub get
+      - name: Build iOS (no codesign)
+        working-directory: flutter_app
+        run: flutter build ios --release --no-codesign

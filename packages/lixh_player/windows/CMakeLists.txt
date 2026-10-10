@@ -34,11 +34,57 @@ set(LIXH_MSVC_IMPLIB_DIR "${CMAKE_CURRENT_BINARY_DIR}/ffmpeg_msvc_implib")
 
 # MinGW ships .dll.a; Flutter Windows uses MSVC — build import libs from .def.
 file(MAKE_DIRECTORY "${LIXH_MSVC_IMPLIB_DIR}")
-find_program(LIXH_LIB_EXE NAMES lib lib.exe
-  HINTS
-    "$ENV{VCToolsInstallDir}/bin/Hostx64/x64"
-    "C:/Program Files (x86)/Microsoft Visual Studio/2022/BuildTools/VC/Tools/MSVC/14.44.35207/bin/Hostx64/x64"
-  REQUIRED)
+
+# CI / different VS installs pin different MSVC toolset versions — resolve lib.exe via
+# VCToolsInstallDir, vswhere, or a Hostx64\x64 glob (not a hardcoded 14.xx path).
+set(LIXH_LIB_EXE "")
+if(DEFINED ENV{VCToolsInstallDir} AND EXISTS "$ENV{VCToolsInstallDir}/bin/Hostx64/x64/lib.exe")
+  set(LIXH_LIB_EXE "$ENV{VCToolsInstallDir}/bin/Hostx64/x64/lib.exe")
+endif()
+if(LIXH_LIB_EXE STREQUAL "")
+  set(_lixh_vswhere_candidates
+    "$ENV{ProgramFiles\(x86\)}/Microsoft Visual Studio/Installer/vswhere.exe"
+    "C:/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
+  )
+  foreach(_lixh_vswhere IN LISTS _lixh_vswhere_candidates)
+    if(EXISTS "${_lixh_vswhere}")
+      execute_process(
+        COMMAND "${_lixh_vswhere}" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64
+          -find "**/Hostx64/x64/lib.exe"
+        OUTPUT_VARIABLE _lixh_lib_out
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+      )
+      if(_lixh_lib_out)
+        string(REGEX REPLACE "\r?\n.*" "" LIXH_LIB_EXE "${_lixh_lib_out}")
+        break()
+      endif()
+    endif()
+  endforeach()
+endif()
+if(LIXH_LIB_EXE STREQUAL "")
+  file(GLOB _lixh_lib_candidates
+    "C:/Program Files (x86)/Microsoft Visual Studio/*/BuildTools/VC/Tools/MSVC/*/bin/Hostx64/x64/lib.exe"
+    "C:/Program Files/Microsoft Visual Studio/*/BuildTools/VC/Tools/MSVC/*/bin/Hostx64/x64/lib.exe"
+    "C:/Program Files (x86)/Microsoft Visual Studio/*/Community/VC/Tools/MSVC/*/bin/Hostx64/x64/lib.exe"
+    "C:/Program Files/Microsoft Visual Studio/*/Community/VC/Tools/MSVC/*/bin/Hostx64/x64/lib.exe"
+    "C:/Program Files (x86)/Microsoft Visual Studio/*/Professional/VC/Tools/MSVC/*/bin/Hostx64/x64/lib.exe"
+    "C:/Program Files/Microsoft Visual Studio/*/Professional/VC/Tools/MSVC/*/bin/Hostx64/x64/lib.exe"
+    "C:/Program Files (x86)/Microsoft Visual Studio/*/Enterprise/VC/Tools/MSVC/*/bin/Hostx64/x64/lib.exe"
+    "C:/Program Files/Microsoft Visual Studio/*/Enterprise/VC/Tools/MSVC/*/bin/Hostx64/x64/lib.exe"
+  )
+  if(_lixh_lib_candidates)
+    list(SORT _lixh_lib_candidates)
+    list(GET _lixh_lib_candidates -1 LIXH_LIB_EXE)
+  endif()
+endif()
+if(LIXH_LIB_EXE STREQUAL "")
+  find_program(LIXH_LIB_EXE NAMES lib lib.exe)
+endif()
+if(NOT LIXH_LIB_EXE OR NOT EXISTS "${LIXH_LIB_EXE}")
+  message(FATAL_ERROR "MSVC lib.exe not found (need VS C++ toolset to build FFmpeg import libs)")
+endif()
+message(STATUS "lixh_player: LIXH_LIB_EXE=${LIXH_LIB_EXE}")
 
 # name.dll pairs for LIBRARY stamp + /OUT
 set(_lixh_ffmpeg_pairs
