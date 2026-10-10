@@ -67,7 +67,7 @@ jobs:
       - name: Build code knowledge graph
         # Code-only graph extraction works without a model/API key.
         # --no-viz avoids committing a large generated HTML visualization.
-        run: graphify . --no-viz
+        run: graphify . --code-only --no-viz
 
       - name: Commit graph outputs
         shell: bash
