@@ -129,6 +129,93 @@ Future<ResolvedRoom> resolveRoom(
   String? cookies,
   bool preferFlv = true,
 }) async {
+  final raw = Platform.isAndroid
+      ? await _resolveViaAndroidJni(roomUrl, cookies: cookies)
+      : await _resolveViaProcess(roomUrl, cookies: cookies);
+
+  final map = jsonDecode(raw) as Map<String, dynamic>;
+  final isLive = map['is_live'] as bool? ?? false;
+  if (!isLive) {
+    throw StateError('直播已结束或不在播');
+  }
+
+  final picks = _selectStreams(
+    map['streams'] as List<dynamic>? ?? const [],
+    preferFlv: preferFlv,
+  );
+  if (picks.isEmpty) {
+    throw StateError('解析器没有返回可播放的视频流');
+  }
+
+  final headers = <String, String>{};
+  final rawHeaders = map['headers'];
+  if (rawHeaders is Map) {
+    rawHeaders.forEach((k, v) {
+      if (k == null || v == null) return;
+      headers['$k'] = '$v';
+    });
+  }
+
+  return ResolvedRoom(
+    platform: map['platform'] as String? ?? '',
+    siteUrl: map['site_url'] as String? ?? roomUrl,
+    title: map['title'] as String? ?? '',
+    artist: map['artist'] as String? ?? '',
+    isLive: isLive,
+    streamUrl: picks.first.url,
+    protocol: picks.first.protocol,
+    candidates: picks,
+    headers: headers,
+  );
+}
+
+/// Android in-process JNI (app UID). Falls back to Process if lib missing.
+Future<String> _resolveViaAndroidJni(
+  String roomUrl, {
+  String? cookies,
+}) async {
+  try {
+    final ready =
+        await _nativePaths.invokeMethod<bool>('resolveNativeReady') ?? false;
+    if (ready) {
+      final payload = await _nativePaths.invokeMethod<String>(
+        'resolveRoom',
+        <String, dynamic>{
+          'url': roomUrl.trim(),
+          if (cookies != null && cookies.isNotEmpty) 'cookies': cookies,
+        },
+      );
+      if (payload == null || payload.isEmpty) {
+        throw StateError('JNI resolve returned empty');
+      }
+      if (payload.startsWith('OK:')) {
+        return payload.substring(3);
+      }
+      if (payload.startsWith('ERR:')) {
+        throw StateError(formatResolveError(payload.substring(4)));
+      }
+      return payload;
+    }
+  } on PlatformException catch (e) {
+    // Fall through to Process helper.
+    if (e.code == 'no_native') {
+      // ignore
+    } else {
+      // Still try Process once; if that also fails, surface JNI error.
+      try {
+        return await _resolveViaProcess(roomUrl, cookies: cookies);
+      } catch (_) {
+        throw StateError(formatResolveError(e.message ?? e.toString()));
+      }
+    }
+  }
+  return _resolveViaProcess(roomUrl, cookies: cookies);
+}
+
+Future<String> _resolveViaProcess(
+  String roomUrl, {
+  String? cookies,
+}) async {
   final exe = await findResolveExe();
   if (exe == null) {
     final bin = Platform.isWindows ? 'lixh_resolve.exe' : 'lixh_resolve';
@@ -151,9 +238,7 @@ Future<ResolvedRoom> resolveRoom(
 
   final env = Map<String, String>.from(Platform.environment);
   if (Platform.isAndroid) {
-    // Ensure the forked helper can dlopen siblings in nativeLibraryDir.
     env['LD_LIBRARY_PATH'] = p.dirname(exe);
-    // Match desktop/strev: do not send Douyin traffic through Android proxies.
     for (final key in const [
       'http_proxy',
       'https_proxy',
@@ -191,41 +276,7 @@ Future<ResolvedRoom> resolveRoom(
   if (raw.isEmpty) {
     throw StateError('lixh_resolve returned empty stdout');
   }
-
-  final map = jsonDecode(raw) as Map<String, dynamic>;
-  final isLive = map['is_live'] as bool? ?? false;
-  if (!isLive) {
-    throw StateError('直播已结束或不在播');
-  }
-
-  final picks = _selectStreams(
-    map['streams'] as List<dynamic>? ?? const [],
-    preferFlv: preferFlv,
-  );
-  if (picks.isEmpty) {
-    throw StateError('解析器没有返回可播放的视频流');
-  }
-
-  final headers = <String, String>{};
-  final rawHeaders = map['headers'];
-  if (rawHeaders is Map) {
-    rawHeaders.forEach((k, v) {
-      if (k == null || v == null) return;
-      headers['$k'] = '$v';
-    });
-  }
-
-  return ResolvedRoom(
-    platform: map['platform'] as String? ?? '',
-    siteUrl: map['site_url'] as String? ?? roomUrl,
-    title: map['title'] as String? ?? '',
-    artist: map['artist'] as String? ?? '',
-    isLive: isLive,
-    streamUrl: picks.first.url,
-    protocol: picks.first.protocol,
-    candidates: picks,
-    headers: headers,
-  );
+  return raw;
 }
 
 /// Candidate filtering for ABR (top 3; optionally prefer FLV).

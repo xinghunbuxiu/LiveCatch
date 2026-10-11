@@ -10,8 +10,10 @@ $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $stack = Join-Path $repo "src-tauri\lixh-stream-stack"
 $outBin = Join-Path $stack "target\aarch64-linux-android\release\lixh_resolve"
+$outLib = Join-Path $stack "target\aarch64-linux-android\release\liblixh_stream_resolver.so"
 $jniDir = Join-Path $PSScriptRoot "app\src\main\jniLibs\arm64-v8a"
 $jniSo = Join-Path $jniDir "liblixh_resolve.so"
+$jniFfi = Join-Path $jniDir "liblixh_stream_resolver.so"
 
 if (-not $NdkRoot -or -not (Test-Path $NdkRoot)) {
   $sdk = $env:ANDROID_SDK_ROOT
@@ -44,17 +46,19 @@ if (-not $env:PROTOC -and (Test-Path "C:\Users\admin\tools\protoc\bin\protoc.exe
 }
 
 Write-Host "NDK=$NdkRoot"
-Write-Host "Building lixh_resolve (aarch64-linux-android)…"
+Write-Host "Building lixh-stream-resolver lib+bin (aarch64-linux-android)…"
 Push-Location $stack
 try {
-  cargo build -p lixh-stream-resolver --bin lixh_resolve --release --target aarch64-linux-android
+  cargo build -p lixh-stream-resolver --release --target aarch64-linux-android
   if ($LASTEXITCODE -ne 0) { throw "cargo build failed: $LASTEXITCODE" }
 } finally {
   Pop-Location
 }
 
 if (-not (Test-Path $outBin)) { throw "Missing $outBin" }
+if (-not (Test-Path $outLib)) { throw "Missing $outLib" }
 New-Item -ItemType Directory -Force -Path $jniDir | Out-Null
 Copy-Item -Force $outBin $jniSo
-$sizeMb = [math]::Round((Get-Item $jniSo).Length / 1MB, 1)
-Write-Host "Staged $jniSo ($sizeMb MB)"
+Copy-Item -Force $outLib $jniFfi
+$sizeMb = [math]::Round((Get-Item $jniFfi).Length / 1MB, 1)
+Write-Host "Staged $jniFfi ($sizeMb MB) + Process helper $jniSo"

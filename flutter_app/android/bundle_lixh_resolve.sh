@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cross-compile stream-stack lixh_resolve for Android arm64 and stage as jniLibs.
+# Cross-compile stream-stack resolve lib+bin for Android arm64 and stage as jniLibs.
 set -euo pipefail
 
 API_LEVEL="${LIXH_ANDROID_API:-26}"
@@ -7,8 +7,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$SCRIPT_DIR/../.." && pwd)"
 STACK="$REPO/src-tauri/lixh-stream-stack"
 OUT_BIN="$STACK/target/aarch64-linux-android/release/lixh_resolve"
+OUT_LIB="$STACK/target/aarch64-linux-android/release/liblixh_stream_resolver.so"
 JNI_DIR="$SCRIPT_DIR/app/src/main/jniLibs/arm64-v8a"
 JNI_SO="$JNI_DIR/liblixh_resolve.so"
+JNI_FFI="$JNI_DIR/liblixh_stream_resolver.so"
 
 NDK_ROOT="${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-}}"
 if [[ -z "$NDK_ROOT" || ! -d "$NDK_ROOT" ]]; then
@@ -37,15 +39,17 @@ export AR_aarch64_linux_android="$AR"
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CLANG"
 
 echo "NDK=$NDK_ROOT"
-echo "Building lixh_resolve (aarch64-linux-android)…"
+echo "Building lixh-stream-resolver lib+bin (aarch64-linux-android)…"
 (
   cd "$STACK"
   rustup target add aarch64-linux-android >/dev/null 2>&1 || true
-  cargo build -p lixh-stream-resolver --bin lixh_resolve --release --target aarch64-linux-android
+  cargo build -p lixh-stream-resolver --release --target aarch64-linux-android
 )
 
 test -f "$OUT_BIN"
+test -f "$OUT_LIB"
 mkdir -p "$JNI_DIR"
 cp -f "$OUT_BIN" "$JNI_SO"
-chmod 755 "$JNI_SO"
-echo "Staged $JNI_SO ($(du -h "$JNI_SO" | awk '{print $1}'))"
+cp -f "$OUT_LIB" "$JNI_FFI"
+chmod 755 "$JNI_SO" "$JNI_FFI"
+echo "Staged $JNI_FFI ($(du -h "$JNI_FFI" | awk '{print $1}')) + Process helper $JNI_SO"

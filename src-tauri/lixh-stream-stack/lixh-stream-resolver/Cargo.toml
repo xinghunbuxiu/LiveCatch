@@ -5,6 +5,11 @@ edition = "2021"
 license = "MIT"
 description = "Stream URL resolver for LiveCatch"
 
+[lib]
+name = "lixh_stream_resolver"
+crate-type = ["rlib", "cdylib"]
+path = "src/lib.rs"
+
 [[bin]]
 name = "lixh_resolve"
 path = "src/bin/lixh_resolve.rs"
@@ -16,8 +21,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 
-# Android runs lixh_resolve as a forked Process (no JVM). platforms-parser's
-# rustls-platform-verifier needs Android Context — use bundled Mozilla roots.
+# Android: prefer in-process JNI (cdylib) so networking uses the app UID.
+# Forked Process + webpki TLS is kept as a fallback binary (lixh_resolve).
 [target.'cfg(target_os = "android")'.dependencies]
 reqwest = { version = "0.12", default-features = false, features = [
   "json",
@@ -27,3 +32,4 @@ reqwest = { version = "0.12", default-features = false, features = [
 ] }
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "aws-lc-rs"] }
 webpki-roots = "1"
+jni = "0.21"

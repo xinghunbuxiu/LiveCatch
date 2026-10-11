@@ -20,27 +20,40 @@ val lixhResolveBin = File(
     lixhRepoRoot,
     "src-tauri/lixh-stream-stack/target/aarch64-linux-android/release/lixh_resolve",
 )
+val lixhResolveLib = File(
+    lixhRepoRoot,
+    "src-tauri/lixh-stream-stack/target/aarch64-linux-android/release/liblixh_stream_resolver.so",
+)
 val lixhResolveJniDir = File(project.projectDir, "src/main/jniLibs/arm64-v8a")
 val lixhResolveJniSo = File(lixhResolveJniDir, "liblixh_resolve.so")
+val lixhResolveJniFfi = File(lixhResolveJniDir, "liblixh_stream_resolver.so")
 
 val syncLixhResolveJni by tasks.registering {
-    description = "Stage aarch64 lixh_resolve as jniLibs/liblixh_resolve.so"
+    description = "Stage aarch64 resolve cdylib + Process helper into jniLibs"
     doLast {
+        lixhResolveJniDir.mkdirs()
+        var staged = false
+        if (lixhResolveLib.isFile) {
+            lixhResolveLib.copyTo(lixhResolveJniFfi, overwrite = true)
+            logger.lifecycle("Bundled ${lixhResolveJniFfi.absolutePath}")
+            staged = true
+        } else if (lixhResolveJniFfi.isFile) {
+            logger.lifecycle("Using existing ${lixhResolveJniFfi.absolutePath}")
+            staged = true
+        }
         if (lixhResolveBin.isFile) {
-            lixhResolveJniDir.mkdirs()
             lixhResolveBin.copyTo(lixhResolveJniSo, overwrite = true)
             logger.lifecycle("Bundled ${lixhResolveJniSo.absolutePath}")
-            return@doLast
-        }
-        if (lixhResolveJniSo.isFile) {
+        } else if (lixhResolveJniSo.isFile) {
             logger.lifecycle("Using existing ${lixhResolveJniSo.absolutePath}")
-            return@doLast
         }
-        throw GradleException(
-            "Missing Android lixh_resolve. Build/stage it first:\n" +
-                "  bash flutter_app/android/bundle_lixh_resolve.sh\n" +
-                "  or: pwsh flutter_app/android/bundle_lixh_resolve.ps1",
-        )
+        if (!staged) {
+            throw GradleException(
+                "Missing Android liblixh_stream_resolver.so. Build/stage it first:\n" +
+                    "  bash flutter_app/android/bundle_lixh_resolve.sh\n" +
+                    "  or: pwsh flutter_app/android/bundle_lixh_resolve.ps1",
+            )
+        }
     }
 }
 

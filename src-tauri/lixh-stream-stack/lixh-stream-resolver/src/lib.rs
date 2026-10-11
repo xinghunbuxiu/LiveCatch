@@ -9,6 +9,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
+#[cfg(target_os = "android")]
+mod android_jni;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StreamCandidate {
     pub url: String,
