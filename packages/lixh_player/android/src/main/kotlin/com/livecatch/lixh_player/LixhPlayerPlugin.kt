@@ -94,6 +94,18 @@ class LixhPlayerPlugin :
                 }
                 result.success(null)
             }
+            "setLatency" -> {
+                if (nativeReady) {
+                    val target = call.argument<Number>("targetMs")?.toInt()
+                    val maxv = call.argument<Number>("maxMs")?.toInt()
+                    if (target == null || maxv == null) {
+                        result.error("bad_args", "targetMs and maxMs required", null)
+                        return
+                    }
+                    nativeSetLatency(nativeHandle, target, maxv)
+                }
+                result.success(null)
+            }
             "getStats" -> {
                 val stats = HashMap<String, Any>(
                     mapOf(
@@ -164,6 +176,8 @@ class LixhPlayerPlugin :
     private external fun nativeStop(ptr: Long)
 
     private external fun nativeSetVideoEnabled(ptr: Long, enabled: Boolean)
+
+    private external fun nativeSetLatency(ptr: Long, targetMs: Int, maxMs: Int)
 
     private external fun nativeLastError(ptr: Long): String
 

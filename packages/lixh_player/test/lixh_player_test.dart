@@ -45,6 +45,10 @@ class MockLixhPlayerPlatform
   Future<void> setVideoEnabled(bool enabled) => Future.value();
 
   @override
+  Future<void> setLatency({required int targetMs, required int maxMs}) =>
+      Future.value();
+
+  @override
   Future<PlayerStats> getStats() => Future.value(
         const PlayerStats(
           textureId: -1,

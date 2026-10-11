@@ -81,6 +81,16 @@ public class LixhPlayerPlugin: NSObject, FlutterPlugin {
       let enabled = (args?["enabled"] as? Bool) ?? false
       engine.setVideoEnabled(enabled)
       result(true)
+    case "setLatency":
+      let args = call.arguments as? [String: Any]
+      let target = (args?["targetMs"] as? NSNumber)?.intValue
+      let maxv = (args?["maxMs"] as? NSNumber)?.intValue
+      guard let target, let maxv else {
+        result(FlutterError(code: "bad_args", message: "targetMs and maxMs required", details: nil))
+        return
+      }
+      engine.setLatencyTargetMs(Int32(target), maxMs: Int32(maxv))
+      result(true)
     case "getStats":
       result(engine.stats())
     case "disposeVideoTexture":

@@ -95,6 +95,11 @@ abstract class LixhPlayerPlatform extends PlatformInterface {
     throw UnimplementedError('setVideoEnabled() has not been implemented.');
   }
 
+  /// Live latency window in milliseconds (applied on next [open]).
+  Future<void> setLatency({required int targetMs, required int maxMs}) {
+    throw UnimplementedError('setLatency() has not been implemented.');
+  }
+
   Future<PlayerStats> getStats() {
     throw UnimplementedError('getStats() has not been implemented.');
   }

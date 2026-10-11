@@ -195,7 +195,7 @@ class Session {
       lixh_player_destroy(p);
       return false;
     }
-    lixh_player_set_latency(p, 200, 700);
+    lixh_player_set_latency(p, latency_target_ms_, latency_max_ms_);
     lixh_player_set_video_sink(p, video_enabled_.load() ? 1 : 0);
     std::lock_guard<std::mutex> lock(mu_);
     player_ = p;
@@ -247,6 +247,19 @@ class Session {
       p = player_;
     }
     if (p) lixh_player_set_video_sink(p, on ? 1 : 0);
+  }
+
+  void SetLatency(int target_ms, int max_ms) {
+    if (target_ms < 40) target_ms = 40;
+    if (max_ms < target_ms) max_ms = target_ms;
+    latency_target_ms_ = target_ms;
+    latency_max_ms_ = max_ms;
+    void* p = nullptr;
+    {
+      std::lock_guard<std::mutex> lock(mu_);
+      p = player_;
+    }
+    if (p) lixh_player_set_latency(p, latency_target_ms_, latency_max_ms_);
   }
 
   std::string last_error() const {
@@ -381,6 +394,8 @@ class Session {
   std::atomic<uint64_t> audio_frames_{0};
   std::atomic<uint64_t> present_ok_{0};
   std::atomic<bool> video_enabled_{false};
+  int latency_target_ms_ = 200;
+  int latency_max_ms_ = 700;
 };
 
 }  // namespace
@@ -430,11 +445,20 @@ Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeStop(JNIEnv*, jobject,
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeSetVideoEnabled(JNIEnv*,
-                                                                     jobject,
-                                                                     jlong ptr,
-                                                                     jboolean on) {
+                                                                       jobject,
+                                                                       jlong ptr,
+                                                                       jboolean on) {
   auto* s = reinterpret_cast<Session*>(ptr);
   if (s) s->SetVideoEnabled(on == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeSetLatency(JNIEnv*, jobject,
+                                                                  jlong ptr,
+                                                                  jint targetMs,
+                                                                  jint maxMs) {
+  auto* s = reinterpret_cast<Session*>(ptr);
+  if (s) s->SetLatency((int)targetMs, (int)maxMs);
 }
 
 extern "C" JNIEXPORT jstring JNICALL

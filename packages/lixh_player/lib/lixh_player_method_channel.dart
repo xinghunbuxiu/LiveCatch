@@ -74,6 +74,14 @@ class MethodChannelLixhPlayer extends LixhPlayerPlatform {
   }
 
   @override
+  Future<void> setLatency({required int targetMs, required int maxMs}) async {
+    await methodChannel.invokeMethod<void>('setLatency', {
+      'targetMs': targetMs,
+      'maxMs': maxMs,
+    });
+  }
+
+  @override
   Future<PlayerStats> getStats() async {
     final map = await methodChannel.invokeMapMethod<String, dynamic>('getStats');
     if (map == null) {

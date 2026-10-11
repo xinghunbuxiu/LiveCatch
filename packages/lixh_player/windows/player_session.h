@@ -35,6 +35,7 @@ class PlayerSession {
   void Stop();
   void Detach();
   void SetVideoEnabled(bool enabled);
+  void SetLatency(int target_ms, int max_ms);
   bool video_enabled() const { return video_enabled_.load(); }
 
   struct Stats {
@@ -90,6 +91,8 @@ class PlayerSession {
   std::atomic<int> decode_hw_{-1};
   // Default off: audio-first; return 1 from on_video to skip GPU/CPU present.
   std::atomic<bool> video_enabled_{false};
+  int latency_target_ms_ = 200;
+  int latency_max_ms_ = 700;
 };
 
 }  // namespace lixh_player

@@ -198,6 +198,15 @@ void LixhPlayerPlugin::SetVideoEnabled(bool enabled) {
   }
 }
 
+void LixhPlayerPlugin::SetLatency(int target_ms, int max_ms) {
+  std::fprintf(stderr, "[lixh] setLatency target=%d max=%d\n", target_ms,
+               max_ms);
+  std::fflush(stderr);
+  if (session_) {
+    session_->SetLatency(target_ms, max_ms);
+  }
+}
+
 void LixhPlayerPlugin::DisposeVideoTexture() {
   if (session_) {
     session_->Detach();
@@ -357,6 +366,20 @@ void LixhPlayerPlugin::HandleMethodCall(
       }
     }
     SetVideoEnabled(enabled);
+    result->Success(flutter::EncodableValue(true));
+    return;
+  }
+
+  if (method == "setLatency") {
+    const auto* args =
+        std::get_if<flutter::EncodableMap>(method_call.arguments());
+    auto target = args ? ReadInt(*args, "targetMs") : std::nullopt;
+    auto maxv = args ? ReadInt(*args, "maxMs") : std::nullopt;
+    if (!target || !maxv) {
+      result->Error("bad_args", "targetMs and maxMs required");
+      return;
+    }
+    SetLatency(static_cast<int>(*target), static_cast<int>(*maxv));
     result->Success(flutter::EncodableValue(true));
     return;
   }

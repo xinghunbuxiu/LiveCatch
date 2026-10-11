@@ -74,7 +74,11 @@ bool looksLikeDirectStream(String input) {
 }
 
 /// Resolve a live room page URL via stream-stack `lixh_resolve`.
-Future<ResolvedRoom> resolveRoom(String roomUrl, {String? cookies}) async {
+Future<ResolvedRoom> resolveRoom(
+  String roomUrl, {
+  String? cookies,
+  bool preferFlv = true,
+}) async {
   final exe = await findResolveExe();
   if (exe == null) {
     final bin = Platform.isWindows ? 'lixh_resolve.exe' : 'lixh_resolve';
@@ -115,7 +119,10 @@ Future<ResolvedRoom> resolveRoom(String roomUrl, {String? cookies}) async {
     throw StateError('直播已结束或不在播');
   }
 
-  final picks = _selectStreams(map['streams'] as List<dynamic>? ?? const []);
+  final picks = _selectStreams(
+    map['streams'] as List<dynamic>? ?? const [],
+    preferFlv: preferFlv,
+  );
   if (picks.isEmpty) {
     throw StateError('解析器没有返回可播放的视频流');
   }
@@ -142,8 +149,8 @@ Future<ResolvedRoom> resolveRoom(String roomUrl, {String? cookies}) async {
   );
 }
 
-/// Candidate filtering for ABR (top 3, prefer FLV).
-List<StreamPick> _selectStreams(List<dynamic> raw) {
+/// Candidate filtering for ABR (top 3; optionally prefer FLV).
+List<StreamPick> _selectStreams(List<dynamic> raw, {bool preferFlv = true}) {
   var list = <StreamPick>[];
   for (final item in raw) {
     if (item is! Map) continue;
@@ -162,7 +169,7 @@ List<StreamPick> _selectStreams(List<dynamic> raw) {
     );
   }
 
-  if (list.any((s) => s.format.toLowerCase().contains('flv'))) {
+  if (preferFlv && list.any((s) => s.format.toLowerCase().contains('flv'))) {
     list = list.where((s) => s.format.toLowerCase().contains('flv')).toList();
   }
 

@@ -80,6 +80,8 @@ static CVPixelBufferRef LixhUploadSoftwareFrame(const AVFrame *f) {
   atomic_ullong _presentOk;
   atomic_ullong _audioFrames;
   atomic_int _decodeHw;
+  int _latencyTargetMs;
+  int _latencyMaxMs;
   NSTimeInterval _lastPresent;
   NSTimeInterval _lastNotify;
 }
@@ -97,6 +99,8 @@ static CVPixelBufferRef LixhUploadSoftwareFrame(const AVFrame *f) {
     atomic_init(&_presentOk, 0);
     atomic_init(&_audioFrames, 0);
     atomic_init(&_decodeHw, -1);
+    _latencyTargetMs = 200;
+    _latencyMaxMs = 700;
   }
   return self;
 }
@@ -251,7 +255,7 @@ static void OnEvent(void *opaque, int type, int code, const char *message) {
                                  userInfo:@{NSLocalizedDescriptionKey : (self.lastError ?: @"")}];
     return NO;
   }
-  lixh_player_set_latency(player, 200, 700);
+  lixh_player_set_latency(player, _latencyTargetMs, _latencyMaxMs);
   lixh_player_set_video_sink(player, atomic_load(&_videoEnabled) ? 1 : 0);
   @synchronized(self) { _player = player; }
   NSLog(@"[lixh] open url=%lu chars", (unsigned long)url.length);
@@ -320,6 +324,17 @@ static void OnEvent(void *opaque, int type, int code, const char *message) {
   @synchronized(self) { player = _player; }
   NSLog(@"[lixh] setVideoEnabled %s", enabled ? "true" : "false");
   if (player) lixh_player_set_video_sink(player, enabled ? 1 : 0);
+}
+
+- (void)setLatencyTargetMs:(int)targetMs maxMs:(int)maxMs {
+  if (targetMs < 40) targetMs = 40;
+  if (maxMs < targetMs) maxMs = targetMs;
+  _latencyTargetMs = targetMs;
+  _latencyMaxMs = maxMs;
+  void *player = NULL;
+  @synchronized(self) { player = _player; }
+  NSLog(@"[lixh] setLatency target=%d max=%d", targetMs, maxMs);
+  if (player) lixh_player_set_latency(player, targetMs, maxMs);
 }
 
 - (void)disposeVideoTexture {

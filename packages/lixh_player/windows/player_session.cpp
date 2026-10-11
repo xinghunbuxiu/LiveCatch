@@ -184,8 +184,7 @@ bool PlayerSession::Open(const std::string& url, const std::string& headers) {
     lixh_player_destroy(player);
     return false;
   }
-  // Tighter live window after VP view caching (was 280/900).
-  lixh_player_set_latency(player, 200, 700);
+  lixh_player_set_latency(player, latency_target_ms_, latency_max_ms_);
   // Default listen-only: discard video packets until UI enables picture.
   lixh_player_set_video_sink(player, video_enabled_.load() ? 1 : 0);
   {
@@ -304,6 +303,21 @@ void PlayerSession::HandleAudio(int sample_rate, int channels,
   }
   audio_frames_.fetch_add(1);
   audio_.Push(samples, frames, channels, sample_rate);
+}
+
+void PlayerSession::SetLatency(int target_ms, int max_ms) {
+  if (target_ms < 40) target_ms = 40;
+  if (max_ms < target_ms) max_ms = target_ms;
+  latency_target_ms_ = target_ms;
+  latency_max_ms_ = max_ms;
+  void* player = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    player = player_;
+  }
+  if (player) {
+    lixh_player_set_latency(player, latency_target_ms_, latency_max_ms_);
+  }
 }
 
 void PlayerSession::SetVideoEnabled(bool enabled) {

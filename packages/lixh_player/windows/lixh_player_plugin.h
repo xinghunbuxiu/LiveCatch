@@ -38,6 +38,7 @@ class LixhPlayerPlugin : public flutter::Plugin {
   bool Play();
   void StopPlayback();
   void SetVideoEnabled(bool enabled);
+  void SetLatency(int target_ms, int max_ms);
   void DisposeVideoTexture();
   flutter::EncodableMap StatsMap() const;
   void NotifyFrameAvailable();

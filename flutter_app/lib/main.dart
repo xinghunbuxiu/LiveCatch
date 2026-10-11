@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:lixh_player/lixh_player.dart';
 
 import 'abr_supervisor.dart';
+import 'app_settings.dart';
 import 'room_resolve.dart';
+import 'settings_sheet.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -84,6 +86,7 @@ class _PlayerPageState extends State<PlayerPage>
   AbrSupervisor? _abr;
   bool _abrBusy = false;
   String _abrLabel = '';
+  AppSettings _settings = AppSettings();
 
   @override
   void initState() {
@@ -95,9 +98,26 @@ class _PlayerPageState extends State<PlayerPage>
     _boot();
   }
 
+  Future<void> _openSettings() async {
+    final next = await showSettingsSheet(context, initial: _settings);
+    if (next == null || !mounted) return;
+    setState(() => _settings = next);
+    final (t, m) = next.latency.latencyMs;
+    try {
+      await _player.setLatency(targetMs: t, maxMs: m);
+    } catch (e) {
+      debugPrint('[LiveCatch] setLatency: $e');
+    }
+  }
+
   Future<void> _boot() async {
     try {
+      _settings = await AppSettings.load();
       final info = await _player.createVideoTexture(width: 1920, height: 1080);
+      final (t, m) = _settings.latency.latencyMs;
+      try {
+        await _player.setLatency(targetMs: t, maxMs: m);
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _texture = info;
@@ -132,7 +152,7 @@ class _PlayerPageState extends State<PlayerPage>
             _stallTicks++;
             if (_stallTicks >= 10 && !_abrBusy) {
               final abr = _abr;
-              if (abr != null) {
+              if (abr != null && _settings.abrEnabled) {
                 final action = abr.reportFailure('stall ticks');
                 _stallTicks = 0;
                 if (action.kind == AbrActionKind.switchTo &&
@@ -202,7 +222,8 @@ class _PlayerPageState extends State<PlayerPage>
 
           // ABR / candidate switch (room resolve only).
           final abr = _abr;
-          if (abr != null &&
+          if (_settings.abrEnabled &&
+              abr != null &&
               !_abrBusy &&
               _playing &&
               !_busy &&
@@ -302,6 +323,7 @@ class _PlayerPageState extends State<PlayerPage>
   Future<void> _start() async {
     final input = _urlCtrl.text.trim();
     if (input.isEmpty || _busy) return;
+    final wantVideo = _settings.startWithVideo;
     setState(() {
       _busy = true;
       _playing = false;
@@ -318,6 +340,8 @@ class _PlayerPageState extends State<PlayerPage>
     });
 
     try {
+      final (t, m) = _settings.latency.latencyMs;
+      await _player.setLatency(targetMs: t, maxMs: m);
       await _player.stop();
       await _player.setVideoEnabled(false);
       _lastProgress = 0;
@@ -332,7 +356,10 @@ class _PlayerPageState extends State<PlayerPage>
       if (!looksLikeDirectStream(input)) {
         _roomInput = input;
         setState(() => _status = '解析直播间…');
-        final room = await resolveRoom(input);
+        final room = await resolveRoom(
+          input,
+          preferFlv: _settings.preferFlv,
+        );
         if (!mounted) return;
         headers = room.ffmpegHeaders;
         _headers = headers;
@@ -379,12 +406,15 @@ class _PlayerPageState extends State<PlayerPage>
           await _player.setVideoEnabled(false);
           await _player.open(pick.url, headers: headers ?? _headers);
           await _player.play();
+          if (wantVideo) {
+            await _player.setVideoEnabled(true);
+          }
           if (!mounted) return;
           setState(() {
             _playing = true;
             _busy = false;
-            _videoOn = false;
-            _status = '听播中';
+            _videoOn = wantVideo;
+            _status = wantVideo ? '画面' : '听播中';
             _graceTicks = 4;
           });
           return;
@@ -482,9 +512,10 @@ class _PlayerPageState extends State<PlayerPage>
                     bitrateKbps: _bitrateKbps,
                     lagMs: _lagMs,
                     cacheMs: _audioQueueMs,
-                    resolution: _videoW > 0 ? '${_videoW}×$_videoH' : '—',
+                    resolution: _videoW > 0 ? '$_videoW×$_videoH' : '—',
                     dropped: _dropped,
                     playing: _playing,
+                    onSettings: _openSettings,
                   ),
                   const SizedBox(height: 12),
                   Expanded(
@@ -506,6 +537,7 @@ class _PlayerPageState extends State<PlayerPage>
                     busy: _busy,
                     playing: _playing,
                     videoOn: _videoOn,
+                    startWithVideo: _settings.startWithVideo,
                     signal: signal,
                     foam: foam,
                     onStart: _start,
@@ -533,6 +565,7 @@ class _Header extends StatelessWidget {
     required this.resolution,
     required this.dropped,
     required this.playing,
+    required this.onSettings,
   });
 
   final String status;
@@ -544,6 +577,7 @@ class _Header extends StatelessWidget {
   final String resolution;
   final int dropped;
   final bool playing;
+  final VoidCallback onSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -575,6 +609,19 @@ class _Header extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: playing ? signal : foam.withValues(alpha: 0.25),
                       shape: BoxShape.circle,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    tooltip: '配置',
+                    onPressed: onSettings,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                    icon: Icon(
+                      Icons.tune,
+                      size: 20,
+                      color: foam.withValues(alpha: 0.7),
                     ),
                   ),
                 ],
@@ -907,6 +954,7 @@ class _Dock extends StatelessWidget {
     required this.busy,
     required this.playing,
     required this.videoOn,
+    required this.startWithVideo,
     required this.signal,
     required this.foam,
     required this.onStart,
@@ -918,6 +966,7 @@ class _Dock extends StatelessWidget {
   final bool busy;
   final bool playing;
   final bool videoOn;
+  final bool startWithVideo;
   final Color signal;
   final Color foam;
   final VoidCallback onStart;
@@ -966,7 +1015,11 @@ class _Dock extends StatelessWidget {
                     borderRadius: BorderRadius.zero,
                   ),
                 ),
-                child: Text(busy ? '接入中…' : '开始听播'),
+                child: Text(
+                  busy
+                      ? '接入中…'
+                      : (startWithVideo ? '开始播放' : '开始听播'),
+                ),
               ),
             ),
             const SizedBox(width: 8),

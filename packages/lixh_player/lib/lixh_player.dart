@@ -46,6 +46,14 @@ class LixhPlayer {
     return LixhPlayerPlatform.instance.setVideoEnabled(enabled);
   }
 
+  /// Target / max live latency window (ms). Applied on the next [open].
+  Future<void> setLatency({required int targetMs, required int maxMs}) {
+    return LixhPlayerPlatform.instance.setLatency(
+      targetMs: targetMs,
+      maxMs: maxMs,
+    );
+  }
+
   Future<PlayerStats> getStats() {
     return LixhPlayerPlatform.instance.getStats();
   }

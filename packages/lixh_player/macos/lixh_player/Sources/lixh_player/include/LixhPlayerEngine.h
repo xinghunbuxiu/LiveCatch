@@ -10,6 +10,7 @@
 - (BOOL)startPlayback:(NSError **)error;
 - (void)stop;
 - (void)setVideoEnabled:(BOOL)enabled;
+- (void)setLatencyTargetMs:(int)targetMs maxMs:(int)maxMs;
 - (void)disposeVideoTexture;
 - (NSDictionary *)stats;
 @end
