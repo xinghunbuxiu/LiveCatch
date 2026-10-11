@@ -21,9 +21,8 @@ liveCatch/
 |----------|------|
 | `Flutter Analyze` / `Windows` / `Android` / `macOS` / `iOS` | single platform (manual retry) |
 | `Verify Flutter All` | all Flutter jobs on push/PR |
-| `Verify Stream Stack` | cargo check/test; dispatch can pick one platform |
-| `Verify FFmpeg Consume` | download smoke for all SDK platforms |
-| `Build Graphify code graph` | code graph refresh |
+| `Verify Stream Stack` | cargo check/test (windows-x64 + macos-arm64); dispatch can pick one |
+| `Build Graphify code graph` | weekly / manual graph refresh |
 
 Desktop/mobile artifacts from Flutter CI:
 
@@ -47,7 +46,7 @@ bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-runtime.sh <platform>
 ```
 
 Platforms: `windows-x64`, `macos-arm64`, `macos-x64`, `android-arm64`, `ios-arm64`.  
-CI: `.github/workflows/verify-ffmpeg-consume.yml` (all five required).
+Flutter CI fetches the platform SDK/runtime as part of each build.
 
 ## Run
 

@@ -5,39 +5,6 @@ on:
   schedule:
     # Weekly refresh; code-only extraction does not require an LLM API key.
     - cron: "23 3 * * 1"
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/graphify.yml"
-      - "**.py"
-      - "**.js"
-      - "**.jsx"
-      - "**.ts"
-      - "**.tsx"
-      - "**.mjs"
-      - "**.cjs"
-      - "**.dart"
-      - "**.rs"
-      - "**.go"
-      - "**.java"
-      - "**.kt"
-      - "**.swift"
-      - "**.c"
-      - "**.h"
-      - "**.cpp"
-      - "**.hpp"
-      - "**.cs"
-      - "**.php"
-      - "**.rb"
-      - "**.sh"
-      - "**.sql"
-      - "**.md"
-      - "**.yaml"
-      - "**.yml"
-      - "**.json"
-      - "**.toml"
-      - ".graphifyignore"
-      - "AGENTS.md"
 
 permissions:
   contents: write

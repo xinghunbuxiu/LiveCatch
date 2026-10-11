@@ -10,7 +10,6 @@ on:
           - all
           - windows-x64
           - macos-arm64
-          - macos-x64
         default: all
   push:
     branches: [main]
@@ -44,9 +43,3 @@ jobs:
     with:
       platform: macos-arm64
       runner: macos-15
-  macos-x64:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'macos-x64' }}
-    uses: ./.github/workflows/verify-stream-stack-platform.yml
-    with:
-      platform: macos-x64
-      runner: macos-15-intel
