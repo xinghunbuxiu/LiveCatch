@@ -15,7 +15,7 @@ jobs:
   android:
     name: android build
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       LIXH_FFMPEG_VERSION: "9.0.2"
       LIXH_FFMPEG_REPO: "xinghunbuxiu/LiveCatchFfmpeg"
@@ -40,6 +40,29 @@ jobs:
             "src-tauri/lixh-stream-stack/sdk/android-arm64"
       - name: Accept Android licenses
         run: yes | flutter doctor --android-licenses || true
+      - name: Install Android NDK
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:?ANDROID_HOME unset}}"
+          SM="$(ls -1d "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | tail -n1 || true)"
+          if [[ -z "$SM" ]]; then SM="$(command -v sdkmanager || true)"; fi
+          test -n "$SM"
+          yes | "$SM" --sdk_root="$SDK" --install "ndk;28.2.13676358"
+          echo "ANDROID_NDK_HOME=$SDK/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          echo "ANDROID_NDK_ROOT=$SDK/ndk/28.2.13676358" >> "$GITHUB_ENV"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Bundle lixh_resolve (android-arm64)
+        run: |
+          set -euo pipefail
+          chmod +x flutter_app/android/bundle_lixh_resolve.sh
+          bash flutter_app/android/bundle_lixh_resolve.sh
+          test -f flutter_app/android/app/src/main/jniLibs/arm64-v8a/liblixh_resolve.so
       - name: Pub get
         working-directory: flutter_app
         run: flutter pub get

@@ -1,7 +1,51 @@
+import java.io.File
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+fun findRepoRoot(start: File): File {
+    var dir: File? = start
+    while (dir != null) {
+        if (File(dir, "src-tauri/lixh-stream-stack").isDirectory) return dir
+        dir = dir.parentFile
+    }
+    return start
+}
+
+val lixhRepoRoot = findRepoRoot(rootProject.projectDir)
+val lixhResolveBin = File(
+    lixhRepoRoot,
+    "src-tauri/lixh-stream-stack/target/aarch64-linux-android/release/lixh_resolve",
+)
+val lixhResolveJniDir = File(project.projectDir, "src/main/jniLibs/arm64-v8a")
+val lixhResolveJniSo = File(lixhResolveJniDir, "liblixh_resolve.so")
+
+val syncLixhResolveJni by tasks.registering {
+    description = "Stage aarch64 lixh_resolve as jniLibs/liblixh_resolve.so"
+    doLast {
+        if (lixhResolveBin.isFile) {
+            lixhResolveJniDir.mkdirs()
+            lixhResolveBin.copyTo(lixhResolveJniSo, overwrite = true)
+            logger.lifecycle("Bundled ${lixhResolveJniSo.absolutePath}")
+            return@doLast
+        }
+        if (lixhResolveJniSo.isFile) {
+            logger.lifecycle("Using existing ${lixhResolveJniSo.absolutePath}")
+            return@doLast
+        }
+        throw GradleException(
+            "Missing Android lixh_resolve. Build/stage it first:\n" +
+                "  bash flutter_app/android/bundle_lixh_resolve.sh\n" +
+                "  or: pwsh flutter_app/android/bundle_lixh_resolve.ps1",
+        )
+    }
+}
+
+tasks.matching { it.name == "preBuild" }.configureEach {
+    dependsOn(syncLixhResolveJni)
 }
 
 android {
@@ -27,6 +71,9 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
     }
 
     buildTypes {
@@ -34,6 +81,13 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+
+    packaging {
+        jniLibs {
+            // Extract liblixh_resolve.so so Dart can Process.run it from nativeLibraryDir.
+            useLegacyPackaging = true
         }
     }
 }

@@ -326,6 +326,10 @@ void PlayerSession::SetVideoEnabled(bool enabled) {
   {
     std::lock_guard<std::mutex> lock(mu_);
     player = player_;
+    // Clear sticky errors so a prior capture glitch does not stay on the HUD.
+    if (enabled) {
+      last_error_.clear();
+    }
   }
   std::fprintf(stderr, "[lixh] video_sink %d -> %d player=%p\n", was ? 1 : 0,
                enabled ? 1 : 0, player);
@@ -367,7 +371,8 @@ int PlayerSession::HandleVideo(int kind, int width, int height,
                                const void* frame_ptr) {
   const auto* frame = static_cast<const LixhNativeFrame*>(frame_ptr);
   if (!frame || !frame->handle0 || width <= 0 || height <= 0) {
-    return -1;
+    // Skip frame — never return -1 here (that forces demux-thread CPU download).
+    return 1;
   }
   video_frames_.fetch_add(1);
   // 1 = skip present AND expensive hwframe_transfer (see lixh_player.c).
@@ -412,8 +417,16 @@ int PlayerSession::HandleVideo(int kind, int width, int height,
       if (!bridge->InitializeWithDevice(src_device.Get(),
                                         static_cast<uint32_t>(width),
                                         static_cast<uint32_t>(height))) {
-        SetError("InitializeWithDevice failed");
-        return -1;
+        // Customer GPUs sometimes fail shared-HANDLE create transiently.
+        // Skip this frame and keep trying direct D3D11 — do NOT force SW path.
+        static int init_fail_logs = 0;
+        if (init_fail_logs < 8) {
+          ++init_fail_logs;
+          std::fprintf(stderr, "[lixh] InitializeWithDevice fail %dx%d\n",
+                       width, height);
+          std::fflush(stderr);
+        }
+        return 1;
       }
     }
     const UINT sub = frame->handle1 > 0 ? static_cast<UINT>(frame->handle1) : 0;
@@ -422,21 +435,21 @@ int PlayerSession::HandleVideo(int kind, int width, int height,
     decode_hw_.store(0);
     const auto* av = static_cast<const AVFrame*>(frame->handle0);
     if (!av || !av->data[0]) {
-      return -1;
+      return 1;
     }
     if (av->format != AV_PIX_FMT_YUV420P && av->format != AV_PIX_FMT_YUVJ420P &&
         av->format != AV_PIX_FMT_NV12 && av->format != AV_PIX_FMT_NV21) {
-      return -1;
+      return 1;
     }
     thread_local std::vector<uint8_t> bgra;
     if (!Yuv420ToBgra(av, &bgra)) {
-      return -1;
+      return 1;
     }
     ok = bridge->CaptureBgra(bgra.data(), static_cast<uint32_t>(av->width),
                              static_cast<uint32_t>(av->height),
                              static_cast<uint32_t>(av->width) * 4);
   } else {
-    return -1;
+    return 1;
   }
 
   if (!ok) {
@@ -447,7 +460,9 @@ int PlayerSession::HandleVideo(int kind, int width, int height,
                    height);
       std::fflush(stderr);
     }
-    return -1;
+    // Skip only — returning -1 used to permanently enable demux-thread
+    // av_hwframe_transfer_data and stall live reads on weak GPUs.
+    return 1;
   }
   QueryPerformanceCounter(&now_qpc);
   last_capture_qpc = now_qpc.QuadPart;

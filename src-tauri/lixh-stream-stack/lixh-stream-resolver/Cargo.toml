@@ -15,3 +15,17 @@ platforms-parser = { git = "https://github.com/hua0512/rust-srec", package = "pl
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+# Android runs lixh_resolve as a forked Process (no JVM). platforms-parser's
+# rustls-platform-verifier needs Android Context — use bundled Mozilla roots.
+[target.'cfg(target_os = "android")'.dependencies]
+reqwest = { version = "0.12", default-features = false, features = [
+  "json",
+  "rustls-tls-webpki-roots",
+  "gzip",
+  "brotli",
+  "deflate",
+  "socks",
+] }
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "aws-lc-rs"] }
+webpki-roots = "1"

@@ -245,6 +245,7 @@ class Session {
     {
       std::lock_guard<std::mutex> lock(mu_);
       p = player_;
+      if (on) last_error_.clear();
     }
     if (p) lixh_player_set_video_sink(p, on ? 1 : 0);
   }
@@ -321,7 +322,7 @@ class Session {
     video_frames_.fetch_add(1);
     if (!video_enabled_.load()) return 1;
     if (kind != LIXH_VIDEO_SOFTWARE || !frame || !frame->handle0) return 1;
-    if (width <= 0 || height <= 0) return -1;
+    if (width <= 0 || height <= 0) return 1;
 
     auto now = std::chrono::steady_clock::now();
     if (last_present_.time_since_epoch().count() != 0) {
@@ -343,10 +344,11 @@ class Session {
     ANativeWindow_Buffer buf{};
     if (ANativeWindow_lock(win, &buf, nullptr) != 0) {
       ANativeWindow_release(win);
-      return -1;
+      // Skip frame only — never -1 (avoids treating present glitches as fatal).
+      return 1;
     }
 
-    int ok = -1;
+    int ok = 1;
     {
       std::lock_guard<std::mutex> lock(win_mu_);
       if (!sws_ || sws_w_ != width || sws_h_ != height || sws_fmt_ != src->format) {

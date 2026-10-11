@@ -1,5 +1,6 @@
 #include "shared_texture.h"
 
+#include <cstdio>
 #include <cstring>
 
 namespace lixh_player {
@@ -85,7 +86,10 @@ void SharedTextureBridge::TickRetired() {
         it->rtvs[i].Reset();
         it->textures[i].Reset();
         if (it->handles[i]) {
-          CloseHandle(it->handles[i]);
+          // Legacy DXGI GetSharedHandle must not be CloseHandle'd.
+          if (it->handles_are_nt) {
+            CloseHandle(it->handles[i]);
+          }
           it->handles[i] = nullptr;
         }
       }
@@ -103,6 +107,7 @@ void SharedTextureBridge::RetireCurrentPair() {
     return;
   }
   RetiredPair retired;
+  retired.handles_are_nt = handles_are_nt_;
   for (int i = 0; i < 2; ++i) {
     retired.textures[i] = textures_[i];
     retired.rtvs[i] = rtvs_[i];
@@ -123,57 +128,102 @@ bool SharedTextureBridge::CreatePair(uint32_t width, uint32_t height) {
     return false;
   }
 
-  D3D11_TEXTURE2D_DESC desc = {};
-  desc.Width = width;
-  desc.Height = height;
-  desc.MipLevels = 1;
-  desc.ArraySize = 1;
-  desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-  desc.SampleDesc.Count = 1;
-  desc.Usage = D3D11_USAGE_DEFAULT;
-  desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-  desc.MiscFlags =
-      D3D11_RESOURCE_MISC_SHARED | D3D11_RESOURCE_MISC_SHARED_NTHANDLE;
+  // Prefer NT shared handles (Flutter DXGI path). Some customer GPUs/drivers
+  // reject SHARED_NTHANDLE — fall back to legacy GetSharedHandle.
+  const UINT misc_attempts[] = {
+      D3D11_RESOURCE_MISC_SHARED | D3D11_RESOURCE_MISC_SHARED_NTHANDLE,
+      D3D11_RESOURCE_MISC_SHARED,
+  };
 
-  for (int i = 0; i < 2; ++i) {
-    HRESULT hr = device_->CreateTexture2D(&desc, nullptr, &textures_[i]);
-    if (FAILED(hr)) {
-      ReleasePair();
-      return false;
+  for (UINT misc : misc_attempts) {
+    bool nt = (misc & D3D11_RESOURCE_MISC_SHARED_NTHANDLE) != 0;
+    bool ok = true;
+    for (int i = 0; i < 2; ++i) {
+      D3D11_TEXTURE2D_DESC desc = {};
+      desc.Width = width;
+      desc.Height = height;
+      desc.MipLevels = 1;
+      desc.ArraySize = 1;
+      desc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+      desc.SampleDesc.Count = 1;
+      desc.Usage = D3D11_USAGE_DEFAULT;
+      desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+      desc.MiscFlags = misc;
+
+      HRESULT hr = device_->CreateTexture2D(&desc, nullptr, &textures_[i]);
+      if (FAILED(hr)) {
+        ok = false;
+        break;
+      }
+      hr = device_->CreateRenderTargetView(textures_[i].Get(), nullptr,
+                                           &rtvs_[i]);
+      if (FAILED(hr)) {
+        ok = false;
+        break;
+      }
+      if (nt) {
+        Microsoft::WRL::ComPtr<IDXGIResource1> resource;
+        hr = textures_[i].As(&resource);
+        if (FAILED(hr)) {
+          ok = false;
+          break;
+        }
+        hr = resource->CreateSharedHandle(
+            nullptr, DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE,
+            nullptr, &handles_[i]);
+        if (FAILED(hr) || handles_[i] == nullptr) {
+          ok = false;
+          break;
+        }
+      } else {
+        Microsoft::WRL::ComPtr<IDXGIResource> resource;
+        hr = textures_[i].As(&resource);
+        if (FAILED(hr)) {
+          ok = false;
+          break;
+        }
+        hr = resource->GetSharedHandle(&handles_[i]);
+        if (FAILED(hr) || handles_[i] == nullptr) {
+          ok = false;
+          break;
+        }
+      }
     }
-    hr = device_->CreateRenderTargetView(textures_[i].Get(), nullptr,
-                                         &rtvs_[i]);
-    if (FAILED(hr)) {
-      ReleasePair();
-      return false;
+    if (ok) {
+      width_ = width;
+      height_ = height;
+      write_index_ = 0;
+      read_index_ = 1;
+      ready_ = true;
+      handles_are_nt_ = nt;
+      const float black[4] = {0.f, 0.f, 0.f, 1.f};
+      for (int i = 0; i < 2; ++i) {
+        context_->ClearRenderTargetView(rtvs_[i].Get(), black);
+      }
+      context_->Flush();
+      if (!nt) {
+        std::fprintf(stderr,
+                     "[lixh] CreatePair using legacy DXGI shared handle\n");
+        std::fflush(stderr);
+      }
+      return true;
     }
-    Microsoft::WRL::ComPtr<IDXGIResource1> resource;
-    hr = textures_[i].As(&resource);
-    if (FAILED(hr)) {
-      ReleasePair();
-      return false;
-    }
-    hr = resource->CreateSharedHandle(
-        nullptr, DXGI_SHARED_RESOURCE_READ | DXGI_SHARED_RESOURCE_WRITE,
-        nullptr, &handles_[i]);
-    if (FAILED(hr) || handles_[i] == nullptr) {
-      ReleasePair();
-      return false;
+    // Retry with next misc flags.
+    for (int i = 0; i < 2; ++i) {
+      rtvs_[i].Reset();
+      textures_[i].Reset();
+      if (handles_[i]) {
+        // NT handles need CloseHandle; legacy shared handles must NOT be closed.
+        if (nt) {
+          CloseHandle(handles_[i]);
+        }
+        handles_[i] = nullptr;
+      }
     }
   }
 
-  width_ = width;
-  height_ = height;
-  write_index_ = 0;
-  read_index_ = 1;
-  ready_ = true;
-
-  const float black[4] = {0.f, 0.f, 0.f, 1.f};
-  for (int i = 0; i < 2; ++i) {
-    context_->ClearRenderTargetView(rtvs_[i].Get(), black);
-  }
-  context_->Flush();
-  return true;
+  ReleasePair();
+  return false;
 }
 
 void SharedTextureBridge::ReleaseVpViews() {

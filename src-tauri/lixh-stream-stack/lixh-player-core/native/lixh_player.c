@@ -66,6 +66,8 @@ typedef struct LixhPlayer {
     int64_t target_latency_ms;
     int64_t max_latency_ms;
     int chase_drop_streak;
+    /* Consecutive on_video <0 before committing to demux-thread SW download. */
+    int d3d11_fail_streak;
     int sample_rate;
     int channels;
 } LixhPlayer;
@@ -285,8 +287,11 @@ static void deliver_video(LixhPlayer *p, AVFrame *f, AVRational tb) {
     if (!p->cb.on_video) return;
     if (f->format == AV_PIX_FMT_D3D11) {
 #ifdef LIXH_WINDOWS
+        /* on_video: 0=presented, 1=skip (keep trying direct), <0=force SW download.
+           Never permanently demote after a single glitch — weak GPUs used to hit
+           av_hwframe_transfer_data every frame and stall demux (play failed). */
         int direct = atomic_load_explicit(&p->direct_d3d11, memory_order_acquire);
-        int presented = -1;
+        int presented = 1;
         if (direct >= 0) {
             ID3D11DeviceContext *frame_context = NULL;
             if (f->hw_frames_ctx) {
@@ -298,13 +303,27 @@ static void deliver_video(LixhPlayer *p, AVFrame *f, AVRational tb) {
             }
             LixhNativeFrame nf = { LIXH_VIDEO_D3D11, f->width, f->height, f->data[0], (intptr_t)f->data[1], frame_context };
             presented = p->cb.on_video(p->cb.opaque, nf.kind, nf.width, nf.height, pts, 0, &nf);
-            if (presented == 0) atomic_store_explicit(&p->direct_d3d11, 1, memory_order_release);
-            else if (presented < 0) atomic_store_explicit(&p->direct_d3d11, -1, memory_order_release);
+            if (presented == 0) {
+                atomic_store_explicit(&p->direct_d3d11, 1, memory_order_release);
+                p->d3d11_fail_streak = 0;
+            } else if (presented < 0) {
+                /* Require a streak before committing to demux-thread SW path. */
+                if (++p->d3d11_fail_streak >= 24) {
+                    atomic_store_explicit(&p->direct_d3d11, -1, memory_order_release);
+                } else {
+                    atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
+                    return;
+                }
+            } else {
+                /* skip: drop this frame, keep direct path */
+                p->d3d11_fail_streak = 0;
+                atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
+                return;
+            }
+        } else {
+            presented = -1;
         }
-        if (presented < 0) {
-            /* Cache an unsupported direct path for the rest of this open.
-               Return code 1 means no video surface is attached, so audio-only
-               mode skips both GPU presentation and the expensive CPU download. */
+        if (presented < 0 || direct < 0) {
             if (!p->transfer_frame) p->transfer_frame = av_frame_alloc();
             AVFrame *sw = p->transfer_frame;
             if (!sw) {
@@ -316,10 +335,13 @@ static void deliver_video(LixhPlayer *p, AVFrame *f, AVRational tb) {
             if (rc >= 0) rc = av_frame_copy_props(sw, f);
             if (rc >= 0) {
                 LixhNativeFrame fallback = { LIXH_VIDEO_SOFTWARE, sw->width, sw->height, sw, 0, sw };
-                p->cb.on_video(p->cb.opaque, fallback.kind, fallback.width, fallback.height, pts, 0, &fallback);
+                int sw_rc = p->cb.on_video(p->cb.opaque, fallback.kind, fallback.width, fallback.height, pts, 0, &fallback);
+                if (sw_rc != 0) {
+                    atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
+                }
             } else {
                 atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
-                emit(p, LIXH_EVT_ERROR, rc, av_err2str(rc));
+                /* Do not emit ERROR — it overwrites UI and looks like play death. */
             }
             av_frame_unref(sw);
         }
@@ -343,10 +365,13 @@ static void deliver_video(LixhPlayer *p, AVFrame *f, AVRational tb) {
         if (rc >= 0) rc = av_frame_copy_props(sw, f);
         if (rc >= 0) {
             LixhNativeFrame fallback = { LIXH_VIDEO_SOFTWARE, sw->width, sw->height, sw, 0, sw };
-            p->cb.on_video(p->cb.opaque, fallback.kind, fallback.width, fallback.height, pts, 0, &fallback);
+            int sw_rc = p->cb.on_video(p->cb.opaque, fallback.kind, fallback.width, fallback.height, pts, 0, &fallback);
+            if (sw_rc != 0) {
+                atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
+            }
         } else {
             atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
-            emit(p, LIXH_EVT_ERROR, rc, av_err2str(rc));
+            /* Silent drop — ERROR here was mistaken for play failure on UI. */
         }
         av_frame_unref(sw);
 #endif
@@ -490,6 +515,7 @@ int lixh_player_play(void *opaque) {
                 atomic_store_explicit(&p->first_pts_ms, AV_NOPTS_VALUE, memory_order_release);
                 atomic_store_explicit(&p->last_video_pts_ms, AV_NOPTS_VALUE, memory_order_release);
                 atomic_store_explicit(&p->base_wall_ms, now_ms(), memory_order_release);
+                p->d3d11_fail_streak = 0;
                 rc = 0; continue;
             }
             break;
@@ -497,6 +523,7 @@ int lixh_player_play(void *opaque) {
         if (atomic_exchange_explicit(&p->flush_video_req, 0, memory_order_acq_rel)) {
             if (p->vdec) avcodec_flush_buffers(p->vdec);
             atomic_store_explicit(&p->direct_d3d11, 0, memory_order_release);
+            p->d3d11_fail_streak = 0;
         }
         if (pkt->size > 0) {
             atomic_fetch_add_explicit(&p->bytes_read, (uint64_t)pkt->size, memory_order_relaxed);
@@ -555,6 +582,8 @@ void lixh_player_set_video_sink(void *opaque, int enabled) {
         /* Listen-only audio may have anchored first_pts; clear so the first
            delivered video frame re-bases live chase instead of mass-dropping. */
         atomic_store_explicit(&p->first_pts_ms, AV_NOPTS_VALUE, memory_order_release);
+        atomic_store_explicit(&p->direct_d3d11, 0, memory_order_release);
+        p->d3d11_fail_streak = 0;
     }
 }
 

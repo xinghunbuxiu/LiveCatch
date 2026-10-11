@@ -54,6 +54,7 @@ class SharedTextureBridge {
     Microsoft::WRL::ComPtr<ID3D11Texture2D> textures[2];
     Microsoft::WRL::ComPtr<ID3D11RenderTargetView> rtvs[2];
     HANDLE handles[2] = {nullptr, nullptr};
+    bool handles_are_nt = true;  // NT CreateSharedHandle must CloseHandle
     int frames_left = 8;  // keep alive until Flutter drops old handles
   };
 
@@ -106,6 +107,7 @@ class SharedTextureBridge {
   int flush_div_ = 0;
 
   HANDLE handles_[2] = {nullptr, nullptr};
+  bool handles_are_nt_ = true;
   std::vector<RetiredPair> retired_;
   FlutterDesktopGpuSurfaceDescriptor descriptor_{};
   uint32_t width_ = 0;

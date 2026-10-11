@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
+
+const _nativePaths = MethodChannel('livecatch/native_paths');
 
 /// Result of [resolveRoom] — room metadata + ranked playable stream URLs.
 class ResolvedRoom {
@@ -88,6 +91,8 @@ Future<ResolvedRoom> resolveRoom(
       '  cargo build -p lixh-stream-resolver --bin lixh_resolve --release \\\n'
       '    --manifest-path src-tauri/lixh-stream-stack/Cargo.toml\n'
       'macOS 安装包需把二进制打进 App（CI 已自动 bundle）。\n'
+      'Android 需先交叉编译并打进 jniLibs:\n'
+      '  bash flutter_app/android/bundle_lixh_resolve.sh\n'
       '也可设置环境变量 LIXH_RESOLVE_EXE 指向该文件。',
     );
   }
@@ -97,15 +102,25 @@ Future<ResolvedRoom> resolveRoom(
     args.addAll(['--cookies', cookies]);
   }
 
+  final env = Map<String, String>.from(Platform.environment);
+  if (Platform.isAndroid) {
+    // Ensure the forked helper can dlopen siblings in nativeLibraryDir.
+    env['LD_LIBRARY_PATH'] = p.dirname(exe);
+  }
+
   final result = await Process.run(
     exe,
     args,
+    environment: env,
     stdoutEncoding: utf8,
     stderrEncoding: utf8,
   );
   if (result.exitCode != 0) {
-    final err = (result.stderr as String).trim();
-    throw StateError(err.isEmpty ? 'lixh_resolve exit ${result.exitCode}' : err);
+    var err = (result.stderr as String).trim();
+    if (err.startsWith('lixh_resolve:')) {
+      err = err.substring('lixh_resolve:'.length).trim();
+    }
+    throw StateError(err.isEmpty ? '房间解析失败 (exit ${result.exitCode})' : err);
   }
 
   final raw = (result.stdout as String).trim();
@@ -191,9 +206,21 @@ Future<String?> findResolveExe() async {
     return fromEnv;
   }
 
+  // Android: packaged as jniLibs arm64-v8a/liblixh_resolve.so (executable ELF).
+  if (Platform.isAndroid) {
+    try {
+      final path = await _nativePaths.invokeMethod<String>('lixhResolvePath');
+      if (path != null && path.isNotEmpty && await File(path).exists()) {
+        return path;
+      }
+    } on PlatformException {
+      // Fall through to filesystem probes below.
+    }
+  }
+
   final names = Platform.isWindows
       ? const ['lixh_resolve.exe']
-      : const ['lixh_resolve'];
+      : const ['lixh_resolve', 'liblixh_resolve.so'];
 
   final exePath = Platform.resolvedExecutable;
   final exeDir = File(exePath).parent.path;

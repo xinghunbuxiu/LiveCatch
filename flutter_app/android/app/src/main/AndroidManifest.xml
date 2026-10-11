@@ -4,6 +4,7 @@
         android:label="livecatch_app"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:extractNativeLibs="true"
         android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"

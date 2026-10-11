@@ -69,6 +69,9 @@ jobs:
           if (-not (Test-Path (Join-Path $src "livecatch_app.exe"))) {
             throw "Windows release output missing: $src\livecatch_app.exe"
           }
+          # App-local VC++ CRT so clean machines do not need a separate redistributable install.
+          & "flutter_app/windows/installer/bundle-msvc-crt.ps1" -DestDir (Resolve-Path $src).Path
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $verLine = (Get-Content flutter_app/pubspec.yaml | Select-String '^version:').Line
           $version = ($verLine -split ':',2)[1].Trim().Split('+')[0]
           $outDir = "flutter_app/build/windows/installer"

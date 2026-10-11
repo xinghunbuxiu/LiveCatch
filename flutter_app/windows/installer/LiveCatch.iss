@@ -1,5 +1,6 @@
 ; LiveCatch Flutter Windows installer (Inno Setup 6)
 ; Packages flutter_app/build/windows/x64/runner/Release
+; Expect MSVC VC143 CRT DLLs already copied into SourceDir (see bundle-msvc-crt.ps1).
 
 #ifndef MyAppVersion
   #define MyAppVersion "0.48.0"
