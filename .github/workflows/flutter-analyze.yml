@@ -5,7 +5,7 @@ on:
   workflow_call:
 
 concurrency:
-  group: livecatch-flutter-analyze-${{ github.ref }}
+  group: livecatch-flutter-analyze-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:

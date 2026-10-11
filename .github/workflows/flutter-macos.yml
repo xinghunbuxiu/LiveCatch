@@ -5,7 +5,7 @@ on:
   workflow_call:
 
 concurrency:
-  group: livecatch-flutter-macos-${{ github.ref }}
+  group: livecatch-flutter-macos-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:

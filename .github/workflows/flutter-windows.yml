@@ -5,7 +5,9 @@ on:
   workflow_call:
 
 concurrency:
-  group: livecatch-flutter-windows-${{ github.ref }}
+  # Include workflow name so reusable calls from Verify Flutter All
+  # do not cancel a standalone Flutter Windows dispatch (and vice versa).
+  group: livecatch-flutter-windows-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
