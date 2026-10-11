@@ -1756,7 +1756,7 @@
       "degree": 21
     },
     {
-      "id": "flutter_app_windows_runner_win32_window_win32window",
+      "id": "packages_lixh_player_example_windows_runner_win32_window_win32window",
       "label": "Win32Window",
       "degree": 20
     },
@@ -1766,7 +1766,7 @@
       "degree": 20
     },
     {
-      "id": "packages_lixh_player_example_windows_runner_win32_window_win32window",
+      "id": "flutter_app_windows_runner_win32_window_win32window",
       "label": "Win32Window",
       "degree": 20
     }
@@ -1787,8 +1787,8 @@
       "source": "wWinMain()",
       "target": "CreateAndAttachConsole()",
       "source_files": [
-        "flutter_app/windows/runner/main.cpp",
-        "flutter_app/windows/runner/utils.cpp"
+        "packages/lixh_player/example/windows/runner/main.cpp",
+        "packages/lixh_player/example/windows/runner/utils.cpp"
       ],
       "confidence": "INFERRED",
       "relation": "calls",
@@ -1798,8 +1798,8 @@
       "source": "wWinMain()",
       "target": "CreateAndAttachConsole()",
       "source_files": [
-        "packages/lixh_player/example/windows/runner/main.cpp",
-        "packages/lixh_player/example/windows/runner/utils.cpp"
+        "flutter_app/windows/runner/main.cpp",
+        "flutter_app/windows/runner/utils.cpp"
       ],
       "confidence": "INFERRED",
       "relation": "calls",
