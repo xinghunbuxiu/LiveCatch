@@ -1,4 +1,4 @@
-name: Verify LiveCatch Tauri Platform
+name: Verify Stream Stack Platform
 
 on:
   workflow_call:
@@ -17,29 +17,24 @@ jobs:
   verify:
     name: ${{ inputs.platform }}
     runs-on: ${{ inputs.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
-      # Change this single version when intentionally upgrading FFmpeg.
-      # The fetch scripts derive the immutable release tag from this version.
       LIXH_FFMPEG_VERSION: "9.0.2"
       LIXH_FFMPEG_REPO: "xinghunbuxiu/LiveCatchFfmpeg"
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
       - name: Install Protoc
         uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
       - uses: dtolnay/rust-toolchain@stable
-      - run: npm install
-      - name: Prepare platform FFmpeg runtime and SDK
+      - name: Prepare FFmpeg SDK
         shell: bash
         run: |
           set -euo pipefail
           bash src-tauri/lixh-stream-stack/scripts/prepare-runtime.sh "${{ inputs.platform }}"
-          bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh "${{ inputs.platform }}" "src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}"
+          bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh "${{ inputs.platform }}" \
+            "src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}"
           if [ "${{ runner.os }}" = "Windows" ]; then
             echo "LIXH_FFMPEG_DIR=${{ github.workspace }}\\src-tauri\\lixh-stream-stack\\sdk\\${{ inputs.platform }}" >> "$GITHUB_ENV"
           else
@@ -48,10 +43,6 @@ jobs:
               echo "DYLD_LIBRARY_PATH=$PWD/src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}/lib:\${DYLD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
             fi
           fi
-          rm -rf src-tauri/resources/ffmpeg
-          mkdir -p src-tauri/resources/ffmpeg
-          cp -R "src-tauri/lixh-stream-stack/runtime/${{ inputs.platform }}/." src-tauri/resources/ffmpeg/
-          # Fail fast if the SDK layout is incomplete (avoids opaque cargo exit 101).
           test -f "src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}/include/libavcodec/avcodec.h"
           if [[ "${{ inputs.platform }}" == macos-* ]]; then
             ls "src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}/lib"/libavutil*.dylib
@@ -59,31 +50,24 @@ jobs:
             ls "src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}/lib"/avutil*.def \
               "src-tauri/lixh-stream-stack/sdk/${{ inputs.platform }}/lib"/libavutil.dll.a
           fi
-      # Legacy desktop path: compile-check only. Installable packages come from Flutter CI.
-      - name: cargo check (stream-stack)
+      - name: cargo check
         env:
           RUST_BACKTRACE: "1"
         shell: bash
         run: |
           set -euo pipefail
           cargo check --manifest-path src-tauri/lixh-stream-stack/Cargo.toml 2>&1 | tee "${RUNNER_TEMP}/cargo-stack.log"
-      - name: cargo check (src-tauri)
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo check --manifest-path src-tauri/Cargo.toml 2>&1 | tee "${RUNNER_TEMP}/cargo-tauri.log"
-      - name: cargo test (stream-stack)
+      - name: cargo test
         shell: bash
         run: |
           set -euo pipefail
           cargo test --manifest-path src-tauri/lixh-stream-stack/Cargo.toml 2>&1 | tee "${RUNNER_TEMP}/cargo-test.log"
-      - run: npm run build
       - name: Surface cargo errors
         if: failure()
         shell: bash
         run: |
           set -uo pipefail
-          for f in cargo-stack.log cargo-tauri.log cargo-test.log; do
+          for f in cargo-stack.log cargo-test.log; do
             log="${RUNNER_TEMP}/${f}"
             [[ -f "$log" ]] || continue
             echo "===== ${f} (tail) ====="

@@ -1,15 +1,26 @@
-name: Verify LiveCatch All Platforms
+name: Verify Stream Stack
+
 on:
   workflow_dispatch:
   push:
     branches: [main]
+    paths:
+      - "src-tauri/lixh-stream-stack/**"
+      - ".github/workflows/verify-stream-stack.yml"
+      - ".github/workflows/verify-stream-stack-platform.yml"
+  pull_request:
+    paths:
+      - "src-tauri/lixh-stream-stack/**"
+      - ".github/workflows/verify-stream-stack.yml"
+      - ".github/workflows/verify-stream-stack-platform.yml"
 
 concurrency:
-  group: livecatch-tauri-verify-${{ github.ref }}
+  group: livecatch-stream-stack-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
+
 jobs:
   verify:
     strategy:
@@ -23,7 +34,7 @@ jobs:
             runner: macos-15
           - platform: macos-x64
             runner: macos-15-intel
-    uses: ./.github/workflows/verify-tauri-platform.yml
+    uses: ./.github/workflows/verify-stream-stack-platform.yml
     with:
       platform: ${{ matrix.platform }}
       runner: ${{ matrix.runner }}

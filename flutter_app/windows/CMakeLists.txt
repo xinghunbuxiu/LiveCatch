@@ -110,8 +110,6 @@ install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
 # Bundle lixh_resolve next to the app (room URL → stream candidates for ABR).
 set(_lixh_resolve "")
 foreach(_cand
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../src-tauri/target/release/lixh_resolve.exe"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../src-tauri/target/debug/lixh_resolve.exe"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../src-tauri/lixh-stream-stack/target/release/lixh_resolve.exe"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../src-tauri/lixh-stream-stack/target/debug/lixh_resolve.exe")
   if(EXISTS "${_cand}")

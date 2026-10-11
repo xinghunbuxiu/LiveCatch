@@ -73,7 +73,7 @@ bool looksLikeDirectStream(String input) {
   return u.contains('.m3u8') || u.contains('.flv') || u.contains('.mp4');
 }
 
-/// Resolve a live room page URL via `lixh_resolve` (same crate as Tauri).
+/// Resolve a live room page URL via stream-stack `lixh_resolve`.
 Future<ResolvedRoom> resolveRoom(String roomUrl, {String? cookies}) async {
   final exe = await findResolveExe();
   if (exe == null) {
@@ -139,7 +139,7 @@ Future<ResolvedRoom> resolveRoom(String roomUrl, {String? cookies}) async {
   );
 }
 
-/// Mirror Tauri `start_live_worker` candidate filtering (top 3, prefer FLV).
+/// Candidate filtering for ABR (top 3, prefer FLV).
 List<StreamPick> _selectStreams(List<dynamic> raw) {
   var list = <StreamPick>[];
   for (final item in raw) {
@@ -200,7 +200,14 @@ Future<String?> findResolveExe() async {
     for (var i = 0; i < 8; i++) {
       for (final profile in const ['debug', 'release']) {
         for (final name in names) {
-          final a = p.join(dir.path, 'src-tauri', 'target', profile, name);
+          final a = p.join(
+            dir.path,
+            'src-tauri',
+            'lixh-stream-stack',
+            'target',
+            profile,
+            name,
+          );
           if (await File(a).exists()) return a;
           final b = p.join(dir.path, 'target', profile, name);
           if (await File(b).exists()) return b;

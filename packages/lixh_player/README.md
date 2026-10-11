@@ -19,7 +19,7 @@ Audio-first: `setVideoEnabled(false)` skips present so demux stays on audio.
 
 ## FFmpeg layout
 
-SDK/runtime zips live under `src-tauri/lixh-stream-stack/` (shared with Tauri):
+SDK/runtime zips live under `src-tauri/lixh-stream-stack/`:
 
 ```bash
 # Git Bash

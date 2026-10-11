@@ -1,6 +1,6 @@
 # LiveCatch
 
-Low-latency live catcher. **Flutter-first** multiplatform; Tauri remains for desktop macOS CI until Flutter mac playback lands.
+Low-latency live catcher. **Flutter** multiplatform app (`flutter_app/`).
 
 ## Layout
 
@@ -8,12 +8,11 @@ Low-latency live catcher. **Flutter-first** multiplatform; Tauri remains for des
 liveCatch/
   flutter_app/                 # Main app: windows / macos / ios / android
   packages/lixh_player/        # Plugin: windows + macos + ios native; android audio-first
-  src-tauri/                   # Desktop legacy + shared stream stack
-    lixh-stream-stack/
-      sdk/ runtime/            # Per-platform FFmpeg (fetch scripts)
-      lixh-player-core/        # Shared C player core
-      scripts/fetch-ffmpeg-*.sh
-  .github/workflows/           # Tauri verify, FFmpeg consume, Flutter analyze
+  src-tauri/lixh-stream-stack/ # Shared FFmpeg + player-core + room resolver (not a Tauri app)
+    sdk/ runtime/              # Per-platform FFmpeg (fetch scripts)
+    lixh-player-core/          # Shared C player core
+    scripts/fetch-ffmpeg-*.sh
+  .github/workflows/           # Flutter, FFmpeg consume, stream-stack cargo verify
 ```
 
 ## FFmpeg
@@ -43,8 +42,6 @@ cargo build -p lixh-stream-resolver --bin lixh_resolve \
 cd flutter_app && flutter pub get && flutter run -d windows
 # macOS / iOS / Android: fetch that platform's sdk+runtime, then flutter run -d <device>
 ```
-
-Tauri desktop: see `package.json` / `run-tauri-dev.bat`.
 
 ## Roadmap (short)
 

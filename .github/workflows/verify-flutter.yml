@@ -63,6 +63,11 @@ jobs:
         with:
           channel: stable
           cache: true
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Fetch FFmpeg windows-x64
         shell: bash
         run: |
@@ -71,6 +76,12 @@ jobs:
           bash src-tauri/lixh-stream-stack/scripts/prepare-runtime.sh windows-x64
           bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh windows-x64 \
             "src-tauri/lixh-stream-stack/sdk/windows-x64"
+      - name: Build lixh_resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo build -p lixh-stream-resolver --bin lixh_resolve --release \
+            --manifest-path src-tauri/lixh-stream-stack/Cargo.toml
       - name: Pub get
         working-directory: flutter_app
         run: flutter pub get
