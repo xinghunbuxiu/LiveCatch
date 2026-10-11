@@ -87,6 +87,20 @@ class _PlayerPageState extends State<PlayerPage>
   bool _abrBusy = false;
   String _abrLabel = '';
   AppSettings _settings = AppSettings();
+  final List<String> _logs = <String>[];
+  String? _lastLoggedNativeErr;
+
+  void _appendLog(String message) {
+    final t = DateTime.now();
+    final stamp =
+        '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}:${t.second.toString().padLeft(2, '0')}';
+    final line = '[$stamp] $message';
+    debugPrint('[LiveCatch] $message');
+    _logs.add(line);
+    if (_logs.length > 400) {
+      _logs.removeRange(0, _logs.length - 400);
+    }
+  }
 
   @override
   void initState() {
@@ -99,14 +113,18 @@ class _PlayerPageState extends State<PlayerPage>
   }
 
   Future<void> _openSettings() async {
-    final next = await showSettingsSheet(context, initial: _settings);
+    final next = await showSettingsSheet(
+      context,
+      initial: _settings,
+      logs: List<String>.from(_logs),
+    );
     if (next == null || !mounted) return;
     setState(() => _settings = next);
     final (t, m) = next.latency.latencyMs;
     try {
       await _player.setLatency(targetMs: t, maxMs: m);
     } catch (e) {
-      debugPrint('[LiveCatch] setLatency: $e');
+      _appendLog('setLatency: $e');
     }
   }
 
@@ -123,6 +141,7 @@ class _PlayerPageState extends State<PlayerPage>
         _texture = info;
         _status = '就绪';
       });
+      _appendLog('就绪');
       _statsTimer = Timer.periodic(const Duration(milliseconds: 500), (_) async {
         if (!_playing || _busy) return;
         try {
@@ -207,14 +226,14 @@ class _PlayerPageState extends State<PlayerPage>
             final hw = s.decodeHw > 0 ? 'HW' : (s.decodeHw == 0 ? 'SW' : '—');
             final abr = _abrLabel.isEmpty ? '' : ' · $_abrLabel';
             _status = (_videoOn ? '画面 · $hw' : '听播 · $hw') + abr;
-            if (s.lastError.isNotEmpty) {
-              _status = s.lastError;
-              debugPrint('[LiveCatch] native error: ${s.lastError}');
+            if (s.lastError.isNotEmpty && s.lastError != _lastLoggedNativeErr) {
+              _lastLoggedNativeErr = s.lastError;
+              _appendLog('native: ${s.lastError}');
             }
           });
-          if (_stallTicks >= 4) {
-            debugPrint(
-              '[LiveCatch] stall tick=$_stallTicks a=${s.audioFrames} '
+          if (_stallTicks == 4 || (_stallTicks > 0 && _stallTicks % 10 == 0)) {
+            _appendLog(
+              'stall tick=$_stallTicks a=${s.audioFrames} '
               'p=${s.presentOk} lag=${s.lagMs} q=${s.audioQueueMs} '
               'br=$kbps drop=${s.droppedFrames}',
             );
@@ -241,18 +260,21 @@ class _PlayerPageState extends State<PlayerPage>
                 _roomInput != null &&
                 _reconnects < 3) {
               _reconnects++;
-              setState(() => _status = 'ABR 耗尽，重解析 #$_reconnects…');
+              _appendLog('ABR 耗尽，重解析 #$_reconnects');
+              setState(() => _status = '重解析 #$_reconnects…');
               // ignore: unawaited_futures
               _start();
             }
           }
         } catch (e) {
-          debugPrint('[LiveCatch] getStats error: $e');
+          _appendLog('getStats: $e');
         }
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _status = '监听失败: ${formatResolveError(e)}');
+      final msg = formatResolveError(e);
+      _appendLog('监听失败: $msg');
+      setState(() => _status = '监听失败');
     }
   }
 
@@ -264,8 +286,9 @@ class _PlayerPageState extends State<PlayerPage>
     _abrBusy = true;
     final pick = abr.candidates[index];
     final keepVideo = _videoOn;
-    debugPrint('[LiveCatch] ABR switch ->[$index] ${pick.protocol} '
-        '${pick.bitrate}bps ($reason)');
+    _appendLog(
+      'ABR switch ->[$index] ${pick.protocol} ${pick.bitrate}bps ($reason)',
+    );
     if (mounted) {
       setState(() {
         _status = 'ABR 切换 ${pick.protocol}…';
@@ -305,14 +328,17 @@ class _PlayerPageState extends State<PlayerPage>
           _reconnects < 3) {
         _reconnects++;
         _abrBusy = false;
+        _appendLog('ABR 失败，重解析: ${formatResolveError(e)}');
         if (mounted) setState(() => _status = 'ABR 失败，重解析…');
         await _start();
         return;
       }
+      final msg = formatResolveError(e);
+      _appendLog('ABR 失败: $msg');
       if (mounted) {
         setState(() {
           _playing = false;
-          _status = 'ABR 失败: ${formatResolveError(e)}';
+          _status = 'ABR 失败';
         });
       }
     } finally {
@@ -337,6 +363,7 @@ class _PlayerPageState extends State<PlayerPage>
       _videoW = 0;
       _videoH = 0;
       _abrLabel = '';
+      _lastLoggedNativeErr = null;
     });
 
     try {
@@ -356,9 +383,14 @@ class _PlayerPageState extends State<PlayerPage>
       if (!looksLikeDirectStream(input)) {
         _roomInput = input;
         setState(() => _status = '解析直播间…');
+        _appendLog('解析: $input');
         final room = await resolveRoom(
           input,
           preferFlv: _settings.preferFlv,
+        );
+        _appendLog(
+          '解析成功 ${room.platform} live=${room.isLive} '
+          'streams=${room.candidates.length}',
         );
         if (!mounted) return;
         headers = room.ffmpegHeaders;
@@ -427,10 +459,12 @@ class _PlayerPageState extends State<PlayerPage>
       throw lastErr ?? StateError('没有可用的播放源');
     } catch (e) {
       if (!mounted) return;
+      final msg = formatResolveError(e);
+      _appendLog('失败: $msg');
       setState(() {
         _busy = false;
         _playing = false;
-        _status = '失败: ${formatResolveError(e)}';
+        _status = '失败';
       });
     }
   }
@@ -507,7 +541,7 @@ class _PlayerPageState extends State<PlayerPage>
                 children: [
                   _Header(
                     status: _status,
-                    title: _playing ? _title : 'LiveCatch',
+                    title: _playing ? _title : '',
                     platform: _platform,
                     bitrateKbps: _bitrateKbps,
                     lagMs: _lagMs,
@@ -579,157 +613,82 @@ class _Header extends StatelessWidget {
   final bool playing;
   final VoidCallback onSettings;
 
+  String get _speed {
+    if (bitrateKbps <= 0) return '—';
+    if (bitrateKbps >= 1000) {
+      return '${(bitrateKbps / 1000).toStringAsFixed(1)}Mbps';
+    }
+    return '${bitrateKbps}kbps';
+  }
+
+  String get _logLine {
+    final parts = <String>[
+      if (platform.isNotEmpty) platform,
+      if (title.isNotEmpty && title != 'LiveCatch') title,
+      if (status.isNotEmpty) status,
+      _speed,
+      '${lagMs.clamp(0, 99999)}ms',
+      '缓${cacheMs.clamp(0, 99999)}ms',
+      if (resolution != '—') resolution,
+      if (dropped > 0) '丢$dropped',
+    ];
+    return parts.join(' · ');
+  }
+
   @override
   Widget build(BuildContext context) {
     final foam = Theme.of(context).colorScheme.onSurface;
     final signal = Theme.of(context).colorScheme.primary;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    'LiveCatch',
-                    style: TextStyle(
-                      fontFamily: 'Bahnschrift',
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.4,
-                      color: foam,
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Container(
-                    width: 7,
-                    height: 7,
-                    decoration: BoxDecoration(
-                      color: playing ? signal : foam.withValues(alpha: 0.25),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: '配置',
-                    onPressed: onSettings,
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                    icon: Icon(
-                      Icons.tune,
-                      size: 20,
-                      color: foam.withValues(alpha: 0.7),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                [
-                  if (platform.isNotEmpty) platform,
-                  if (title.isNotEmpty && title != 'LiveCatch') title,
-                  status,
-                ].where((e) => e.trim().isNotEmpty).join(' · '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: foam.withValues(alpha: 0.55),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 12),
-        _HudCard(
-          bitrateKbps: bitrateKbps,
-          lagMs: lagMs,
-          cacheMs: cacheMs,
-          resolution: resolution,
-          dropped: dropped,
-        ),
-      ],
-    );
-  }
-}
-
-class _HudCard extends StatelessWidget {
-  const _HudCard({
-    required this.bitrateKbps,
-    required this.lagMs,
-    required this.cacheMs,
-    required this.resolution,
-    required this.dropped,
-  });
-
-  final int bitrateKbps;
-  final int lagMs;
-  final int cacheMs;
-  final String resolution;
-  final int dropped;
-
-  String get _speed {
-    if (bitrateKbps <= 0) return '—';
-    if (bitrateKbps >= 1000) {
-      return '${(bitrateKbps / 1000).toStringAsFixed(1)} Mbps';
-    }
-    return '$bitrateKbps kbps';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final foam = Theme.of(context).colorScheme.onSurface;
-    return Container(
-      constraints: const BoxConstraints(minWidth: 168),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.35),
-        border: Border.all(color: foam.withValues(alpha: 0.12)),
-      ),
-      child: DefaultTextStyle(
-        style: TextStyle(
-          fontSize: 11,
-          height: 1.45,
-          fontFeatures: const [FontFeature.tabularFigures()],
-          color: foam.withValues(alpha: 0.82),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
+        Row(
           children: [
-            _HudLine(label: '网速', value: _speed),
-            _HudLine(label: '延时', value: '${lagMs.clamp(0, 99999)} ms'),
-            _HudLine(label: '缓存', value: '${cacheMs.clamp(0, 99999)} ms'),
-            _HudLine(label: '画质', value: resolution),
-            if (dropped > 0) _HudLine(label: '丢帧', value: '$dropped'),
+            Text(
+              'LiveCatch',
+              style: TextStyle(
+                fontFamily: 'Bahnschrift',
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.4,
+                color: foam,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              width: 7,
+              height: 7,
+              decoration: BoxDecoration(
+                color: playing ? signal : foam.withValues(alpha: 0.25),
+                shape: BoxShape.circle,
+              ),
+            ),
+            const Spacer(),
+            IconButton(
+              tooltip: '配置',
+              onPressed: onSettings,
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              icon: Icon(
+                Icons.tune,
+                size: 20,
+                color: foam.withValues(alpha: 0.7),
+              ),
+            ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _HudLine extends StatelessWidget {
-  const _HudLine({required this.label, required this.value});
-
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
+        const SizedBox(height: 4),
         Text(
-          label,
+          _logLine,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.42),
+            fontSize: 12,
+            fontFeatures: const [FontFeature.tabularFigures()],
+            color: foam.withValues(alpha: 0.55),
           ),
         ),
-        const SizedBox(width: 10),
-        Text(value),
       ],
     );
   }

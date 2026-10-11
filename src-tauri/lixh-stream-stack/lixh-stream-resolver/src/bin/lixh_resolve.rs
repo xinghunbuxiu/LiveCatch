@@ -18,13 +18,21 @@ async fn main() -> ExitCode {
     match run().await {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            // Prefer the leaf message for Flutter UI (avoid "resolve: extract: …" chains).
-            let leaf = e
-                .chain()
-                .last()
-                .map(|c| c.to_string())
-                .unwrap_or_else(|| e.to_string());
-            let _ = writeln!(io::stderr(), "lixh_resolve: {leaf}");
+            // Full chain for transport errors; otherwise leaf for short UI tips.
+            let full = format!("{e:#}");
+            let msg = if full.contains("error sending request")
+                || full.contains("网络请求失败")
+                || full.contains("certificate")
+                || full.contains("dns error")
+            {
+                full
+            } else {
+                e.chain()
+                    .last()
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| e.to_string())
+            };
+            let _ = writeln!(io::stderr(), "lixh_resolve: {msg}");
             ExitCode::from(1)
         }
     }

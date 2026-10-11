@@ -18,12 +18,10 @@ tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 
 # Android runs lixh_resolve as a forked Process (no JVM). platforms-parser's
 # rustls-platform-verifier needs Android Context — use bundled Mozilla roots.
-# Feature set mirrors rust-srec/strev (gzip+deflate, no brotli) so Accept-Encoding matches.
 [target.'cfg(target_os = "android")'.dependencies]
 reqwest = { version = "0.12", default-features = false, features = [
   "json",
-  "stream",
-  "rustls-tls-webpki-roots-no-provider",
+  "rustls-tls-webpki-roots",
   "gzip",
   "deflate",
 ] }

@@ -157,9 +157,7 @@ fn is_retryable_extract(err: &anyhow::Error) -> bool {
 fn map_resolve_error(err: anyhow::Error) -> anyhow::Error {
     let full = format!("{err:#}");
     if full.contains("服务繁忙") {
-        return anyhow!(
-            "抖音接口繁忙（请确认直播间正在开播后稍后重试）"
-        );
+        return anyhow!("抖音接口繁忙（请确认直播间正在开播后稍后重试）");
     }
     if full.contains("StreamerNotFound") || full.contains("streamer not found") {
         return anyhow!("未找到该直播间，请检查链接");
@@ -173,12 +171,18 @@ fn map_resolve_error(err: anyhow::Error) -> anyhow::Error {
     if full.contains("Failed to extract ttwid") {
         return anyhow!("获取抖音凭证失败，请检查网络后重试");
     }
+    // Keep the cause chain for transport failures (cert/DNS/reset), not just the leaf.
+    if full.contains("error sending request")
+        || full.contains("connection")
+        || full.contains("timed out")
+        || full.contains("dns error")
+        || full.contains("certificate")
+        || full.contains("tls")
+    {
+        return anyhow!("网络请求失败: {full}");
+    }
     // Drop leading "resolve:" / "extract stream metadata:" noise for UI.
-    let leaf = full
-        .rsplit(": ")
-        .next()
-        .unwrap_or(&full)
-        .trim();
+    let leaf = full.rsplit(": ").next().unwrap_or(&full).trim();
     if leaf != full {
         anyhow!("{leaf}")
     } else {

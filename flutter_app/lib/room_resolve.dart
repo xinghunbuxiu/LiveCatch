@@ -97,6 +97,16 @@ String formatResolveError(Object error) {
   if (s.contains('服务繁忙') || s.contains('繁忙')) {
     return '抖音接口繁忙，请确认直播间在播后稍后重试';
   }
+  if (s.contains('error sending request') ||
+      s.contains('网络请求失败') ||
+      s.contains('certificate') ||
+      s.contains('dns error')) {
+    // Keep cause text — useful when Android TLS/network diverges from desktop.
+    final compact = s
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .replaceAll('error sending request for url', '请求失败');
+    return compact.length > 180 ? '${compact.substring(0, 180)}…' : compact;
+  }
   if (s.contains('找不到') && s.contains('lixh_resolve')) {
     return s;
   }
