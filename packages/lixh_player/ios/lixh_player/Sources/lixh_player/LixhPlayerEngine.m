@@ -154,7 +154,7 @@ static void OnEvent(void *opaque, int type, int code, const char *message) {
   if (!atomic_load(&_videoEnabled)) return 1;
 
   NSTimeInterval now = CFAbsoluteTimeGetCurrent();
-  if (_lastPresent != 0 && (now - _lastPresent) * 1000.0 < 15.0) return 1;
+  if (_lastPresent != 0 && (now - _lastPresent) * 1000.0 < 8.0) return 1;
 
   CVPixelBufferRef pix = NULL;
   if (kind == LIXH_VIDEO_VIDEOTOOLBOX) {
@@ -186,7 +186,7 @@ static void OnEvent(void *opaque, int type, int code, const char *message) {
 - (void)notifyFrame {
   if (self.textureId < 0 || !self.textures) return;
   NSTimeInterval now = CFAbsoluteTimeGetCurrent();
-  if (_lastNotify != 0 && (now - _lastNotify) * 1000.0 < 12.0) return;
+  if (_lastNotify != 0 && (now - _lastNotify) * 1000.0 < 8.0) return;
   _lastNotify = now;
   [self.textures textureFrameAvailable:self.textureId];
 }

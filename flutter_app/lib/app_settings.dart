@@ -28,7 +28,8 @@ extension LatencyProfileX on LatencyProfile {
   /// Target / max live latency (ms) for native player when wired.
   (int targetMs, int maxMs) get latencyMs => switch (this) {
         LatencyProfile.smooth => (280, 900),
-        LatencyProfile.balanced => (180, 600),
+        LatencyProfile.balanced => (160, 520),
+        // Matches prior macOS engine default (tight live window).
         LatencyProfile.low => (120, 450),
       };
 }
@@ -38,7 +39,8 @@ class AppSettings {
     this.startWithVideo = false,
     this.abrEnabled = true,
     this.preferFlv = true,
-    this.latency = LatencyProfile.balanced,
+    // Default to former macOS live window so fresh installs stay snappy.
+    this.latency = LatencyProfile.low,
   });
 
   /// Open with video sink on (otherwise audio-first listen mode).

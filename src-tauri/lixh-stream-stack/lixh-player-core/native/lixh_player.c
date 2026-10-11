@@ -552,6 +552,9 @@ void lixh_player_set_video_sink(void *opaque, int enabled) {
     /* Never touch AVCodecContext from the UI thread — play loop will flush. */
     if (on && !prev) {
         atomic_store_explicit(&p->flush_video_req, 1, memory_order_release);
+        /* Listen-only audio may have anchored first_pts; clear so the first
+           delivered video frame re-bases live chase instead of mass-dropping. */
+        atomic_store_explicit(&p->first_pts_ms, AV_NOPTS_VALUE, memory_order_release);
     }
 }
 
