@@ -22,7 +22,7 @@ Per-platform workflows (Actions → Run workflow) for targeted retries:
 | Workflow | What |
 |----------|------|
 | `Flutter Analyze` / `Flutter Windows` / `Android` / `macOS` / `iOS` | single platform |
-| `Verify Flutter All` | all Flutter jobs |
+| `Verify Flutter All` | all Flutter jobs (Windows artifact = Inno Setup `.exe`) |
 | `Stream Stack Windows` / `macOS arm64` / `macOS x64` | single platform cargo |
 | `Verify Stream Stack All` | all stream-stack jobs |
 

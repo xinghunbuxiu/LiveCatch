@@ -57,20 +57,33 @@ jobs:
       - name: Build Windows release
         working-directory: flutter_app
         run: flutter build windows --release
-      - name: Package Windows release zip
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup -y --no-progress
+      - name: Build Windows installer
         shell: pwsh
         run: |
           $src = "flutter_app/build/windows/x64/runner/Release"
-          if (-not (Test-Path $src)) { throw "Windows release output missing: $src" }
-          $out = "livecatch-flutter-windows-x64.zip"
-          if (Test-Path $out) { Remove-Item $out -Force }
-          Compress-Archive -Path (Join-Path $src '*') -DestinationPath $out -Force
-          Get-Item $out | Format-List FullName, Length
-      - name: Upload Windows zip
+          if (-not (Test-Path (Join-Path $src "livecatch_app.exe"))) {
+            throw "Windows release output missing: $src\livecatch_app.exe"
+          }
+          $verLine = (Get-Content flutter_app/pubspec.yaml | Select-String '^version:').Line
+          $version = ($verLine -split ':',2)[1].Trim().Split('+')[0]
+          $outDir = "flutter_app/build/windows/installer"
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { $iscc = "C:\Program Files\Inno Setup 6\ISCC.exe" }
+          & $iscc "flutter_app/windows/installer/LiveCatch.iss" `
+            "/DMyAppVersion=$version" `
+            "/DSourceDir=$((Resolve-Path $src).Path)" `
+            "/DOutputDir=$((Resolve-Path $outDir).Path)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-ChildItem $outDir -Filter *-setup.exe | Format-Table Name, Length
+      - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: livecatch-flutter-windows-x64
-          path: livecatch-flutter-windows-x64.zip
+          name: livecatch-flutter-windows-x64-setup
+          path: flutter_app/build/windows/installer/*-setup.exe
           if-no-files-found: error
       - name: Surface resolve errors
         if: failure()
