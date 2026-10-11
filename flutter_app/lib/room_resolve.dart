@@ -77,11 +77,14 @@ bool looksLikeDirectStream(String input) {
 Future<ResolvedRoom> resolveRoom(String roomUrl, {String? cookies}) async {
   final exe = await findResolveExe();
   if (exe == null) {
+    final bin = Platform.isWindows ? 'lixh_resolve.exe' : 'lixh_resolve';
     throw StateError(
-      '找不到 lixh_resolve.exe。请先在仓库执行:\n'
-      '  cargo build -p lixh-stream-resolver --bin lixh_resolve \\\n'
+      '找不到 $bin（房间解析器）。\n'
+      '开发时请先构建并保证可执行文件在 PATH/仓库 target 下:\n'
+      '  cargo build -p lixh-stream-resolver --bin lixh_resolve --release \\\n'
       '    --manifest-path src-tauri/lixh-stream-stack/Cargo.toml\n'
-      '或设置环境变量 LIXH_RESOLVE_EXE。',
+      'macOS 安装包需把二进制打进 App（CI 已自动 bundle）。\n'
+      '也可设置环境变量 LIXH_RESOLVE_EXE 指向该文件。',
     );
   }
 
@@ -185,19 +188,34 @@ Future<String?> findResolveExe() async {
       ? const ['lixh_resolve.exe']
       : const ['lixh_resolve'];
 
-  final exeDir = File(Platform.resolvedExecutable).parent.path;
-  for (final name in names) {
-    final candidate = p.join(exeDir, name);
+  final exePath = Platform.resolvedExecutable;
+  final exeDir = File(exePath).parent.path;
+  final candidates = <String>[
+    for (final name in names) p.join(exeDir, name),
+  ];
+
+  // macOS .app: Contents/MacOS/<bin> (same dir as main executable).
+  if (Platform.isMacOS) {
+    final contents = Directory(exeDir).parent.path; // …/Contents
+    for (final name in names) {
+      candidates.add(p.join(contents, 'MacOS', name));
+      candidates.add(p.join(contents, 'Resources', name));
+      candidates.add(p.join(contents, 'Helpers', name));
+    }
+  }
+
+  for (final candidate in candidates) {
     if (await File(candidate).exists()) return candidate;
   }
 
   final roots = <String>{
     Directory.current.path,
     exeDir,
+    File(exePath).parent.parent.parent.path, // walk up from .app/Contents/MacOS
   };
   for (final root in roots) {
     var dir = Directory(root);
-    for (var i = 0; i < 8; i++) {
+    for (var i = 0; i < 10; i++) {
       for (final profile in const ['debug', 'release']) {
         for (final name in names) {
           final a = p.join(

@@ -250,7 +250,8 @@ static void OnEvent(void *opaque, int type, int code, const char *message) {
                                  userInfo:@{NSLocalizedDescriptionKey : (self.lastError ?: @"")}];
     return NO;
   }
-  lixh_player_set_latency(player, 200, 700);
+  // Tighter live window on macOS (was 200/700); reduces glass-to-glass lag.
+  lixh_player_set_latency(player, 120, 450);
   lixh_player_set_video_sink(player, atomic_load(&_videoEnabled) ? 1 : 0);
   @synchronized(self) { _player = player; }
   NSLog(@"[lixh] open url=%lu chars", (unsigned long)url.length);
