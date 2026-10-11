@@ -73,7 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           flutter build macos --release 2>&1 | tee "${RUNNER_TEMP}/macos-build.log"
-      - name: Package macOS .app zip
+      - name: Package macOS DMG installer
         run: |
           set -euo pipefail
           APP="$(find flutter_app/build/macos -type d -name '*.app' -path '*/Build/Products/Release/*' | head -n 1)"
@@ -82,15 +82,30 @@ jobs:
             find flutter_app/build/macos -maxdepth 6 -type d -name '*.app' 2>/dev/null | head -n 20 || true
             exit 1
           fi
-          OUT="livecatch-flutter-${PLAT}.zip"
-          ditto -c -k --keepParent "${APP}" "$OUT"
-          ls -lah "$OUT"
-          echo "MAC_ARTIFACT=$OUT" >> "$GITHUB_ENV"
-      - name: Upload macOS zip
+          VERSION="$(grep -E '^version:' flutter_app/pubspec.yaml | head -n1 | awk '{print $2}' | cut -d+ -f1)"
+          VOL="LiveCatch"
+          STAGE="${RUNNER_TEMP}/dmg-stage"
+          OUT_DIR="flutter_app/build/macos/installer"
+          DMG_NAME="LiveCatch-${VERSION}-${PLAT}.dmg"
+          rm -rf "$STAGE" "$OUT_DIR"
+          mkdir -p "$STAGE" "$OUT_DIR"
+          # Drag-to-/Applications style installer image.
+          ditto "$APP" "$STAGE/$(basename "$APP")"
+          ln -s /Applications "$STAGE/Applications"
+          # Ad-hoc sign helps Gatekeeper a bit on unsigned CI builds.
+          codesign --force --deep --sign - "$STAGE/$(basename "$APP")" || true
+          hdiutil create \
+            -volname "$VOL" \
+            -srcfolder "$STAGE" \
+            -ov -format UDZO \
+            "$OUT_DIR/$DMG_NAME"
+          ls -lah "$OUT_DIR"
+          echo "DMG_PATH=$OUT_DIR/$DMG_NAME" >> "$GITHUB_ENV"
+      - name: Upload macOS DMG
         uses: actions/upload-artifact@v4
         with:
-          name: livecatch-flutter-${{ env.PLAT }}
-          path: livecatch-flutter-${{ env.PLAT }}.zip
+          name: livecatch-flutter-${{ env.PLAT }}-dmg
+          path: flutter_app/build/macos/installer/*.dmg
           if-no-files-found: error
       - name: Surface macOS errors
         if: failure()

@@ -22,7 +22,16 @@ Per-platform workflows (Actions → Run workflow) for targeted retries:
 | Workflow | What |
 |----------|------|
 | `Flutter Analyze` / `Flutter Windows` / `Android` / `macOS` / `iOS` | single platform |
-| `Verify Flutter All` | all Flutter jobs (Windows artifact = Inno Setup `.exe`) |
+| `Verify Flutter All` | all Flutter jobs |
+
+Desktop installers from CI Artifacts:
+
+| Platform | Artifact |
+|----------|----------|
+| Windows | `livecatch-flutter-windows-x64-setup` → `LiveCatch-*-windows-x64-setup.exe` (Inno Setup) |
+| macOS | `livecatch-flutter-macos-arm64-dmg` → `LiveCatch-*-macos-arm64.dmg` (drag to Applications) |
+| Android | `livecatch-android-arm64` → APK |
+| iOS | compile-only (no codesign → no IPA) |
 | `Stream Stack Windows` / `macOS arm64` / `macOS x64` | single platform cargo |
 | `Verify Stream Stack All` | all stream-stack jobs |
 
