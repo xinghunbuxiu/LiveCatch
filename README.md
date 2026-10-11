@@ -17,23 +17,22 @@ liveCatch/
 
 ## CI (GitHub Actions)
 
-Per-platform workflows (Actions → Run workflow) for targeted retries:
-
 | Workflow | What |
 |----------|------|
-| `Flutter Analyze` / `Flutter Windows` / `Android` / `macOS` / `iOS` | single platform |
-| `Verify Flutter All` | all Flutter jobs |
+| `Flutter Analyze` / `Windows` / `Android` / `macOS` / `iOS` | single platform (manual retry) |
+| `Verify Flutter All` | all Flutter jobs on push/PR |
+| `Verify Stream Stack` | cargo check/test; dispatch can pick one platform |
+| `Verify FFmpeg Consume` | download smoke for all SDK platforms |
+| `Build Graphify code graph` | code graph refresh |
 
-Desktop installers from CI Artifacts:
+Desktop/mobile artifacts from Flutter CI:
 
 | Platform | Artifact |
 |----------|----------|
-| Windows | `livecatch-flutter-windows-x64-setup` → `LiveCatch-*-windows-x64-setup.exe` (Inno Setup) |
-| macOS | `livecatch-flutter-macos-arm64-dmg` → `LiveCatch-*-macos-arm64.dmg` (drag to Applications) |
-| Android | `livecatch-android-arm64` → APK |
+| Windows | `…-windows-x64-setup` → Inno Setup `.exe` |
+| macOS | `…-macos-arm64-dmg` → drag-to-Applications `.dmg` |
+| Android | `…-android-arm64` → APK |
 | iOS | compile-only (no codesign → no IPA) |
-| `Stream Stack Windows` / `macOS arm64` / `macOS x64` | single platform cargo |
-| `Verify Stream Stack All` | all stream-stack jobs |
 
 
 ## FFmpeg

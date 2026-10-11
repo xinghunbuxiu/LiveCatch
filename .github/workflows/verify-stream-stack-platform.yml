@@ -1,4 +1,5 @@
-name: Verify Stream Stack Platform
+# Reusable job only (not listed for manual runs). Called by Verify Stream Stack.
+name: _stream-stack-platform
 
 on:
   workflow_call:

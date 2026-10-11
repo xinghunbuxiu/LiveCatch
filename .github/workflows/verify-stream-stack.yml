@@ -1,23 +1,31 @@
-name: Verify Stream Stack All
+name: Verify Stream Stack
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: "all = every host; or one platform for a targeted retry"
+        type: choice
+        options:
+          - all
+          - windows-x64
+          - macos-arm64
+          - macos-x64
+        default: all
   push:
     branches: [main]
     paths:
       - "src-tauri/lixh-stream-stack/**"
       - ".github/workflows/verify-stream-stack.yml"
       - ".github/workflows/verify-stream-stack-platform.yml"
-      - ".github/workflows/stream-stack-*.yml"
   pull_request:
     paths:
       - "src-tauri/lixh-stream-stack/**"
       - ".github/workflows/verify-stream-stack.yml"
       - ".github/workflows/verify-stream-stack-platform.yml"
-      - ".github/workflows/stream-stack-*.yml"
 
 concurrency:
-  group: livecatch-stream-stack-all-${{ github.ref }}
+  group: livecatch-stream-stack-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.platform || 'all' }}
   cancel-in-progress: true
 
 permissions:
@@ -25,8 +33,20 @@ permissions:
 
 jobs:
   windows:
-    uses: ./.github/workflows/stream-stack-windows.yml
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'windows-x64' }}
+    uses: ./.github/workflows/verify-stream-stack-platform.yml
+    with:
+      platform: windows-x64
+      runner: windows-latest
   macos-arm64:
-    uses: ./.github/workflows/stream-stack-macos-arm64.yml
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'macos-arm64' }}
+    uses: ./.github/workflows/verify-stream-stack-platform.yml
+    with:
+      platform: macos-arm64
+      runner: macos-15
   macos-x64:
-    uses: ./.github/workflows/stream-stack-macos-x64.yml
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'macos-x64' }}
+    uses: ./.github/workflows/verify-stream-stack-platform.yml
+    with:
+      platform: macos-x64
+      runner: macos-15-intel

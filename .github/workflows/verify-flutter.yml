@@ -1,4 +1,5 @@
 name: Verify Flutter All
+# Aggregator only. Per-platform retries: Flutter Analyze / Windows / Android / macOS / iOS.
 
 on:
   workflow_dispatch:
