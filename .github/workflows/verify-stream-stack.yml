@@ -1,4 +1,4 @@
-name: Verify Stream Stack
+name: Verify Stream Stack All
 
 on:
   workflow_dispatch:
@@ -8,33 +8,25 @@ on:
       - "src-tauri/lixh-stream-stack/**"
       - ".github/workflows/verify-stream-stack.yml"
       - ".github/workflows/verify-stream-stack-platform.yml"
+      - ".github/workflows/stream-stack-*.yml"
   pull_request:
     paths:
       - "src-tauri/lixh-stream-stack/**"
       - ".github/workflows/verify-stream-stack.yml"
       - ".github/workflows/verify-stream-stack-platform.yml"
+      - ".github/workflows/stream-stack-*.yml"
 
 concurrency:
-  group: livecatch-stream-stack-${{ github.ref }}
+  group: livecatch-stream-stack-all-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  verify:
-    strategy:
-      fail-fast: false
-      max-parallel: 3
-      matrix:
-        include:
-          - platform: windows-x64
-            runner: windows-latest
-          - platform: macos-arm64
-            runner: macos-15
-          - platform: macos-x64
-            runner: macos-15-intel
-    uses: ./.github/workflows/verify-stream-stack-platform.yml
-    with:
-      platform: ${{ matrix.platform }}
-      runner: ${{ matrix.runner }}
+  windows:
+    uses: ./.github/workflows/stream-stack-windows.yml
+  macos-arm64:
+    uses: ./.github/workflows/stream-stack-macos-arm64.yml
+  macos-x64:
+    uses: ./.github/workflows/stream-stack-macos-x64.yml

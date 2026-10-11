@@ -1,0 +1,85 @@
+name: Flutter Windows
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: livecatch-flutter-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: windows build
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      LIXH_FFMPEG_VERSION: "9.0.2"
+      LIXH_FFMPEG_REPO: "xinghunbuxiu/LiveCatchFfmpeg"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Fetch FFmpeg windows-x64
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x src-tauri/lixh-stream-stack/scripts/*.sh
+          bash src-tauri/lixh-stream-stack/scripts/prepare-runtime.sh windows-x64
+          bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh windows-x64 \
+            "src-tauri/lixh-stream-stack/sdk/windows-x64"
+          echo "LIXH_FFMPEG_DIR=${{ github.workspace }}\\src-tauri\\lixh-stream-stack\\sdk\\windows-x64" >> "$GITHUB_ENV"
+      # Build resolver before MSVC env is injected (msvc-dev-cmd can break rustc/git deps).
+      - name: Build lixh_resolve
+        shell: bash
+        env:
+          RUST_BACKTRACE: "1"
+        run: |
+          set -euo pipefail
+          cargo build -p lixh-stream-resolver --bin lixh_resolve --release \
+            --manifest-path src-tauri/lixh-stream-stack/Cargo.toml 2>&1 \
+            | tee "${RUNNER_TEMP}/lixh-resolve.log"
+          test -f src-tauri/lixh-stream-stack/target/release/lixh_resolve.exe
+      - uses: ilammy/msvc-dev-cmd@v1
+      - name: Pub get
+        working-directory: flutter_app
+        run: flutter pub get
+      - name: Build Windows release
+        working-directory: flutter_app
+        run: flutter build windows --release
+      - name: Package Windows release zip
+        shell: pwsh
+        run: |
+          $src = "flutter_app/build/windows/x64/runner/Release"
+          if (-not (Test-Path $src)) { throw "Windows release output missing: $src" }
+          $out = "livecatch-flutter-windows-x64.zip"
+          if (Test-Path $out) { Remove-Item $out -Force }
+          Compress-Archive -Path (Join-Path $src '*') -DestinationPath $out -Force
+          Get-Item $out | Format-List FullName, Length
+      - name: Upload Windows zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: livecatch-flutter-windows-x64
+          path: livecatch-flutter-windows-x64.zip
+          if-no-files-found: error
+      - name: Surface resolve errors
+        if: failure()
+        shell: bash
+        run: |
+          set -uo pipefail
+          LOG="${RUNNER_TEMP}/lixh-resolve.log"
+          [[ -f "$LOG" ]] || exit 0
+          tail -n 160 "$LOG" || true
+          grep -E 'error(\[E[0-9]+\])?:|error:|FAILED|panic|fatal' "$LOG" \
+            | head -n 40 \
+            | while IFS= read -r line; do echo "::error::${line}"; done || true

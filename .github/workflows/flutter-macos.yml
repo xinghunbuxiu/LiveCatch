@@ -1,0 +1,107 @@
+name: Flutter macOS
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: livecatch-flutter-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: macos build
+    runs-on: macos-15
+    timeout-minutes: 75
+    env:
+      LIXH_FFMPEG_VERSION: "9.0.2"
+      LIXH_FFMPEG_REPO: "xinghunbuxiu/LiveCatchFfmpeg"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Prefer CocoaPods over SPM
+        run: flutter config --no-enable-swift-package-manager
+      - name: Fetch and sync host-arch FFmpeg into pod
+        run: |
+          set -euo pipefail
+          ARCH="$(uname -m)"
+          if [[ "$ARCH" == "arm64" ]]; then
+            PLAT=macos-arm64
+            EXCLUDE=x86_64
+          else
+            PLAT=macos-x64
+            EXCLUDE=arm64
+          fi
+          echo "PLAT=$PLAT" >> "$GITHUB_ENV"
+          echo "HOST_ARCH=$ARCH" >> "$GITHUB_ENV"
+          echo "EXCLUDE_ARCH=$EXCLUDE" >> "$GITHUB_ENV"
+          chmod +x src-tauri/lixh-stream-stack/scripts/*.sh
+          chmod +x packages/lixh_player/macos/sync_ffmpeg_macos.sh
+          bash src-tauri/lixh-stream-stack/scripts/prepare-runtime.sh "$PLAT"
+          bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh "$PLAT" \
+            "src-tauri/lixh-stream-stack/sdk/$PLAT"
+          bash packages/lixh_player/macos/sync_ffmpeg_macos.sh "$PLAT"
+          # Force host-only slice (Flutter Release often tries universal).
+          {
+            echo ""
+            echo "ARCHS = ${ARCH}"
+            echo "ONLY_ACTIVE_ARCH = YES"
+            echo "EXCLUDED_ARCHS = ${EXCLUDE}"
+          } >> flutter_app/macos/Runner/Configs/Release.xcconfig
+          {
+            echo ""
+            echo "ARCHS = ${ARCH}"
+            echo "ONLY_ACTIVE_ARCH = YES"
+            echo "EXCLUDED_ARCHS = ${EXCLUDE}"
+          } >> flutter_app/macos/Runner/Configs/Debug.xcconfig
+      - name: Pub get
+        working-directory: flutter_app
+        run: flutter pub get
+      - name: pod install
+        working-directory: flutter_app/macos
+        run: |
+          set -euo pipefail
+          pod install --repo-update
+      - name: Build macOS release
+        working-directory: flutter_app
+        run: |
+          set -euo pipefail
+          flutter build macos --release 2>&1 | tee "${RUNNER_TEMP}/macos-build.log"
+      - name: Package macOS .app zip
+        run: |
+          set -euo pipefail
+          APP="$(find flutter_app/build/macos -type d -name '*.app' -path '*/Build/Products/Release/*' | head -n 1)"
+          if [[ -z "${APP}" ]]; then
+            echo "macOS .app not found" >&2
+            find flutter_app/build/macos -maxdepth 6 -type d -name '*.app' 2>/dev/null | head -n 20 || true
+            exit 1
+          fi
+          OUT="livecatch-flutter-${PLAT}.zip"
+          ditto -c -k --keepParent "${APP}" "$OUT"
+          ls -lah "$OUT"
+          echo "MAC_ARTIFACT=$OUT" >> "$GITHUB_ENV"
+      - name: Upload macOS zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: livecatch-flutter-${{ env.PLAT }}
+          path: livecatch-flutter-${{ env.PLAT }}.zip
+          if-no-files-found: error
+      - name: Surface macOS errors
+        if: failure()
+        run: |
+          set -uo pipefail
+          LOG="${RUNNER_TEMP}/macos-build.log"
+          if [[ -f "$LOG" ]]; then
+            tail -n 200 "$LOG"
+            grep -E 'error:|Error \(|&error|fatal error|Undefined symbols|ld: |CocoaPods|INVALID|FAILED|architecture' "$LOG" \
+              | head -n 50 \
+              | while IFS= read -r line; do
+                  echo "::error::${line}"
+                done || true
+          fi

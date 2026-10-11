@@ -1,0 +1,39 @@
+name: Flutter Analyze
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: livecatch-flutter-analyze-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: analyze
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Pub get (plugin)
+        working-directory: packages/lixh_player
+        run: flutter pub get
+      - name: Analyze plugin
+        working-directory: packages/lixh_player
+        run: flutter analyze --no-fatal-infos
+      - name: Pub get (app)
+        working-directory: flutter_app
+        run: flutter pub get
+      - name: Analyze app
+        working-directory: flutter_app
+        run: flutter analyze --no-fatal-infos
+      - name: Unit tests (ABR)
+        working-directory: flutter_app
+        run: flutter test test/abr_supervisor_test.dart

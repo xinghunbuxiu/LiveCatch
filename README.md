@@ -12,8 +12,20 @@ liveCatch/
     sdk/ runtime/              # Per-platform FFmpeg (fetch scripts)
     lixh-player-core/          # Shared C player core
     scripts/fetch-ffmpeg-*.sh
-  .github/workflows/           # Flutter, FFmpeg consume, stream-stack cargo verify
+  .github/workflows/           # Per-platform Flutter/stream-stack Actions + All aggregators
 ```
+
+## CI (GitHub Actions)
+
+Per-platform workflows (Actions → Run workflow) for targeted retries:
+
+| Workflow | What |
+|----------|------|
+| `Flutter Analyze` / `Flutter Windows` / `Android` / `macOS` / `iOS` | single platform |
+| `Verify Flutter All` | all Flutter jobs |
+| `Stream Stack Windows` / `macOS arm64` / `macOS x64` | single platform cargo |
+| `Verify Stream Stack All` | all stream-stack jobs |
+
 
 ## FFmpeg
 

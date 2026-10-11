@@ -1,0 +1,64 @@
+name: Flutter iOS
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: livecatch-flutter-ios-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    name: ios build
+    runs-on: macos-15
+    timeout-minutes: 75
+    env:
+      LIXH_FFMPEG_VERSION: "9.0.2"
+      LIXH_FFMPEG_REPO: "xinghunbuxiu/LiveCatchFfmpeg"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Prefer CocoaPods over SPM
+        run: flutter config --no-enable-swift-package-manager
+      - name: Fetch and sync FFmpeg ios-arm64 into pod
+        run: |
+          set -euo pipefail
+          chmod +x src-tauri/lixh-stream-stack/scripts/*.sh
+          chmod +x packages/lixh_player/ios/sync_ffmpeg_ios.sh
+          bash src-tauri/lixh-stream-stack/scripts/prepare-runtime.sh ios-arm64
+          bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh ios-arm64 \
+            "src-tauri/lixh-stream-stack/sdk/ios-arm64"
+          bash packages/lixh_player/ios/sync_ffmpeg_ios.sh
+      - name: Pub get
+        working-directory: flutter_app
+        run: flutter pub get
+      - name: pod install
+        working-directory: flutter_app/ios
+        run: |
+          set -euo pipefail
+          pod install --repo-update
+      - name: Build iOS (no codesign)
+        working-directory: flutter_app
+        run: |
+          set -euo pipefail
+          flutter build ios --release --no-codesign 2>&1 | tee "${RUNNER_TEMP}/ios-build.log"
+      - name: Surface iOS errors
+        if: failure()
+        run: |
+          set -uo pipefail
+          LOG="${RUNNER_TEMP}/ios-build.log"
+          if [[ -f "$LOG" ]]; then
+            tail -n 200 "$LOG"
+            grep -E 'error:|Error \(|&error|fatal error|Undefined symbols|ld: |CocoaPods|INVALID|❌|FAILED' "$LOG" \
+              | head -n 40 \
+              | while IFS= read -r line; do
+                  echo "::error::${line}"
+                done || true
+          fi

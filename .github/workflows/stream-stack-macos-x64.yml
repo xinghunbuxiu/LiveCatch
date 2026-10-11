@@ -1,0 +1,19 @@
+name: Stream Stack macOS x64
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+concurrency:
+  group: livecatch-stream-macos-x64-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    uses: ./.github/workflows/verify-stream-stack-platform.yml
+    with:
+      platform: macos-x64
+      runner: macos-15-intel
