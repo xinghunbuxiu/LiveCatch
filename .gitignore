@@ -27,6 +27,9 @@ packages/lixh_player/example/build/
 packages/lixh_player/example/.dart_tool/
 packages/lixh_player/android/src/main/jniLibs/
 packages/lixh_player/ios/Frameworks/
+packages/lixh_player/macos/Frameworks/
+packages/lixh_player/macos/lixh_player/Sources/lixh_player_corec/include/lixh_player.h
+packages/lixh_player/ios/lixh_player/Sources/lixh_player_corec/include/lixh_player.h
 
 # IDE / OS
 .idea/

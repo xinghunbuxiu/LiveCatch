@@ -152,20 +152,26 @@ jobs:
         with:
           channel: stable
           cache: true
-      # macOS plugin uses Package.swift (SPM) with monorepo FFmpeg paths; no Podfile.
-      - name: Fetch FFmpeg macos-arm64
+      # Monorepo FFmpeg + unsafeFlags break SPM; use CocoaPods like iOS.
+      - name: Prefer CocoaPods over SPM
+        run: flutter config --no-enable-swift-package-manager
+      - name: Fetch and sync FFmpeg macos-arm64 into pod
         run: |
           set -euo pipefail
           chmod +x src-tauri/lixh-stream-stack/scripts/*.sh
+          chmod +x packages/lixh_player/macos/sync_ffmpeg_macos.sh
           bash src-tauri/lixh-stream-stack/scripts/prepare-runtime.sh macos-arm64
           bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh macos-arm64 \
             "src-tauri/lixh-stream-stack/sdk/macos-arm64"
-          # Normalize install names so the .app can load bundled/runtime dylibs.
-          bash src-tauri/lixh-stream-stack/scripts/normalize-ffmpeg-macos.sh \
-            "src-tauri/lixh-stream-stack/sdk/macos-arm64"
+          bash packages/lixh_player/macos/sync_ffmpeg_macos.sh macos-arm64
       - name: Pub get
         working-directory: flutter_app
         run: flutter pub get
+      - name: pod install
+        working-directory: flutter_app/macos
+        run: |
+          set -euo pipefail
+          pod install --repo-update
       - name: Build macOS release
         working-directory: flutter_app
         run: |

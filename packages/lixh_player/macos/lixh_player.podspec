@@ -1,5 +1,7 @@
+require 'pathname'
+
 #
-# CocoaPods fallback (Flutter macOS apps using SPM use Package.swift).
+# CocoaPods path for Flutter macOS (SPM Package.swift kept for local SPM experiments).
 #
 Pod::Spec.new do |s|
   s.name             = 'lixh_player'
@@ -15,24 +17,42 @@ LiveCatch lixh_player macOS plugin: lixh-player-core + AudioQueue + FlutterTextu
   s.source           = { :path => '.' }
   s.source_files = 'lixh_player/Sources/lixh_player/**/*.{h,m,swift}',
                    'lixh_player/Sources/lixh_player_corec/**/*.{h,c}'
-  s.public_header_files = 'lixh_player/Sources/lixh_player/include/**/*.h',
-                          'lixh_player/Sources/lixh_player_corec/include/**/*.h'
+  # ObjC API public; C/FFmpeg headers private (avoids modular header errors).
+  s.public_header_files = 'lixh_player/Sources/lixh_player/include/**/*.h'
+  s.private_header_files = 'lixh_player/Sources/lixh_player_corec/include/**/*.h'
 
-  core = File.expand_path('../../../src-tauri/lixh-stream-stack/lixh-player-core', __dir__)
-  sdk_arm = File.expand_path('../../../src-tauri/lixh-stream-stack/sdk/macos-arm64', __dir__)
-  sdk_x64 = File.expand_path('../../../src-tauri/lixh-stream-stack/sdk/macos-x64', __dir__)
+  pod_root = Pathname.new(File.expand_path(__dir__))
+  sdk = (pod_root + 'Frameworks').cleanpath
+  core_include = (pod_root + 'lixh_player/Sources/lixh_player_corec/include').cleanpath
+
+  unless (sdk + 'include/libavcodec/avcodec.h').exist?
+    raise "FFmpeg macOS SDK not synced into #{sdk}. Run: bash packages/lixh_player/macos/sync_ffmpeg_macos.sh"
+  end
+  unless (core_include + 'lixh_player.h').exist?
+    raise "lixh_player.h missing at #{core_include}. Run: bash packages/lixh_player/macos/sync_ffmpeg_macos.sh"
+  end
+
+  av_names = %w[avformat avcodec avutil swresample]
+  av_names.each do |n|
+    matches = Dir.glob((sdk + "lib/lib#{n}*.dylib").to_s)
+    raise "Missing lib#{n}*.dylib under #{sdk}/lib — run sync_ffmpeg_macos.sh" if matches.empty?
+  end
+  s.vendored_libraries = av_names.flat_map { |n|
+    Dir.glob("Frameworks/lib/lib#{n}*.dylib")
+  }.uniq
 
   s.dependency 'FlutterMacOS'
   s.platform = :osx, '12.0'
   s.swift_version = '5.0'
   s.frameworks = 'AudioToolbox', 'AVFoundation', 'CoreMedia', 'CoreVideo', 'Cocoa'
-  s.libraries = 'avformat', 'avcodec', 'avutil', 'swresample'
   s.pod_target_xcconfig = {
     'DEFINES_MODULE' => 'YES',
     'GCC_PREPROCESSOR_DEFINITIONS' => '$(inherited) LIXH_MACOS=1',
-    'HEADER_SEARCH_PATHS' => "\"#{core}/include\" \"#{sdk_arm}/include\" \"#{sdk_x64}/include\"",
-    'LIBRARY_SEARCH_PATHS' => "\"#{sdk_arm}/lib\" \"#{sdk_x64}/lib\"",
-    'LD_RUNPATH_SEARCH_PATHS' => "#{sdk_arm}/lib #{sdk_x64}/lib @loader_path/../Frameworks",
-    'OTHER_CFLAGS' => '-std=c11',
+    'HEADER_SEARCH_PATHS' => "\"#{core_include}\" \"#{sdk}/include\" $(inherited)",
+    'LIBRARY_SEARCH_PATHS' => "\"#{sdk}/lib\" $(inherited)",
+    'LD_RUNPATH_SEARCH_PATHS' => '@loader_path/../Frameworks @executable_path/../Frameworks',
+    'OTHER_CFLAGS' => '$(inherited) -std=c11',
+    'OTHER_LDFLAGS' => '$(inherited) -ObjC',
+    'CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES' => 'YES',
   }
 end
