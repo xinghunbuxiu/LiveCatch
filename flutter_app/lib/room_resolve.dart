@@ -69,6 +69,43 @@ class StreamPick {
       format.toLowerCase().contains('flv') ? 'FLV' : 'HLS';
 }
 
+/// Strip nested resolver/extractor noise into a short UI-facing message.
+String formatResolveError(Object error) {
+  var s = error.toString().trim();
+  const prefixes = ['Bad state: ', 'Exception: ', 'StateError: '];
+  for (final p in prefixes) {
+    if (s.startsWith(p)) {
+      s = s.substring(p.length).trim();
+    }
+  }
+  // Drop common English chain prefixes left by older binaries.
+  for (final p in [
+    'resolve: ',
+    'extract stream metadata: ',
+    'validation error: ',
+    'API error: ',
+  ]) {
+    final i = s.toLowerCase().indexOf(p.toLowerCase());
+    if (i == 0) {
+      s = s.substring(p.length).trim();
+    } else if (i > 0) {
+      // Prefer the leaf after the last known noise token.
+      final leaf = s.substring(i + p.length).trim();
+      if (leaf.isNotEmpty) s = leaf;
+    }
+  }
+  if (s.contains('服务繁忙') || s.contains('繁忙')) {
+    return '抖音接口繁忙，请确认直播间在播后稍后重试';
+  }
+  if (s.contains('找不到') && s.contains('lixh_resolve')) {
+    return s;
+  }
+  if (s.contains('直播已结束') || s.contains('不在播')) {
+    return '直播已结束或不在播';
+  }
+  return s.isEmpty ? '房间解析失败' : s;
+}
+
 /// True when [input] looks like a direct media URL (skip resolver).
 bool looksLikeDirectStream(String input) {
   final u = input.trim().toLowerCase();
@@ -106,6 +143,19 @@ Future<ResolvedRoom> resolveRoom(
   if (Platform.isAndroid) {
     // Ensure the forked helper can dlopen siblings in nativeLibraryDir.
     env['LD_LIBRARY_PATH'] = p.dirname(exe);
+    // Match desktop/strev: do not send Douyin traffic through Android proxies.
+    for (final key in const [
+      'http_proxy',
+      'https_proxy',
+      'HTTP_PROXY',
+      'HTTPS_PROXY',
+      'ALL_PROXY',
+      'all_proxy',
+      'no_proxy',
+      'NO_PROXY',
+    ]) {
+      env.remove(key);
+    }
   }
 
   final result = await Process.run(
@@ -120,7 +170,11 @@ Future<ResolvedRoom> resolveRoom(
     if (err.startsWith('lixh_resolve:')) {
       err = err.substring('lixh_resolve:'.length).trim();
     }
-    throw StateError(err.isEmpty ? '房间解析失败 (exit ${result.exitCode})' : err);
+    throw StateError(
+      formatResolveError(
+        err.isEmpty ? '房间解析失败 (exit ${result.exitCode})' : err,
+      ),
+    );
   }
 
   final raw = (result.stdout as String).trim();

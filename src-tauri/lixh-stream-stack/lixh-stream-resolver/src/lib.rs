@@ -67,14 +67,51 @@ pub async fn resolve_with_options(
     let client = android_http_client().context("build HTTP client")?;
     #[cfg(not(target_os = "android"))]
     let client = create_client(None);
-    let factory = ExtractorFactory::new(client);
+
+    // First attempt matches strev/desktop defaults (no forced Douyin extras).
+    let extras = options.extras;
+    let cookies = options.cookies;
+
+    let mut last_err: Option<anyhow::Error> = None;
+    for attempt in 0u32..3 {
+        if attempt > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(700 * u64::from(attempt)))
+                .await;
+        }
+        let factory = ExtractorFactory::new(client.clone());
+        let attempt_extras = if attempt == 0 {
+            extras.clone()
+        } else if looks_like_douyin(url) {
+            // Same extractor; only retry path differs (mobile API + fresh ttwid).
+            bump_retry_extras(extras.clone())
+        } else {
+            extras.clone()
+        };
+        match try_extract_once(&factory, url, cookies.clone(), attempt_extras).await {
+            Ok(resolved) => return Ok(resolved),
+            Err(e) => {
+                let retryable = is_retryable_extract(&e);
+                last_err = Some(e);
+                if !retryable {
+                    break;
+                }
+            }
+        }
+    }
+
+    Err(map_resolve_error(
+        last_err.unwrap_or_else(|| anyhow!("extract stream metadata failed")),
+    ))
+}
+
+async fn try_extract_once(
+    factory: &ExtractorFactory,
+    url: &str,
+    cookies: Option<String>,
+    extras: Option<Value>,
+) -> Result<ResolvedStream> {
     let extractor = factory
-        .create_extractor(
-            url,
-            options.cookies,
-            options.extras,
-            ExtractorSelection::Auto,
-        )
+        .create_extractor(url, cookies, extras, ExtractorSelection::Auto)
         .map_err(|e| anyhow!(e.to_string()))
         .context("create stream extractor")?;
     let platform = extractor.get_extractor().platform_name.clone();
@@ -86,7 +123,71 @@ pub async fn resolve_with_options(
     Ok(map_media(media, platform))
 }
 
+fn looks_like_douyin(url: &str) -> bool {
+    let u = url.to_ascii_lowercase();
+    u.contains("douyin.com") || u.contains("iesdouyin.com") || u.contains("live.douyin")
+}
+
+fn bump_retry_extras(extras: Option<Value>) -> Option<Value> {
+    let mut obj = match extras {
+        Some(Value::Object(map)) => map,
+        _ => serde_json::Map::new(),
+    };
+    obj.insert("force_mobile_api".into(), Value::Bool(true));
+    obj.insert(
+        "ttwid_management_mode".into(),
+        Value::String("per_extractor".into()),
+    );
+    obj.remove("ttwid");
+    Some(Value::Object(obj))
+}
+
+fn is_retryable_extract(err: &anyhow::Error) -> bool {
+    let msg = format!("{err:#}").to_ascii_lowercase();
+    msg.contains("服务繁忙")
+        || msg.contains("繁忙")
+        || msg.contains("rate limit")
+        || msg.contains("timeout")
+        || msg.contains("timed out")
+        || msg.contains("connection")
+        || msg.contains("temporarily")
+}
+
+/// Prefer a short Chinese tip over nested anyhow/extractor English chains.
+fn map_resolve_error(err: anyhow::Error) -> anyhow::Error {
+    let full = format!("{err:#}");
+    if full.contains("服务繁忙") {
+        return anyhow!(
+            "抖音接口繁忙（请确认直播间正在开播后稍后重试）"
+        );
+    }
+    if full.contains("StreamerNotFound") || full.contains("streamer not found") {
+        return anyhow!("未找到该直播间，请检查链接");
+    }
+    if full.contains("直播已结束") || full.contains("not live") {
+        return anyhow!("直播已结束或不在播");
+    }
+    if full.contains("HTML error page") || full.contains("rate limiting or blocking") {
+        return anyhow!("抖音接口拒绝请求，请稍后重试或更换网络");
+    }
+    if full.contains("Failed to extract ttwid") {
+        return anyhow!("获取抖音凭证失败，请检查网络后重试");
+    }
+    // Drop leading "resolve:" / "extract stream metadata:" noise for UI.
+    let leaf = full
+        .rsplit(": ")
+        .next()
+        .unwrap_or(&full)
+        .trim();
+    if leaf != full {
+        anyhow!("{leaf}")
+    } else {
+        err
+    }
+}
+
 /// Forked Android Process has no JVM — cannot use rustls-platform-verifier.
+/// Mirror strev/platforms-parser feature set (webpki roots + gzip/deflate).
 #[cfg(target_os = "android")]
 fn android_http_client() -> Result<reqwest::Client> {
     use rustls::ClientConfig;
@@ -107,9 +208,12 @@ fn android_http_client() -> Result<reqwest::Client> {
         .with_root_certificates(roots)
         .with_no_client_auth();
 
+    // no_proxy: Android may inject HTTP(S)_PROXY into the forked Process env;
+    // strev/desktop usually hit Douyin directly.
     reqwest::Client::builder()
         .use_preconfigured_tls(tls)
         .timeout(std::time::Duration::from_secs(30))
+        .no_proxy()
         .build()
         .context("reqwest client")
 }

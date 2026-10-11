@@ -18,7 +18,13 @@ async fn main() -> ExitCode {
     match run().await {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
-            let _ = writeln!(io::stderr(), "lixh_resolve: {e:#}");
+            // Prefer the leaf message for Flutter UI (avoid "resolve: extract: …" chains).
+            let leaf = e
+                .chain()
+                .last()
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| e.to_string());
+            let _ = writeln!(io::stderr(), "lixh_resolve: {leaf}");
             ExitCode::from(1)
         }
     }
@@ -57,9 +63,7 @@ async fn run() -> Result<()> {
     }
 
     let url = url.ok_or_else(|| anyhow!("room URL required"))?;
-    let resolved: ResolvedStream = resolve(&url, cookies.as_deref(), None)
-        .await
-        .context("resolve")?;
+    let resolved: ResolvedStream = resolve(&url, cookies.as_deref(), None).await?;
 
     let json = serde_json::to_string(&resolved).context("serialize")?;
     let mut out = io::stdout().lock();

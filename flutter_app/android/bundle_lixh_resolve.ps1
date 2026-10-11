@@ -56,4 +56,5 @@ try {
 if (-not (Test-Path $outBin)) { throw "Missing $outBin" }
 New-Item -ItemType Directory -Force -Path $jniDir | Out-Null
 Copy-Item -Force $outBin $jniSo
-Write-Host "Staged $jniSo ($([math]::Round((Get-Item $jniSo).Length/1MB,1)) MB)"
+$sizeMb = [math]::Round((Get-Item $jniSo).Length / 1MB, 1)
+Write-Host "Staged $jniSo ($sizeMb MB)"

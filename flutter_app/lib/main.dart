@@ -252,7 +252,7 @@ class _PlayerPageState extends State<PlayerPage>
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _status = '创建失败: $e');
+      setState(() => _status = '监听失败: ${formatResolveError(e)}');
     }
   }
 
@@ -312,7 +312,7 @@ class _PlayerPageState extends State<PlayerPage>
       if (mounted) {
         setState(() {
           _playing = false;
-          _status = 'ABR 失败: $e';
+          _status = 'ABR 失败: ${formatResolveError(e)}';
         });
       }
     } finally {
@@ -430,7 +430,7 @@ class _PlayerPageState extends State<PlayerPage>
       setState(() {
         _busy = false;
         _playing = false;
-        _status = '失败: $e';
+        _status = '失败: ${formatResolveError(e)}';
       });
     }
   }
