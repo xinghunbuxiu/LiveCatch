@@ -27,11 +27,13 @@ namespace {
 /* ~500ms stereo @48k — physical ceiling; live trim keeps far less. */
 constexpr int kRingCap = 48000 * 2 / 2;
 
-/* Video chase target ≠ safe PCM depth. Start lean (~120ms), grow on underrun
-   so stable links stay snappy while weak ones stop crackling. */
-static int PcmQueueMsFromChase(int chase_target_ms) {
-  int pcm = chase_target_ms * 2;
-  if (pcm < 120) pcm = 120;
+/* Video chase target ≠ safe PCM depth. Listen-only stays closer to chase
+   (snap ~60ms); picture keeps a fatter cushion. Grows on underrun. */
+static int PcmQueueMsFromChase(int chase_target_ms, bool listen_only) {
+  int pcm = listen_only ? (chase_target_ms + chase_target_ms / 2)
+                        : (chase_target_ms * 2);
+  const int floor = listen_only ? 60 : 100;
+  if (pcm < floor) pcm = floor;
   if (pcm > 400) pcm = 400;
   return pcm;
 }
@@ -42,15 +44,20 @@ class AudioOut {
 
   void SetMaxQueueMs(int ms) {
     std::lock_guard<std::mutex> lock(mu_);
-    if (ms < 120) ms = 120;
+    if (ms < 60) ms = 60;
     if (ms > 400) ms = 400;
     base_queue_ms_ = ms;
     max_queue_ms_ = ms;
   }
 
-  /* Warm-start: hold output until ~180–240ms is buffered, then play.
-     Decode/demux keeps filling on another thread (live chase continues). */
+  /* Warm-start scales with queue: snap/listen (~≤100ms) primes to base;
+     balanced+ still waits ~180–240ms before first audible frame. */
   int PrimeNeedMsLocked() const {
+    if (base_queue_ms_ <= 100) {
+      int p = base_queue_ms_;
+      if (p < 40) p = 40;
+      return p;
+    }
     int p = base_queue_ms_;
     if (p < 180) p = 180;
     if (p > 240) p = 240;
@@ -70,10 +77,13 @@ class AudioOut {
       if (cap_ms < p) cap_ms = p;
     }
     int max_samples = ch_ * rate_ * cap_ms / 1000;
-    if (max_samples < ch_ * rate_ * 120 / 1000) max_samples = ch_ * rate_ * 120 / 1000;
+    const int floor_ms = max_queue_ms_ < 100 ? 60 : (max_queue_ms_ < 140 ? 80 : 100);
+    if (max_samples < ch_ * rate_ * floor_ms / 1000) {
+      max_samples = ch_ * rate_ * floor_ms / 1000;
+    }
     if (max_samples > kRingCap - n) max_samples = kRingCap - n;
     const int trim_at = max_samples + max_samples / 4;
-    const int keep_ms = max_queue_ms_ >= 160 ? 80 : 60;
+    const int keep_ms = max_queue_ms_ >= 160 ? 80 : (max_queue_ms_ >= 100 ? 50 : 35);
     const int min_keep = primed_ ? (ch_ * rate_ * keep_ms / 1000) : 0;
     while (count_ + n > trim_at && count_ > min_keep) {
       int drop = ch_ * (rate_ / 50);  // ~20ms
@@ -285,7 +295,8 @@ class Session {
       lixh_player_destroy(p);
       return false;
     }
-    audio_.SetMaxQueueMs(PcmQueueMsFromChase((int)latency_target_ms_));
+    audio_.SetMaxQueueMs(
+        PcmQueueMsFromChase((int)latency_target_ms_, !video_enabled_.load()));
     std::lock_guard<std::mutex> lock(mu_);
     player_ = p;
     LOGI("open url=%zu surface=%p", url.size(), surface_global_);
@@ -337,14 +348,18 @@ class Session {
       if (on) last_error_.clear();
     }
     if (p) lixh_player_set_video_sink(p, on ? 1 : 0);
+    /* Re-lean PCM when returning to listen-only. */
+    audio_.SetMaxQueueMs(
+        PcmQueueMsFromChase((int)latency_target_ms_, !on));
   }
 
   void SetLatency(int target_ms, int max_ms) {
-    if (target_ms < 40) target_ms = 40;
+    if (target_ms < 30) target_ms = 30;
     if (max_ms < target_ms) max_ms = target_ms;
     latency_target_ms_ = target_ms;
     latency_max_ms_ = max_ms;
-    audio_.SetMaxQueueMs(PcmQueueMsFromChase(target_ms));
+    audio_.SetMaxQueueMs(
+        PcmQueueMsFromChase(target_ms, !video_enabled_.load()));
     void* p = nullptr;
     {
       std::lock_guard<std::mutex> lock(mu_);

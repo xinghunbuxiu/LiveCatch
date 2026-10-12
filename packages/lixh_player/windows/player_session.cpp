@@ -183,8 +183,11 @@ bool PlayerSession::Open(const std::string& url, const std::string& headers) {
   lixh_player_set_video_sink(player, video_enabled_.load() ? 1 : 0);
   lixh_player_set_latency(player, latency_target_ms_, latency_max_ms_);
   {
-    int pcm_ms = latency_target_ms_ * 2;
-    if (pcm_ms < 120) pcm_ms = 120;
+    const bool listen = !video_enabled_.load();
+    int pcm_ms = listen ? (latency_target_ms_ + latency_target_ms_ / 2)
+                        : (latency_target_ms_ * 2);
+    const int floor = listen ? 60 : 100;
+    if (pcm_ms < floor) pcm_ms = floor;
     if (pcm_ms > 400) pcm_ms = 400;
     audio_.SetMaxQueueMs(pcm_ms);
   }
@@ -312,13 +315,14 @@ void PlayerSession::HandleAudio(int sample_rate, int channels,
 }
 
 void PlayerSession::SetLatency(int target_ms, int max_ms) {
-  if (target_ms < 40) target_ms = 40;
+  if (target_ms < 30) target_ms = 30;
   if (max_ms < target_ms) max_ms = target_ms;
   latency_target_ms_ = target_ms;
   latency_max_ms_ = max_ms;
-  // PCM cushion ≠ video chase (80ms chase → ~120ms audio, grows on underrun).
-  int pcm_ms = target_ms * 2;
-  if (pcm_ms < 120) pcm_ms = 120;
+  const bool listen = !video_enabled_.load();
+  int pcm_ms = listen ? (target_ms + target_ms / 2) : (target_ms * 2);
+  const int floor = listen ? 60 : 100;
+  if (pcm_ms < floor) pcm_ms = floor;
   if (pcm_ms > 400) pcm_ms = 400;
   audio_.SetMaxQueueMs(pcm_ms);
   void* player = nullptr;
@@ -348,6 +352,8 @@ void PlayerSession::SetVideoEnabled(bool enabled) {
   if (player) {
     lixh_player_set_video_sink(player, enabled ? 1 : 0);
   }
+  // Re-lean PCM when returning to listen-only.
+  SetLatency(latency_target_ms_, latency_max_ms_);
 }
 
 PlayerSession::Stats PlayerSession::GetStats() const {

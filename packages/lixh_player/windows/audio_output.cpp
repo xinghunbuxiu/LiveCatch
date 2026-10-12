@@ -72,8 +72,8 @@ void AudioOutput::ClearQueue() {
 void AudioOutput::Flush() { ClearQueue(); }
 
 void AudioOutput::SetMaxQueueMs(int ms) {
-  // Lean floor; grows on underrun (see RenderLoop) so stable links stay snappy.
-  if (ms < 120) ms = 120;
+  // Snap/listen may request ~60ms; grows on underrun (see RenderLoop).
+  if (ms < 60) ms = 60;
   if (ms > 2000) ms = 2000;
   std::lock_guard<std::mutex> lock(mu_);
   base_queue_ms_ = ms;
@@ -435,12 +435,16 @@ void AudioOutput::Push(const float* samples, int frames, int channels,
     ring_cap_ = max_queue_;
     r_ = w_ = count_ = 0;
   }
-  // Warm-start: allow a fatter burst before first audible frame.
+  // Warm-start: snap primes to base; balanced+ still waits ~180–240ms.
   size_t effective_max = max_queue_;
   if (!primed_) {
     int p = base_queue_ms_;
-    if (p < 180) p = 180;
-    if (p > 240) p = 240;
+    if (base_queue_ms_ <= 100) {
+      if (p < 40) p = 40;
+    } else {
+      if (p < 180) p = 180;
+      if (p > 240) p = 240;
+    }
     size_t prime_cap = static_cast<size_t>(std::max(1, out_rate_)) *
                        static_cast<size_t>(std::max(1, out_channels_)) *
                        static_cast<size_t>(p) / 1000;
@@ -449,7 +453,8 @@ void AudioOutput::Push(const float* samples, int frames, int channels,
   // Hysteresis: trim only past 125% of cap; keep a fraction to avoid crackle.
   const size_t cap = effective_max < ring_cap_ ? effective_max : ring_cap_;
   const size_t trim_at = cap + cap / 4;
-  const int keep_ms = max_queue_ms_ >= 160 ? 80 : 60;
+  const int keep_ms =
+      max_queue_ms_ >= 160 ? 80 : (max_queue_ms_ >= 100 ? 50 : 35);
   const size_t min_keep = primed_
       ? (static_cast<size_t>(std::max(1, out_channels_)) *
          static_cast<size_t>(std::max(1, out_rate_)) * keep_ms / 1000)
@@ -515,8 +520,12 @@ void AudioOutput::RenderLoop() {
                                  static_cast<unsigned>(rate));
         }
         int need_prime = base_queue_ms_;
-        if (need_prime < 180) need_prime = 180;
-        if (need_prime > 240) need_prime = 240;
+        if (base_queue_ms_ <= 100) {
+          if (need_prime < 40) need_prime = 40;
+        } else {
+          if (need_prime < 180) need_prime = 180;
+          if (need_prime > 240) need_prime = 240;
+        }
         if (qms >= need_prime) {
           primed_ = true;
         } else {

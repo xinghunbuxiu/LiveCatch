@@ -99,11 +99,12 @@ static CVPixelBufferRef LixhUploadSoftwareFrame(const AVFrame *f) {
     atomic_init(&_presentOk, 0);
     atomic_init(&_audioFrames, 0);
     atomic_init(&_decodeHw, -1);
-    _latencyTargetMs = 200;
-    _latencyMaxMs = 700;
+    _latencyTargetMs = 40;
+    _latencyMaxMs = 160;
     {
-      int pcmMs = _latencyTargetMs * 2;
-      if (pcmMs < 120) pcmMs = 120;
+      // Default listen-first: lean PCM.
+      int pcmMs = _latencyTargetMs + _latencyTargetMs / 2;
+      if (pcmMs < 60) pcmMs = 60;
       if (pcmMs > 400) pcmMs = 400;
       [_audio setMaxQueueMs:pcmMs];
     }
@@ -330,21 +331,24 @@ static void OnEvent(void *opaque, int type, int code, const char *message) {
   @synchronized(self) { player = _player; }
   NSLog(@"[lixh] setVideoEnabled %s", enabled ? "true" : "false");
   if (player) lixh_player_set_video_sink(player, enabled ? 1 : 0);
+  [self setLatencyTargetMs:_latencyTargetMs maxMs:_latencyMaxMs];
 }
 
 - (void)setLatencyTargetMs:(int)targetMs maxMs:(int)maxMs {
-  if (targetMs < 40) targetMs = 40;
+  if (targetMs < 30) targetMs = 30;
   if (maxMs < targetMs) maxMs = targetMs;
   _latencyTargetMs = targetMs;
   _latencyMaxMs = maxMs;
-  // PCM cushion ≠ video chase (80ms chase → ≥160ms audio).
-  int pcmMs = targetMs * 2;
-  if (pcmMs < 120) pcmMs = 120;
+  BOOL listen = !atomic_load(&_videoEnabled);
+  int pcmMs = listen ? (targetMs + targetMs / 2) : (targetMs * 2);
+  int floor = listen ? 60 : 100;
+  if (pcmMs < floor) pcmMs = floor;
   if (pcmMs > 400) pcmMs = 400;
   [self.audio setMaxQueueMs:pcmMs];
   void *player = NULL;
   @synchronized(self) { player = _player; }
-  NSLog(@"[lixh] setLatency target=%d max=%d pcm=%d", targetMs, maxMs, pcmMs);
+  NSLog(@"[lixh] setLatency target=%d max=%d pcm=%d listen=%d", targetMs, maxMs,
+        pcmMs, listen ? 1 : 0);
   if (player) lixh_player_set_latency(player, targetMs, maxMs);
 }
 

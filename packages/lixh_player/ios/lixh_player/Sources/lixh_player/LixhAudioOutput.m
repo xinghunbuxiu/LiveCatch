@@ -34,11 +34,23 @@ enum { kLixhRingCap = 48000 * 2 * 2 };
 
 - (void)setMaxQueueMs:(int)ms {
   @synchronized(self) {
-    // Lean floor; grows toward 280ms if fill underruns.
-    if (ms < 120) ms = 120;
+    // Snap/listen may request ~60ms; grows toward 280ms on underrun.
+    if (ms < 60) ms = 60;
     if (ms > 2000) ms = 2000;
     _maxQueueMs = ms;
   }
+}
+
+- (int)primeNeedMsLocked {
+  if (_maxQueueMs <= 100) {
+    int p = _maxQueueMs;
+    if (p < 40) p = 40;
+    return p;
+  }
+  int p = _maxQueueMs;
+  if (p < 180) p = 180;
+  if (p > 240) p = 240;
+  return p;
 }
 
 static void LixhAqCallback(void *user, AudioQueueRef q, AudioQueueBufferRef buf) {
@@ -59,10 +71,7 @@ static void LixhAqCallback(void *user, AudioQueueRef q, AudioQueueBufferRef buf)
     int need = frames * _ch;
     if (!_primed) {
       int qms = (_rate > 0 && _ch > 0) ? (int)((_count / _ch) * 1000L / _rate) : 0;
-      int needPrime = _maxQueueMs;
-      if (needPrime < 180) needPrime = 180;
-      if (needPrime > 240) needPrime = 240;
-      if (qms >= needPrime) {
+      if (qms >= [self primeNeedMsLocked]) {
         _primed = YES;
       } else {
         memset(dst, 0, (size_t)need * sizeof(float));
@@ -169,18 +178,19 @@ static void LixhAqCallback(void *user, AudioQueueRef q, AudioQueueBufferRef buf)
     int max_samples = kLixhRingCap;
     int cap_ms = _maxQueueMs;
     if (!_primed) {
-      int p = _maxQueueMs;
-      if (p < 180) p = 180;
-      if (p > 240) p = 240;
+      int p = [self primeNeedMsLocked];
       if (cap_ms < p) cap_ms = p;
     }
     if (cap_ms > 0 && _rate > 0 && _ch > 0) {
       max_samples = _ch * _rate * cap_ms / 1000;
-      if (max_samples < _ch * _rate * 120 / 1000) max_samples = _ch * _rate * 120 / 1000;
+      int floor_ms = _maxQueueMs < 100 ? 60 : (_maxQueueMs < 140 ? 80 : 100);
+      if (max_samples < _ch * _rate * floor_ms / 1000) {
+        max_samples = _ch * _rate * floor_ms / 1000;
+      }
       if (max_samples > kLixhRingCap) max_samples = kLixhRingCap;
     }
     int trim_at = max_samples + max_samples / 4;
-    int keep_ms = _maxQueueMs >= 160 ? 80 : 60;
+    int keep_ms = _maxQueueMs >= 160 ? 80 : (_maxQueueMs >= 100 ? 50 : 35);
     int min_keep = _primed ? (_ch * _rate * keep_ms / 1000) : 0;
     while (_count + n > trim_at && _count > min_keep) {
       int drop = _ch > 0 ? _ch * (_rate / 50) : n;

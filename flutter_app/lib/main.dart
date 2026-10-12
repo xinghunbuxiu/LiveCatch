@@ -263,6 +263,12 @@ class _PlayerPageState extends State<PlayerPage>
     );
   }
 
+  Future<void> _applyLatency({bool? videoOn}) async {
+    final on = videoOn ?? _videoOn;
+    final (t, m) = _settings.latency.latencyMsFor(videoOn: on);
+    await _player.setLatency(targetMs: t, maxMs: m);
+  }
+
   Future<void> _openSettings() async {
     final next = await showSettingsSheet(
       context,
@@ -272,9 +278,8 @@ class _PlayerPageState extends State<PlayerPage>
     );
     if (next == null || !mounted) return;
     setState(() => _settings = next);
-    final (t, m) = next.latency.latencyMs;
     try {
-      await _player.setLatency(targetMs: t, maxMs: m);
+      await _applyLatency();
     } catch (e) {
       _appendLog('setLatency: $e');
     }
@@ -284,9 +289,9 @@ class _PlayerPageState extends State<PlayerPage>
     try {
       _settings = await AppSettings.load();
       final info = await _player.createVideoTexture(width: 1920, height: 1080);
-      final (t, m) = _settings.latency.latencyMs;
       try {
-        await _player.setLatency(targetMs: t, maxMs: m);
+        // Boot is listen-first until the user opens picture.
+        await _applyLatency(videoOn: _settings.startWithVideo);
       } catch (_) {}
       if (!mounted) return;
       setState(() {
@@ -584,8 +589,7 @@ class _PlayerPageState extends State<PlayerPage>
       }
 
       await PlaybackKeepAlive.stop();
-      final (t, m) = _settings.latency.latencyMs;
-      await _player.setLatency(targetMs: t, maxMs: m);
+      await _applyLatency(videoOn: false);
       await _player.stop();
       await _player.setVideoEnabled(false);
       _lastProgress = 0;
@@ -781,6 +785,7 @@ class _PlayerPageState extends State<PlayerPage>
     });
     try {
       await _player.setVideoEnabled(next);
+      await _applyLatency(videoOn: next);
       debugPrint('[LiveCatch] setVideoEnabled ok ($next)');
     } catch (e, st) {
       debugPrint('[LiveCatch] setVideoEnabled FAILED: $e\n$st');

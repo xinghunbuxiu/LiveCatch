@@ -5,11 +5,14 @@ enum LatencyProfile {
   /// Slightly larger buffer — steadier on weak networks.
   smooth,
 
-  /// Default balance.
+  /// Default balance for picture + audio.
   balanced,
 
-  /// Smallest buffer — lowest lag, more risk of stalls.
+  /// Tight chase; still keeps a modest PCM cushion.
   low,
+
+  /// Listen race mode — shortest PCM/prime; more underrun risk.
+  snap,
 }
 
 extension LatencyProfileX on LatencyProfile {
@@ -17,22 +20,35 @@ extension LatencyProfileX on LatencyProfile {
         LatencyProfile.smooth => '流畅优先',
         LatencyProfile.balanced => '均衡',
         LatencyProfile.low => '低延迟',
+        LatencyProfile.snap => '听播极限',
       };
 
   String get hint => switch (this) {
         LatencyProfile.smooth => '缓冲更大，弱网更稳',
         LatencyProfile.balanced => '延迟与稳定性折中',
-        LatencyProfile.low => '追帧更紧；音频约 120ms 起，卡顿时自动加厚',
+        LatencyProfile.low => '追帧更紧；音频约 100ms 起，卡顿时自动加厚',
+        LatencyProfile.snap => '对标秒听听感：极短预缓冲，易刺啦时自动加厚',
       };
 
-  /// Target / max live latency (ms) for native player when wired.
-  /// Note: PCM starts near max(target×2, 120)ms and grows on underrun.
+  /// Target / max live latency (ms) for native chase when wired.
+  /// PCM/prime scale from target in native (listen-only goes leaner).
   (int targetMs, int maxMs) get latencyMs => switch (this) {
         LatencyProfile.smooth => (200, 600),
         LatencyProfile.balanced => (120, 400),
-        // Tight video chase; audio cushion is applied separately in native.
         LatencyProfile.low => (80, 280),
+        LatencyProfile.snap => (40, 160),
       };
+
+  /// When picture is off, shave chase one notch so audio isn't waiting on video.
+  (int targetMs, int maxMs) latencyMsFor({required bool videoOn}) {
+    final (t, m) = latencyMs;
+    if (videoOn) return (t, m);
+    // Already snap — keep as-is.
+    if (this == LatencyProfile.snap) return (t, m);
+    final nt = (t * 3) ~/ 4;
+    final nm = (m * 3) ~/ 4;
+    return (nt < 40 ? 40 : nt, nm < nt ? (nt < 40 ? 40 : nt) + 80 : nm);
+  }
 }
 
 class AppSettings {
@@ -41,8 +57,8 @@ class AppSettings {
     // Listen-first: avoid mid-play quality switches (each switch re-opens the stream).
     this.abrEnabled = false,
     this.preferFlv = true,
-    // Balanced: less underrun risk than "low" on first install.
-    this.latency = LatencyProfile.balanced,
+    // Race the listen edge by default (product is 抢听).
+    this.latency = LatencyProfile.snap,
   });
 
   /// Open with video sink on (otherwise audio-first listen mode).
@@ -66,7 +82,7 @@ class AppSettings {
     final latName = p.getString(_kLatency);
     final latency = LatencyProfile.values.firstWhere(
       (e) => e.name == latName,
-      orElse: () => LatencyProfile.balanced,
+      orElse: () => LatencyProfile.snap,
     );
     return AppSettings(
       startWithVideo: p.getBool(_kVideo) ?? false,
