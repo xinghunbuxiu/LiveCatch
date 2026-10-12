@@ -214,6 +214,10 @@ static int open_decoder(LixhPlayer *p, AVStream *st, int video) {
             rc = avcodec_open2(ctx, codec, NULL);
         }
     } else {
+        /* Audio: single-thread + low delay — AAC frame threading adds join lag. */
+        ctx->flags |= AV_CODEC_FLAG_LOW_DELAY;
+        ctx->flags2 |= AV_CODEC_FLAG2_FAST;
+        ctx->thread_count = 1;
         rc = avcodec_open2(ctx, codec, NULL);
     }
     if (rc < 0) {
@@ -235,9 +239,15 @@ static int open_input(LixhPlayer *p) {
     av_dict_set(&opts, "fflags", "nobuffer+discardcorrupt+flush_packets", 0);
     av_dict_set(&opts, "max_delay", "0", 0);
     av_dict_set(&opts, "flags", "low_delay", 0);
-    /* Tight probe for faster join (listen-first cares about TTFB to audio). */
-    av_dict_set(&opts, "probesize", "163840", 0);
-    av_dict_set(&opts, "analyzeduration", "150000", 0);
+    /* Tight probe for faster join (listen-first cares about TTFB to audio).
+       Even tighter when picture is off — we only need the audio stream. */
+    if (!atomic_load_explicit(&p->video_sink, memory_order_acquire)) {
+        av_dict_set(&opts, "probesize", "65536", 0);
+        av_dict_set(&opts, "analyzeduration", "80000", 0);
+    } else {
+        av_dict_set(&opts, "probesize", "163840", 0);
+        av_dict_set(&opts, "analyzeduration", "150000", 0);
+    }
     av_dict_set(&opts, "rw_timeout", "2000000", 0);
     av_dict_set(&opts, "timeout", "2000000", 0);
     /* Live CDN edge nodes (e.g. douyincdn) throttle/reset bare Lavf
@@ -533,6 +543,15 @@ static void deliver_video(LixhPlayer *p, AVFrame *f, AVRational tb) {
     }
 }
 
+static int ensure_audio_out(LixhPlayer *p, size_t needed) {
+    if (needed <= p->audio_out_capacity) return 0;
+    float *grown = (float *)av_realloc_array(p->audio_out, needed, sizeof(float));
+    if (!grown) return -1;
+    p->audio_out = grown;
+    p->audio_out_capacity = needed;
+    return 0;
+}
+
 static void deliver_audio(LixhPlayer *p, AVFrame *f, AVRational tb) {
     int64_t pts = frame_pts_ms(f, tb);
     if (pts == AV_NOPTS_VALUE || !p->cb.on_audio) return;
@@ -544,19 +563,39 @@ static void deliver_audio(LixhPlayer *p, AVFrame *f, AVRational tb) {
     }
     atomic_store_explicit(&p->last_audio_pts_ms, pts, memory_order_release);
     atomic_fetch_add_explicit(&p->audio_frames, 1, memory_order_relaxed);
-    if (!p->swr) return;
-    int out_samples = av_rescale_rnd(swr_get_delay(p->swr, p->sample_rate) + f->nb_samples,
-                                     p->sample_rate, p->sample_rate, AV_ROUND_UP);
-    size_t needed = (size_t)out_samples * (size_t)p->channels;
-    if (needed > p->audio_out_capacity) {
-        float *grown = (float *)av_realloc_array(p->audio_out, needed, sizeof(float));
-        if (!grown) return;
-        p->audio_out = grown;
-        p->audio_out_capacity = needed;
+
+    const int ch = p->channels > 0 ? p->channels : f->ch_layout.nb_channels;
+    const int n_in = f->nb_samples;
+    if (ch <= 0 || n_in <= 0) return;
+
+    /* Fast path: AAC usually lands as FLTP — interleave without swr delay. */
+    if (f->format == AV_SAMPLE_FMT_FLTP && f->extended_data) {
+        size_t needed = (size_t)n_in * (size_t)ch;
+        if (ensure_audio_out(p, needed) < 0) return;
+        for (int i = 0; i < n_in; ++i) {
+            for (int c = 0; c < ch; ++c) {
+                const float *plane = (const float *)f->extended_data[c];
+                p->audio_out[i * ch + c] = plane ? plane[i] : 0.f;
+            }
+        }
+        p->cb.on_audio(p->cb.opaque, p->sample_rate, ch, AV_SAMPLE_FMT_FLT, pts,
+                       p->audio_out, n_in);
+        return;
     }
+    if (f->format == AV_SAMPLE_FMT_FLT && f->data[0]) {
+        p->cb.on_audio(p->cb.opaque, p->sample_rate, ch, AV_SAMPLE_FMT_FLT, pts,
+                       (float *)f->data[0], n_in);
+        return;
+    }
+
+    if (!p->swr) return;
+    int out_samples = av_rescale_rnd(swr_get_delay(p->swr, p->sample_rate) + n_in,
+                                     p->sample_rate, p->sample_rate, AV_ROUND_UP);
+    size_t needed = (size_t)out_samples * (size_t)ch;
+    if (ensure_audio_out(p, needed) < 0) return;
     uint8_t *dst[1] = { (uint8_t *)p->audio_out };
-    int n = swr_convert(p->swr, dst, out_samples, (const uint8_t **)f->extended_data, f->nb_samples);
-    if (n > 0) p->cb.on_audio(p->cb.opaque, p->sample_rate, p->channels, AV_SAMPLE_FMT_FLT, pts, p->audio_out, n);
+    int n = swr_convert(p->swr, dst, out_samples, (const uint8_t **)f->extended_data, n_in);
+    if (n > 0) p->cb.on_audio(p->cb.opaque, p->sample_rate, ch, AV_SAMPLE_FMT_FLT, pts, p->audio_out, n);
 }
 
 static int decode_packet(LixhPlayer *p, AVPacket *pkt) {

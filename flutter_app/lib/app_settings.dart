@@ -76,9 +76,18 @@ class AppSettings {
   static const _kAbr = 'cfg.abrEnabled';
   static const _kFlv = 'cfg.preferFlv';
   static const _kLatency = 'cfg.latency';
+  static const _kSnapMigrate = 'cfg.latencySnapMigrate1';
 
   static Future<AppSettings> load() async {
     final p = await SharedPreferences.getInstance();
+    // One-shot: listen-first product pivot — bump old defaults to 听播极限.
+    if (!(p.getBool(_kSnapMigrate) ?? false)) {
+      await p.setBool(_kSnapMigrate, true);
+      final prev = p.getString(_kLatency);
+      if (prev == null || prev == 'balanced') {
+        await p.setString(_kLatency, LatencyProfile.snap.name);
+      }
+    }
     final latName = p.getString(_kLatency);
     final latency = LatencyProfile.values.firstWhere(
       (e) => e.name == latName,

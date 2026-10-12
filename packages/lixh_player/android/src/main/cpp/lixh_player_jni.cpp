@@ -196,9 +196,18 @@ class AudioOut {
     AAudioStreamBuilder_setSampleRate(b, rate_);
     AAudioStreamBuilder_setPerformanceMode(b, AAUDIO_PERFORMANCE_MODE_LOW_LATENCY);
     AAudioStreamBuilder_setDataCallback(b, Callback, this);
+    /* Aim for a small callback burst; device may round up. */
+    AAudioStreamBuilder_setFramesPerDataCallback(b, rate_ / 100); /* ~10ms */
     aaudio_result_t rc = AAudioStreamBuilder_openStream(b, &stream_);
     AAudioStreamBuilder_delete(b);
     if (rc != AAUDIO_OK || !stream_) return false;
+    {
+      int32_t burst = AAudioStream_getFramesPerBurst(stream_);
+      if (burst > 0) {
+        /* Keep device buffer near 2 bursts (~low latency shared mode). */
+        AAudioStream_setBufferSizeInFrames(stream_, burst * 2);
+      }
+    }
     return AAudioStream_requestStart(stream_) == AAUDIO_OK;
   }
 
