@@ -509,6 +509,8 @@ class _PlayerPageState extends State<PlayerPage>
       if (keepVideo && _appInBackground) {
         await _player.setVideoEnabled(false);
       }
+      // Re-bind chase/PCM to listen vs picture after ABR reopen.
+      await _applyLatency(videoOn: _videoOn);
       await _syncKeepAlive(playing: true);
     } catch (e) {
       if (gen != _playGen) return;

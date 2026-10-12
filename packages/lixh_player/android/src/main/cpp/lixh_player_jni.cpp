@@ -532,8 +532,8 @@ class Session {
   std::atomic<uint64_t> audio_frames_{0};
   std::atomic<uint64_t> present_ok_{0};
   std::atomic<bool> video_enabled_{false};
-  int latency_target_ms_ = 100;
-  int latency_max_ms_ = 320;
+  int latency_target_ms_ = 40;
+  int latency_max_ms_ = 160;
 };
 
 }  // namespace

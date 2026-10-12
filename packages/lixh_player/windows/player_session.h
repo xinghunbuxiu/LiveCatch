@@ -91,8 +91,8 @@ class PlayerSession {
   std::atomic<int> decode_hw_{-1};
   // Default off: audio-first; return 1 from on_video to skip GPU/CPU present.
   std::atomic<bool> video_enabled_{false};
-  int latency_target_ms_ = 200;
-  int latency_max_ms_ = 700;
+  int latency_target_ms_ = 40;
+  int latency_max_ms_ = 160;
 };
 
 }  // namespace lixh_player
