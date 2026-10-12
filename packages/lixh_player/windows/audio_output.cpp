@@ -70,6 +70,39 @@ void AudioOutput::ClearQueue() {
 
 void AudioOutput::Flush() { ClearQueue(); }
 
+void AudioOutput::SetMaxQueueMs(int ms) {
+  // Floor: chase target can be 80ms; PCM needs more to avoid WASAPI underruns.
+  if (ms < 160) ms = 160;
+  if (ms > 2000) ms = 2000;
+  std::lock_guard<std::mutex> lock(mu_);
+  max_queue_ms_ = ms;
+  const int rate = out_rate_ > 0 ? out_rate_ : src_rate_;
+  const int ch = out_channels_ > 0 ? out_channels_ : src_channels_;
+  size_t next = static_cast<size_t>(std::max(1, rate)) *
+                static_cast<size_t>(std::max(1, ch)) *
+                static_cast<size_t>(ms) / 1000;
+  if (next < 2048) next = 2048;
+  max_queue_ = next;
+  if (ring_cap_ > 0 && ring_cap_ < max_queue_) {
+    ring_.assign(max_queue_, 0.f);
+    ring_cap_ = max_queue_;
+    r_ = w_ = count_ = 0;
+  } else if (ring_cap_ > 0) {
+    const size_t trim_at = max_queue_ + max_queue_ / 4;
+    const size_t min_keep =
+        static_cast<size_t>(std::max(1, ch)) *
+        static_cast<size_t>(std::max(1, rate)) * 80 / 1000;
+    while (count_ > trim_at && count_ > min_keep) {
+      size_t drop = static_cast<size_t>(std::max(1, ch)) *
+                    static_cast<size_t>(std::max(1, rate / 50));
+      if (drop > count_ - min_keep) drop = count_ - min_keep;
+      if (drop == 0) break;
+      r_ = (r_ + drop) % ring_cap_;
+      count_ -= drop;
+    }
+  }
+}
+
 size_t AudioOutput::RingSpace() const {
   return ring_cap_ > count_ ? ring_cap_ - count_ : 0;
 }
@@ -304,9 +337,10 @@ bool AudioOutput::Start() {
   render_ = render;
   event_ = event;
   buffer_frames_ = buffer_frames;
-  // ~80ms of PCM.
+  // App-side PCM cap from latency target (updated by SetMaxQueueMs).
   max_queue_ = static_cast<size_t>(std::max(1, out_rate_)) *
-               static_cast<size_t>(std::max(1, out_channels_)) / 12;
+               static_cast<size_t>(std::max(1, out_channels_)) *
+               static_cast<size_t>(std::max(40, max_queue_ms_)) / 1000;
   if (max_queue_ < 2048) {
     max_queue_ = 2048;
   }
@@ -398,14 +432,19 @@ void AudioOutput::Push(const float* samples, int frames, int channels,
     ring_cap_ = max_queue_;
     r_ = w_ = count_ = 0;
   }
-  // Drop oldest (live chase) instead of vector head-erase.
-  while (count_ + chunk.size() > ring_cap_) {
+  // Hysteresis: trim only past 125% of cap; keep ≥~80ms to avoid crackle.
+  const size_t cap = max_queue_ < ring_cap_ ? max_queue_ : ring_cap_;
+  const size_t trim_at = cap + cap / 4;
+  const size_t min_keep =
+      static_cast<size_t>(std::max(1, out_channels_)) *
+      static_cast<size_t>(std::max(1, out_rate_)) * 80 / 1000;
+  while (count_ + chunk.size() > trim_at && count_ > min_keep) {
     size_t drop = static_cast<size_t>(std::max(1, out_channels_)) *
                   static_cast<size_t>(std::max(1, out_rate_ / 50));
-    if (drop > count_) {
-      drop = count_;
+    if (drop > count_ - min_keep) {
+      drop = count_ - min_keep;
     }
-    if (drop == 0) {
+    if (drop == 0 || ring_cap_ == 0) {
       break;
     }
     r_ = (r_ + drop) % ring_cap_;

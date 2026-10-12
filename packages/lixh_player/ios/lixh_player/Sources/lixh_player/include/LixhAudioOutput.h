@@ -4,6 +4,7 @@
 - (BOOL)start;
 - (void)stop;
 - (void)flush;
+- (void)setMaxQueueMs:(int)ms;
 - (void)pushSamples:(const float *)samples
              frames:(int)frames
            channels:(int)channels

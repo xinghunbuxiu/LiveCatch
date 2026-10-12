@@ -110,13 +110,33 @@ String formatResolveError(Object error) {
   if (s.contains('找不到') && s.contains('lixh_resolve')) {
     return s;
   }
-  if (s.contains('直播已结束') || s.contains('不在播')) {
+  // Ended / offline — keep wording obvious so it is not mistaken for a bug.
+  if (s.contains('直播已结束') ||
+      s.contains('不在播') ||
+      s.contains('已下播') ||
+      s.contains('主播已离开') ||
+      s.contains('not live') ||
+      s.contains('StreamerNotFound') ||
+      s.contains('streamer not found')) {
     return '直播已结束或不在播';
+  }
+  if (s.contains('没有返回可播放') ||
+      s.contains('没有可用的直播流') ||
+      s.contains('没有可播放线路')) {
+    return '没有可播放线路（直播可能已结束）';
   }
   if (s.contains('短链') && (s.contains('展开') || s.contains('跳转') || s.contains('web_rid'))) {
     return s;
   }
   return s.isEmpty ? '房间解析失败' : s;
+}
+
+/// True when [msg] means the room is offline / ended (not an app fault).
+bool isLiveEndedResolveError(Object error) {
+  final s = formatResolveError(error);
+  return s.contains('直播已结束') ||
+      s.contains('不在播') ||
+      s.contains('可能已结束');
 }
 
 /// True when [input] looks like a direct media URL (skip resolver).
@@ -147,7 +167,8 @@ Future<ResolvedRoom> resolveRoom(
     preferFlv: preferFlv,
   );
   if (picks.isEmpty) {
-    throw StateError('解析器没有返回可播放的视频流');
+    // is_live can still be true while CDN lists are empty at end-of-stream.
+    throw StateError('没有可播放线路（直播可能已结束）');
   }
 
   final headers = <String, String>{};

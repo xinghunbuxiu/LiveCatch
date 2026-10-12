@@ -23,6 +23,9 @@ class AudioOutput {
   bool Start();
   void Stop();
 
+  // Cap app-side PCM backlog to roughly [ms] (same semantics as Android).
+  void SetMaxQueueMs(int ms);
+
   // frames = samples per channel; samples are interleaved float [-1,1].
   void Push(const float* samples, int frames, int channels, int sample_rate);
 
@@ -52,6 +55,7 @@ class AudioOutput {
   size_t w_ = 0;
   size_t count_ = 0;
   size_t max_queue_ = 48000 * 2;
+  int max_queue_ms_ = 160;
   int src_rate_ = 48000;
   int src_channels_ = 2;
   std::string last_error_;

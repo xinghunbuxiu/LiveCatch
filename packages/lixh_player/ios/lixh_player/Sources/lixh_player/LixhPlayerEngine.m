@@ -101,6 +101,12 @@ static CVPixelBufferRef LixhUploadSoftwareFrame(const AVFrame *f) {
     atomic_init(&_decodeHw, -1);
     _latencyTargetMs = 200;
     _latencyMaxMs = 700;
+    {
+      int pcmMs = _latencyTargetMs * 2;
+      if (pcmMs < 160) pcmMs = 160;
+      if (pcmMs > 400) pcmMs = 400;
+      [_audio setMaxQueueMs:pcmMs];
+    }
   }
   return self;
 }
@@ -331,9 +337,14 @@ static void OnEvent(void *opaque, int type, int code, const char *message) {
   if (maxMs < targetMs) maxMs = targetMs;
   _latencyTargetMs = targetMs;
   _latencyMaxMs = maxMs;
+  // PCM cushion ≠ video chase (80ms chase → ≥160ms audio).
+  int pcmMs = targetMs * 2;
+  if (pcmMs < 160) pcmMs = 160;
+  if (pcmMs > 400) pcmMs = 400;
+  [self.audio setMaxQueueMs:pcmMs];
   void *player = NULL;
   @synchronized(self) { player = _player; }
-  NSLog(@"[lixh] setLatency target=%d max=%d", targetMs, maxMs);
+  NSLog(@"[lixh] setLatency target=%d max=%d pcm=%d", targetMs, maxMs, pcmMs);
   if (player) lixh_player_set_latency(player, targetMs, maxMs);
 }
 

@@ -182,6 +182,12 @@ bool PlayerSession::Open(const std::string& url, const std::string& headers) {
   // Before open: listen-only skips video decoder/HW init.
   lixh_player_set_video_sink(player, video_enabled_.load() ? 1 : 0);
   lixh_player_set_latency(player, latency_target_ms_, latency_max_ms_);
+  {
+    int pcm_ms = latency_target_ms_ * 2;
+    if (pcm_ms < 160) pcm_ms = 160;
+    if (pcm_ms > 400) pcm_ms = 400;
+    audio_.SetMaxQueueMs(pcm_ms);
+  }
   if (lixh_player_open(player, url.c_str()) < 0) {
     SetError("lixh_player_open failed");
     lixh_player_destroy(player);
@@ -310,6 +316,11 @@ void PlayerSession::SetLatency(int target_ms, int max_ms) {
   if (max_ms < target_ms) max_ms = target_ms;
   latency_target_ms_ = target_ms;
   latency_max_ms_ = max_ms;
+  // PCM cushion ≠ video chase target (80ms chase → ≥160ms audio).
+  int pcm_ms = target_ms * 2;
+  if (pcm_ms < 160) pcm_ms = 160;
+  if (pcm_ms > 400) pcm_ms = 400;
+  audio_.SetMaxQueueMs(pcm_ms);
   void* player = nullptr;
   {
     std::lock_guard<std::mutex> lock(mu_);

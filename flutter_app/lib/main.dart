@@ -359,13 +359,12 @@ class _PlayerPageState extends State<PlayerPage>
             }
           }
 
-          final effLag = () {
-            var lag = s.lagMs > 0 ? s.lagMs : s.audioQueueMs;
-            if (s.lagMs > 0 && s.audioQueueMs > 0) {
-              lag = s.lagMs + s.audioQueueMs;
-            }
-            return lag;
-          }();
+          // lagMs = clock-drift / chase backlog (NOT absolute live delay).
+          // audioQueueMs = app PCM backlog. Do not sum them as end-to-end latency.
+          final chaseLag = s.lagMs < 0 ? 0 : s.lagMs;
+          final queueMs = s.audioQueueMs < 0 ? 0 : s.audioQueueMs;
+          final backlogMs =
+              chaseLag > queueMs ? chaseLag : queueMs;
 
           if (s.lastError.isNotEmpty && s.lastError != _lastLoggedNativeErr) {
             _lastLoggedNativeErr = s.lastError;
@@ -374,7 +373,7 @@ class _PlayerPageState extends State<PlayerPage>
           if (_stallTicks == 4 || (_stallTicks > 0 && _stallTicks % 10 == 0)) {
             _appendLog(
               'stall tick=$_stallTicks a=${s.audioFrames} '
-              'p=${s.presentOk} lag=${s.lagMs} q=${s.audioQueueMs} '
+              'p=${s.presentOk} chase=$chaseLag q=$queueMs '
               'br=$kbps drop=${s.droppedFrames}',
             );
           }
@@ -395,8 +394,8 @@ class _PlayerPageState extends State<PlayerPage>
           final nextH = s.videoHeight > 0 ? s.videoHeight : _videoH;
           final changed = _audioFrames != s.audioFrames ||
               _presentOk != s.presentOk ||
-              _audioQueueMs != s.audioQueueMs ||
-              _lagMs != effLag ||
+              _audioQueueMs != queueMs ||
+              _lagMs != chaseLag ||
               _bitrateKbps != kbps ||
               _dropped != s.droppedFrames ||
               _videoW != nextW ||
@@ -406,8 +405,8 @@ class _PlayerPageState extends State<PlayerPage>
             setState(() {
               _audioFrames = s.audioFrames;
               _presentOk = s.presentOk;
-              _audioQueueMs = s.audioQueueMs;
-              _lagMs = effLag;
+              _audioQueueMs = queueMs;
+              _lagMs = chaseLag;
               _bitrateKbps = kbps;
               _dropped = s.droppedFrames;
               _videoW = nextW;
@@ -426,7 +425,7 @@ class _PlayerPageState extends State<PlayerPage>
               _graceTicks <= 0) {
             final action = abr.observe(
               progress: progress,
-              lagMs: effLag,
+              lagMs: backlogMs,
               playing: _playing,
             );
             if (action.kind == AbrActionKind.switchTo &&
@@ -531,7 +530,7 @@ class _PlayerPageState extends State<PlayerPage>
       if (mounted) {
         setState(() {
           _playing = false;
-          _status = 'ABR 失败';
+          _status = isLiveEndedResolveError(e) ? msg : 'ABR 失败：$msg';
         });
       }
     } finally {
@@ -710,13 +709,24 @@ class _PlayerPageState extends State<PlayerPage>
     } catch (e) {
       if (!mounted) return;
       final msg = formatResolveError(e);
-      _appendLog('失败: $msg');
+      final ended = isLiveEndedResolveError(e);
+      _appendLog(ended ? '直播结束: $msg' : '失败: $msg');
       await PlaybackKeepAlive.stop();
+      if (!mounted) return;
       setState(() {
         _busy = false;
         _playing = false;
-        _status = '失败';
+        // Surface the real reason in the HUD (was only "失败").
+        _status = msg;
       });
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      messenger?.clearSnackBars();
+      messenger?.showSnackBar(
+        SnackBar(
+          content: Text(ended ? msg : '解析失败：$msg'),
+          duration: Duration(seconds: ended ? 5 : 4),
+        ),
+      );
     }
   }
 
@@ -904,7 +914,7 @@ class _Header extends StatelessWidget {
       if (platform.isNotEmpty) platform,
       if (status.isNotEmpty) status,
       _speed,
-      '${lagMs.clamp(0, 99999)}ms',
+      '追${lagMs.clamp(0, 99999)}ms',
       '缓${cacheMs.clamp(0, 99999)}ms',
       if (resolution != '—') resolution,
       if (dropped > 0) '丢$dropped',

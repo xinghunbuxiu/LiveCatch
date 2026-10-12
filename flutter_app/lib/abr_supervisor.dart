@@ -98,7 +98,8 @@ class AbrSupervisor {
   }
 
   /// Observe one stats sample. [progress] = audioFrames + presentOk (or similar).
-  /// [lagMs] = effective delay (clock lag + audio queue).
+  /// [lagMs] = app backlog signal (max of chase clock-drift and PCM queue),
+  /// not absolute live-site delay.
   AbrAction observe({
     required int progress,
     required int lagMs,

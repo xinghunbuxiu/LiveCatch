@@ -43,6 +43,8 @@ typedef struct LixhStats {
     uint64_t reconnects;
     int64_t last_video_pts_ms;
     int64_t last_audio_pts_ms;
+    /* Clock-drift / chase backlog (wall−PTS), NOT absolute live delay.
+       Absolute end-to-end latency needs a reliable wall-clock live epoch. */
     int64_t input_buffer_ms;
     int decode_hw;
     uint64_t bytes_read;
@@ -50,6 +52,8 @@ typedef struct LixhStats {
     int video_height;
     /* Last successful present path: LIXH_PRESENT_*. */
     int present_mode;
+    /* 0=none, 1=soft (skip present), 2=hard (skip to keyframe). */
+    int chase_mode;
 } LixhStats;
 
 void *lixh_player_create(const LixhCallbacks *cb);

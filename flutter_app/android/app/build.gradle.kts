@@ -101,6 +101,14 @@ android {
         jniLibs {
             // Extract liblixh_resolve.so so Dart can Process.run it from nativeLibraryDir.
             useLegacyPackaging = true
+            // Keep APK arm64-only even if Flutter/AndroidX merge other ABIs
+            // (bare `flutter build apk` without --target-platform used to inflate ~19→33MB).
+            excludes += setOf(
+                "**/armeabi/**",
+                "**/armeabi-v7a/**",
+                "**/x86/**",
+                "**/x86_64/**",
+            )
         }
     }
 }

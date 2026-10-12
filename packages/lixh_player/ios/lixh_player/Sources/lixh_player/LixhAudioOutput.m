@@ -12,6 +12,7 @@ enum { kLixhRingCap = 48000 * 2 * 2 };
   int _count;
   int _rate;
   int _ch;
+  int _maxQueueMs;
   BOOL _started;
 }
 - (void)fillBuffer:(AudioQueueBufferRef)buf queue:(AudioQueueRef)q;
@@ -20,6 +21,21 @@ enum { kLixhRingCap = 48000 * 2 * 2 };
 @end
 
 @implementation LixhAudioOutput
+
+- (instancetype)init {
+  self = [super init];
+  if (self) _maxQueueMs = 160;
+  return self;
+}
+
+- (void)setMaxQueueMs:(int)ms {
+  @synchronized(self) {
+    // PCM cushion floor — chase targets like 80ms underrun and crackle.
+    if (ms < 160) ms = 160;
+    if (ms > 2000) ms = 2000;
+    _maxQueueMs = ms;
+  }
+}
 
 static void LixhAqCallback(void *user, AudioQueueRef q, AudioQueueBufferRef buf) {
   LixhAudioOutput *self = (__bridge LixhAudioOutput *)user;
@@ -123,11 +139,21 @@ static void LixhAqCallback(void *user, AudioQueueRef q, AudioQueueBufferRef buf)
     if (![self ensureQueueRate:sampleRate channels:channels]) return;
     int n = frames * channels;
     if (n > kLixhRingCap / 2) n = kLixhRingCap / 2;
-    // Drop oldest if full (live chase).
-    while (_count + n > kLixhRingCap) {
+    /* Cap app-side PCM to latency target (same semantics as Android).
+       Ring capacity (~2s) is only a hard ceiling, not the live target. */
+    int max_samples = kLixhRingCap;
+    if (_maxQueueMs > 0 && _rate > 0 && _ch > 0) {
+      max_samples = _ch * _rate * _maxQueueMs / 1000;
+      if (max_samples < _ch * _rate * 160 / 1000) max_samples = _ch * _rate * 160 / 1000;
+      if (max_samples > kLixhRingCap) max_samples = kLixhRingCap;
+    }
+    int trim_at = max_samples + max_samples / 4;
+    int min_keep = _ch * _rate * 80 / 1000;
+    while (_count + n > trim_at && _count > min_keep) {
       int drop = _ch > 0 ? _ch * (_rate / 50) : n;
       if (drop < 1) drop = n;
-      if (drop > _count) drop = _count;
+      if (drop > _count - min_keep) drop = _count - min_keep;
+      if (drop < 1) break;
       _r = (_r + drop) % kLixhRingCap;
       _count -= drop;
     }
