@@ -92,6 +92,7 @@ class MethodChannelLixhPlayer extends LixhPlayerPlatform {
         audioFrames: 0,
         decodeHw: -1,
         lastError: '',
+        presentMode: 0,
       );
     }
     int n(String key) => (map[key] as num?)?.toInt() ?? 0;
@@ -110,6 +111,7 @@ class MethodChannelLixhPlayer extends LixhPlayerPlatform {
       audioQueueMs: n('audioQueueMs'),
       videoWidth: n('videoWidth'),
       videoHeight: n('videoHeight'),
+      presentMode: n('presentMode'),
     );
   }
 

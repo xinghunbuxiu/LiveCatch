@@ -24,6 +24,9 @@
 #if defined(LIXH_MACOS) || defined(LIXH_IOS)
 #include <libavutil/hwcontext_videotoolbox.h>
 #endif
+#if defined(LIXH_ANDROID)
+#include <libavcodec/mediacodec.h>
+#endif
 
 typedef struct LixhPlayer {
     LixhCallbacks cb;
@@ -49,9 +52,17 @@ typedef struct LixhPlayer {
     atomic_int video_sink;
     /* Set from UI thread; consumed only on the play/decode thread. */
     atomic_int flush_video_req;
+    /* Listen→picture: open video decoder on the play thread (never from UI). */
+    atomic_int open_video_req;
+    atomic_int present_mode;
     int opened;
     char *url;
     char *http_headers;
+#if defined(LIXH_ANDROID)
+    /* Opaque jobject Surface (caller-owned GlobalRef). */
+    void *android_surface;
+    int mc_surface_inited;
+#endif
     atomic_int_fast64_t base_wall_ms;
     atomic_int_fast64_t first_pts_ms;
     atomic_int_fast64_t last_video_pts_ms;
@@ -83,8 +94,25 @@ static int interrupt_cb(void *opaque) {
     return p && atomic_load_explicit(&p->stop, memory_order_acquire) ? 1 : 0;
 }
 
+#if defined(LIXH_ANDROID)
+static void free_mediacodec_surface(LixhPlayer *p) {
+    if (p->mc_surface_inited && p->vdec) {
+        av_mediacodec_default_free(p->vdec);
+    }
+    p->mc_surface_inited = 0;
+}
+
+static void release_mc_buffer(AVFrame *f, int render) {
+    if (!f || f->format != AV_PIX_FMT_MEDIACODEC || !f->data[3]) return;
+    av_mediacodec_release_buffer((AVMediaCodecBuffer *)f->data[3], render ? 1 : 0);
+}
+#endif
+
 static void free_player_media(LixhPlayer *p) {
     if (p->swr) swr_free(&p->swr);
+#if defined(LIXH_ANDROID)
+    free_mediacodec_surface(p);
+#endif
     if (p->vdec) avcodec_free_context(&p->vdec);
     if (p->adec) avcodec_free_context(&p->adec);
     if (p->fmt) avformat_close_input(&p->fmt);
@@ -119,7 +147,7 @@ static int setup_hw(LixhPlayer *p) {
     }
     return 0;
 #elif defined(LIXH_ANDROID)
-    /* MediaCodec decode → CPU transfer → SurfaceTexture present. */
+    /* MediaCodec → Surface when android_surface is set; else transfer→RGBA. */
     p->hw_pix_fmt = AV_PIX_FMT_MEDIACODEC;
     p->hw_kind = LIXH_VIDEO_MEDIACODEC;
     int rc = av_hwdevice_ctx_create(&p->hw_device, AV_HWDEVICE_TYPE_MEDIACODEC, NULL, NULL, 0);
@@ -154,8 +182,25 @@ static int open_decoder(LixhPlayer *p, AVStream *st, int video) {
             ctx->hw_device_ctx = av_buffer_ref(p->hw_device);
             ctx->thread_count = 1;
         }
+#if defined(LIXH_ANDROID)
+        /* Bind Flutter SurfaceTexture before open for zero-copy output. */
+        if (p->hw_device && p->android_surface) {
+            AVMediaCodecContext *mc = av_mediacodec_alloc_context();
+            if (mc) {
+                if (av_mediacodec_default_init(ctx, mc, p->android_surface) == 0) {
+                    p->mc_surface_inited = 1;
+                }
+            }
+        }
+#endif
         rc = avcodec_open2(ctx, codec, NULL);
         if (rc < 0 && p->hw_device) {
+#if defined(LIXH_ANDROID)
+            if (p->mc_surface_inited) {
+                av_mediacodec_default_free(ctx);
+                p->mc_surface_inited = 0;
+            }
+#endif
             av_buffer_unref(&ctx->hw_device_ctx);
             p->hw_kind = LIXH_VIDEO_SOFTWARE;
             ctx->get_format = NULL;
@@ -164,7 +209,16 @@ static int open_decoder(LixhPlayer *p, AVStream *st, int video) {
     } else {
         rc = avcodec_open2(ctx, codec, NULL);
     }
-    if (rc < 0) { avcodec_free_context(&ctx); return rc; }
+    if (rc < 0) {
+#if defined(LIXH_ANDROID)
+        if (p->mc_surface_inited) {
+            av_mediacodec_default_free(ctx);
+            p->mc_surface_inited = 0;
+        }
+#endif
+        avcodec_free_context(&ctx);
+        return rc;
+    }
     if (video) p->vdec = ctx; else p->adec = ctx;
     return 0;
 }
@@ -174,9 +228,9 @@ static int open_input(LixhPlayer *p) {
     av_dict_set(&opts, "fflags", "nobuffer+discardcorrupt+flush_packets", 0);
     av_dict_set(&opts, "max_delay", "0", 0);
     av_dict_set(&opts, "flags", "low_delay", 0);
-    /* Tight probe for faster join. */
-    av_dict_set(&opts, "probesize", "327680", 0);
-    av_dict_set(&opts, "analyzeduration", "300000", 0);
+    /* Tight probe for faster join (listen-first cares about TTFB to audio). */
+    av_dict_set(&opts, "probesize", "163840", 0);
+    av_dict_set(&opts, "analyzeduration", "150000", 0);
     av_dict_set(&opts, "rw_timeout", "2000000", 0);
     av_dict_set(&opts, "timeout", "2000000", 0);
     /* Live CDN edge nodes (e.g. douyincdn) throttle/reset bare Lavf
@@ -201,14 +255,22 @@ static int open_input(LixhPlayer *p) {
     if (rc < 0) return rc;
     p->vstream = av_find_best_stream(p->fmt, AVMEDIA_TYPE_VIDEO, -1, -1, NULL, 0);
     p->astream = av_find_best_stream(p->fmt, AVMEDIA_TYPE_AUDIO, -1, -1, NULL, 0);
-    if (p->vstream < 0) return AVERROR_STREAM_NOT_FOUND;
-    setup_hw(p);
-    rc = open_decoder(p, p->fmt->streams[p->vstream], 1);
-    if (rc < 0) return rc;
+    int want_video = atomic_load_explicit(&p->video_sink, memory_order_acquire);
+    if (want_video) {
+        if (p->vstream < 0) return AVERROR_STREAM_NOT_FOUND;
+        setup_hw(p);
+        rc = open_decoder(p, p->fmt->streams[p->vstream], 1);
+        if (rc < 0) return rc;
+    } else {
+        /* Listen-only: require audio; skip video decoder/HW (big Android win). */
+        if (p->astream < 0) return AVERROR_STREAM_NOT_FOUND;
+        atomic_store_explicit(&p->open_video_req, 0, memory_order_release);
+    }
     if (p->astream >= 0) {
         rc = open_decoder(p, p->fmt->streams[p->astream], 0);
         if (rc < 0) p->astream = -1;
     }
+    if (!want_video && p->astream < 0) return AVERROR_STREAM_NOT_FOUND;
     if (p->adec) {
         p->sample_rate = p->adec->sample_rate;
         p->channels = p->adec->ch_layout.nb_channels;
@@ -255,12 +317,18 @@ static int live_chase_should_drop(LixhPlayer *p, int64_t pts, int is_key) {
         return 1;
     }
     if (p->target_latency_ms > 0 && live_lag > p->target_latency_ms) {
-        /* Prefer dropping non-keyframes so we snap to the next IDR near live. */
-        if (!is_key || p->chase_drop_streak < 8) {
+        /* Drop until a keyframe, then re-anchor wall clock to that IDR so we
+           actually sit on the live edge (previously we presented the keyframe
+           without re-anchoring and lag stayed high). */
+        if (!is_key || p->chase_drop_streak < 6) {
             p->chase_drop_streak++;
             atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
             return 1;
         }
+        atomic_store_explicit(&p->first_pts_ms, pts, memory_order_release);
+        atomic_store_explicit(&p->base_wall_ms, now_ms(), memory_order_release);
+        p->chase_drop_streak = 0;
+        return 0;
     }
     p->chase_drop_streak = 0;
     return 0;
@@ -268,23 +336,44 @@ static int live_chase_should_drop(LixhPlayer *p, int64_t pts, int is_key) {
 
 static void deliver_video(LixhPlayer *p, AVFrame *f, AVRational tb) {
     int64_t pts = frame_pts_ms(f, tb);
-    if (pts == AV_NOPTS_VALUE) return;
+    if (pts == AV_NOPTS_VALUE) {
+#if defined(LIXH_ANDROID)
+        release_mc_buffer(f, 0);
+#endif
+        return;
+    }
     int64_t last_pts = atomic_load_explicit(&p->last_video_pts_ms, memory_order_acquire);
-    if (last_pts != AV_NOPTS_VALUE && pts < last_pts - 1000) return;
+    if (last_pts != AV_NOPTS_VALUE && pts < last_pts - 1000) {
+#if defined(LIXH_ANDROID)
+        release_mc_buffer(f, 0);
+#endif
+        return;
+    }
     int is_key = 0;
 #if LIBAVUTIL_VERSION_MAJOR >= 58
     is_key = (f->flags & AV_FRAME_FLAG_KEY) != 0;
 #else
     is_key = f->key_frame;
 #endif
-    if (live_chase_should_drop(p, pts, is_key)) return;
+    if (live_chase_should_drop(p, pts, is_key)) {
+#if defined(LIXH_ANDROID)
+        /* MediaCodec buffers must be returned or the decoder stalls. */
+        release_mc_buffer(f, 0);
+#endif
+        return;
+    }
     atomic_store_explicit(&p->last_video_pts_ms, pts, memory_order_release);
     atomic_fetch_add_explicit(&p->video_frames, 1, memory_order_relaxed);
     if (f->width > 0 && f->height > 0) {
         atomic_store_explicit(&p->video_width, f->width, memory_order_relaxed);
         atomic_store_explicit(&p->video_height, f->height, memory_order_relaxed);
     }
-    if (!p->cb.on_video) return;
+    if (!p->cb.on_video) {
+#if defined(LIXH_ANDROID)
+        release_mc_buffer(f, 0);
+#endif
+        return;
+    }
     if (f->format == AV_PIX_FMT_D3D11) {
 #ifdef LIXH_WINDOWS
         /* on_video: 0=presented, 1=skip (keep trying direct), <0=force SW download.
@@ -353,31 +442,52 @@ static void deliver_video(LixhPlayer *p, AVFrame *f, AVRational tb) {
 #endif
 #if defined(LIXH_ANDROID)
     } else if (f->format == AV_PIX_FMT_MEDIACODEC) {
-        /* Transfer to SW for ANativeWindow/RGBA present (direct Surface later). */
-        if (!p->transfer_frame) p->transfer_frame = av_frame_alloc();
-        AVFrame *sw = p->transfer_frame;
-        if (!sw) {
-            atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
-            return;
-        }
-        av_frame_unref(sw);
-        int rc = av_hwframe_transfer_data(sw, f, 0);
-        if (rc >= 0) rc = av_frame_copy_props(sw, f);
-        if (rc >= 0) {
-            LixhNativeFrame fallback = { LIXH_VIDEO_SOFTWARE, sw->width, sw->height, sw, 0, sw };
-            int sw_rc = p->cb.on_video(p->cb.opaque, fallback.kind, fallback.width, fallback.height, pts, 0, &fallback);
-            if (sw_rc != 0) {
+        if (p->mc_surface_inited && f->data[3]) {
+            /* Zero-copy: platform may skip (return !=0) → release without render. */
+            LixhNativeFrame nf = { LIXH_VIDEO_MEDIACODEC, f->width, f->height, f->data[3], 0, f };
+            int presented = p->cb.on_video(p->cb.opaque, nf.kind, nf.width, nf.height, pts, 0, &nf);
+            int render = (presented == 0) ? 1 : 0;
+            if (av_mediacodec_release_buffer((AVMediaCodecBuffer *)f->data[3], render) < 0) {
+                atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
+            } else if (render) {
+                atomic_store_explicit(&p->present_mode, LIXH_PRESENT_SURFACE, memory_order_relaxed);
+            } else {
                 atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
             }
         } else {
-            atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
-            /* Silent drop — ERROR here was mistaken for play failure on UI. */
+            /* No Surface bind: GPU→CPU transfer then RGBA present. */
+            if (!p->transfer_frame) p->transfer_frame = av_frame_alloc();
+            AVFrame *sw = p->transfer_frame;
+            if (!sw) {
+                release_mc_buffer(f, 0);
+                atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
+                return;
+            }
+            av_frame_unref(sw);
+            int rc = av_hwframe_transfer_data(sw, f, 0);
+            if (rc >= 0) rc = av_frame_copy_props(sw, f);
+            /* Consumed HW buffer regardless of transfer outcome. */
+            release_mc_buffer(f, 0);
+            if (rc >= 0) {
+                LixhNativeFrame fallback = { LIXH_VIDEO_SOFTWARE, sw->width, sw->height, sw, 0, sw };
+                int sw_rc = p->cb.on_video(p->cb.opaque, fallback.kind, fallback.width, fallback.height, pts, 0, &fallback);
+                if (sw_rc != 0) {
+                    atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
+                } else {
+                    atomic_store_explicit(&p->present_mode, LIXH_PRESENT_RGBA, memory_order_relaxed);
+                }
+            } else {
+                atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
+            }
+            av_frame_unref(sw);
         }
-        av_frame_unref(sw);
 #endif
     } else {
         LixhNativeFrame nf = { LIXH_VIDEO_SOFTWARE, f->width, f->height, f, 0, f };
-        p->cb.on_video(p->cb.opaque, nf.kind, nf.width, nf.height, pts, 0, &nf);
+        int sw_rc = p->cb.on_video(p->cb.opaque, nf.kind, nf.width, nf.height, pts, 0, &nf);
+        if (sw_rc == 0) {
+            atomic_store_explicit(&p->present_mode, LIXH_PRESENT_RGBA, memory_order_relaxed);
+        }
     }
 }
 
@@ -437,8 +547,11 @@ void *lixh_player_create(const LixhCallbacks *cb) {
     atomic_init(&p->stop, 0);
     atomic_init(&p->playing, 0);
     atomic_init(&p->direct_d3d11, 0);
-    atomic_init(&p->video_sink, 1);
+    /* Default listen-first; UI enables picture after open when desired. */
+    atomic_init(&p->video_sink, 0);
     atomic_init(&p->flush_video_req, 0);
+    atomic_init(&p->open_video_req, 0);
+    atomic_init(&p->present_mode, LIXH_PRESENT_NONE);
     atomic_init(&p->video_frames, 0);
     atomic_init(&p->audio_frames, 0);
     atomic_init(&p->dropped_frames, 0);
@@ -449,8 +562,8 @@ void *lixh_player_create(const LixhCallbacks *cb) {
     atomic_init(&p->first_pts_ms, AV_NOPTS_VALUE);
     atomic_init(&p->last_video_pts_ms, AV_NOPTS_VALUE);
     atomic_init(&p->last_audio_pts_ms, AV_NOPTS_VALUE);
-    p->target_latency_ms = 400;
-    p->max_latency_ms = 900;
+    p->target_latency_ms = 100;
+    p->max_latency_ms = 320;
     return p;
 }
 
@@ -520,6 +633,16 @@ int lixh_player_play(void *opaque) {
             }
             break;
         }
+        if (atomic_exchange_explicit(&p->open_video_req, 0, memory_order_acq_rel)) {
+            if (!p->vdec && p->vstream >= 0 && p->fmt) {
+                setup_hw(p);
+                if (open_decoder(p, p->fmt->streams[p->vstream], 1) < 0) {
+                    emit(p, LIXH_EVT_INFO, -1, "video decoder deferred-open failed");
+                }
+            }
+            atomic_store_explicit(&p->direct_d3d11, 0, memory_order_release);
+            p->d3d11_fail_streak = 0;
+        }
         if (atomic_exchange_explicit(&p->flush_video_req, 0, memory_order_acq_rel)) {
             if (p->vdec) avcodec_flush_buffers(p->vdec);
             atomic_store_explicit(&p->direct_d3d11, 0, memory_order_release);
@@ -529,7 +652,7 @@ int lixh_player_play(void *opaque) {
             atomic_fetch_add_explicit(&p->bytes_read, (uint64_t)pkt->size, memory_order_relaxed);
         }
         if (pkt->stream_index == p->vstream &&
-            !atomic_load_explicit(&p->video_sink, memory_order_acquire)) {
+            (!atomic_load_explicit(&p->video_sink, memory_order_acquire) || !p->vdec)) {
             av_packet_unref(pkt);
             continue;
         }
@@ -576,15 +699,29 @@ void lixh_player_set_video_sink(void *opaque, int enabled) {
     if (!p) return;
     int on = enabled ? 1 : 0;
     int prev = atomic_exchange_explicit(&p->video_sink, on, memory_order_acq_rel);
-    /* Never touch AVCodecContext from the UI thread — play loop will flush. */
+    /* Never touch AVCodecContext from the UI thread — play loop opens/flushes. */
     if (on && !prev) {
-        atomic_store_explicit(&p->flush_video_req, 1, memory_order_release);
+        if (!p->vdec) {
+            atomic_store_explicit(&p->open_video_req, 1, memory_order_release);
+        } else {
+            atomic_store_explicit(&p->flush_video_req, 1, memory_order_release);
+        }
         /* Listen-only audio may have anchored first_pts; clear so the first
            delivered video frame re-bases live chase instead of mass-dropping. */
         atomic_store_explicit(&p->first_pts_ms, AV_NOPTS_VALUE, memory_order_release);
         atomic_store_explicit(&p->direct_d3d11, 0, memory_order_release);
         p->d3d11_fail_streak = 0;
     }
+}
+
+void lixh_player_set_android_surface(void *opaque, void *surface) {
+    LixhPlayer *p = (LixhPlayer *)opaque;
+    if (!p) return;
+#if defined(LIXH_ANDROID)
+    p->android_surface = surface;
+#else
+    (void)surface;
+#endif
 }
 
 int lixh_player_get_stats(void *opaque, LixhStats *out) {
@@ -614,5 +751,6 @@ int lixh_player_get_stats(void *opaque, LixhStats *out) {
         out->input_buffer_ms = lag;
     }
     out->decode_hw = p->hw_kind;
+    out->present_mode = atomic_load_explicit(&p->present_mode, memory_order_relaxed);
     return 0;
 }

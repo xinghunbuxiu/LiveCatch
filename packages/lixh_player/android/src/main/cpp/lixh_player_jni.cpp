@@ -24,11 +24,19 @@ extern "C" {
 
 namespace {
 
-constexpr int kRingCap = 48000 * 2 * 2;
+/* ~500ms stereo @48k — physical ceiling; live trim keeps far less. */
+constexpr int kRingCap = 48000 * 2 / 2;
 
 class AudioOut {
  public:
   ~AudioOut() { Stop(); }
+
+  void SetMaxQueueMs(int ms) {
+    std::lock_guard<std::mutex> lock(mu_);
+    if (ms < 40) ms = 40;
+    if (ms > 400) ms = 400;
+    max_queue_ms_ = ms;
+  }
 
   void Push(const float* samples, int frames, int channels, int rate) {
     if (!samples || frames <= 0 || channels <= 0) return;
@@ -36,8 +44,12 @@ class AudioOut {
     if (!Ensure(rate, channels)) return;
     int n = frames * channels;
     if (n > kRingCap / 2) n = kRingCap / 2;
-    while (count_ + n > kRingCap) {
-      int drop = ch_ * (rate_ / 50);
+    // Keep only ~target latency of PCM; drop oldest when ahead of live.
+    int max_samples = ch_ * rate_ * max_queue_ms_ / 1000;
+    if (max_samples < ch_ * rate_ / 25) max_samples = ch_ * rate_ / 25;  // ≥40ms
+    if (max_samples > kRingCap - n) max_samples = kRingCap - n;
+    while (count_ + n > max_samples) {
+      int drop = ch_ * (rate_ / 50);  // ~20ms
       if (drop < 1) drop = n;
       if (drop > count_) drop = count_;
       r_ = (r_ + drop) % kRingCap;
@@ -125,6 +137,7 @@ class AudioOut {
   mutable std::mutex mu_;
   std::vector<float> ring_ = std::vector<float>(kRingCap);
   int r_ = 0, w_ = 0, count_ = 0, rate_ = 48000, ch_ = 2;
+  int max_queue_ms_ = 120;
   AAudioStream* stream_ = nullptr;
 };
 
@@ -133,33 +146,43 @@ class Session {
   Session() = default;
   ~Session() {
     Stop();
-    DetachSurface();
+    /* Best-effort: Detach without JNIEnv leaves GlobalRef until process exit
+       if destroy skipped Attach/Detach — plugin always Detach before Destroy. */
+    ClearWindowLocked();
   }
 
   void AttachSurface(JNIEnv* env, jobject surface) {
-    std::lock_guard<std::mutex> lock(win_mu_);
-    if (window_) {
-      ANativeWindow_release(window_);
-      window_ = nullptr;
+    jobject global = nullptr;
+    ANativeWindow* win = nullptr;
+    {
+      std::lock_guard<std::mutex> lock(win_mu_);
+      ClearSurfaceRefs(env);
+      if (surface) {
+        surface_global_ = env->NewGlobalRef(surface);
+        window_ = ANativeWindow_fromSurface(env, surface);
+      }
+      global = surface_global_;
+      win = window_;
+      last_present_ = {};
     }
-    if (surface) {
-      window_ = ANativeWindow_fromSurface(env, surface);
+    void* p = nullptr;
+    {
+      std::lock_guard<std::mutex> plock(mu_);
+      p = player_;
     }
-    last_present_ = {};
+    if (p) lixh_player_set_android_surface(p, global);
+    LOGI("attach surface global=%p window=%p", global, win);
   }
 
-  void DetachSurface() {
+  void DetachSurface(JNIEnv* env) {
+    void* p = nullptr;
+    {
+      std::lock_guard<std::mutex> plock(mu_);
+      p = player_;
+    }
+    if (p) lixh_player_set_android_surface(p, nullptr);
     std::lock_guard<std::mutex> lock(win_mu_);
-    if (sws_) {
-      sws_freeContext(sws_);
-      sws_ = nullptr;
-    }
-    sws_w_ = sws_h_ = 0;
-    sws_fmt_ = AV_PIX_FMT_NONE;
-    if (window_) {
-      ANativeWindow_release(window_);
-      window_ = nullptr;
-    }
+    ClearSurfaceRefs(env);
   }
 
   bool Open(const std::string& url, const std::string& headers) {
@@ -190,16 +213,22 @@ class Session {
       return false;
     }
     if (!headers.empty()) lixh_player_set_headers(p, headers.c_str());
+    {
+      std::lock_guard<std::mutex> lock(win_mu_);
+      lixh_player_set_android_surface(p, surface_global_);
+    }
+    // Before open: listen-only skips video decoder init (major join latency win).
+    lixh_player_set_video_sink(p, video_enabled_.load() ? 1 : 0);
+    lixh_player_set_latency(p, latency_target_ms_, latency_max_ms_);
     if (lixh_player_open(p, url.c_str()) < 0) {
       SetError("lixh_player_open failed");
       lixh_player_destroy(p);
       return false;
     }
-    lixh_player_set_latency(p, latency_target_ms_, latency_max_ms_);
-    lixh_player_set_video_sink(p, video_enabled_.load() ? 1 : 0);
+    audio_.SetMaxQueueMs((int)latency_target_ms_);
     std::lock_guard<std::mutex> lock(mu_);
     player_ = p;
-    LOGI("open url=%zu", url.size());
+    LOGI("open url=%zu surface=%p", url.size(), surface_global_);
     return true;
   }
 
@@ -255,6 +284,7 @@ class Session {
     if (max_ms < target_ms) max_ms = target_ms;
     latency_target_ms_ = target_ms;
     latency_max_ms_ = max_ms;
+    audio_.SetMaxQueueMs(target_ms);
     void* p = nullptr;
     {
       std::lock_guard<std::mutex> lock(mu_);
@@ -291,7 +321,7 @@ class Session {
     putI("audioQueueMs", audio_.QueuedMs());
     uint64_t dropped = 0, bread = 0;
     int64_t lag = 0;
-    int vw = 0, vh = 0, decode_hw = 0;
+    int vw = 0, vh = 0, decode_hw = 0, present_mode = 0;
     std::string err;
     {
       std::lock_guard<std::mutex> lock(mu_);
@@ -305,10 +335,12 @@ class Session {
           vw = core.video_width;
           vh = core.video_height;
           decode_hw = core.decode_hw;
+          present_mode = core.present_mode;
         }
       }
     }
     putI("decodeHw", decode_hw);
+    putI("presentMode", present_mode);
     putL("droppedFrames", (int64_t)dropped);
     putL("bytesRead", (int64_t)bread);
     putL("lagMs", lag);
@@ -318,9 +350,37 @@ class Session {
   }
 
  private:
+  void ClearWindowLocked() {
+    if (sws_) {
+      sws_freeContext(sws_);
+      sws_ = nullptr;
+    }
+    sws_w_ = sws_h_ = 0;
+    sws_fmt_ = AV_PIX_FMT_NONE;
+    if (window_) {
+      ANativeWindow_release(window_);
+      window_ = nullptr;
+    }
+  }
+
+  void ClearSurfaceRefs(JNIEnv* env) {
+    ClearWindowLocked();
+    if (surface_global_ && env) {
+      env->DeleteGlobalRef(surface_global_);
+    }
+    surface_global_ = nullptr;
+  }
+
   int OnVideo(int kind, int width, int height, const LixhNativeFrame* frame) {
     video_frames_.fetch_add(1);
     if (!video_enabled_.load()) return 1;
+
+    /* MediaCodec Surface path: core releases with render=1 when we return 0. */
+    if (kind == LIXH_VIDEO_MEDIACODEC) {
+      present_ok_.fetch_add(1);
+      return 0;
+    }
+
     if (kind != LIXH_VIDEO_SOFTWARE || !frame || !frame->handle0) return 1;
     if (width <= 0 || height <= 0) return 1;
 
@@ -388,6 +448,7 @@ class Session {
   std::thread play_thread_;
   AudioOut audio_;
   ANativeWindow* window_ = nullptr;
+  jobject surface_global_ = nullptr;
   SwsContext* sws_ = nullptr;
   int sws_w_ = 0, sws_h_ = 0, sws_fmt_ = AV_PIX_FMT_NONE;
   std::chrono::steady_clock::time_point last_present_{};
@@ -396,8 +457,8 @@ class Session {
   std::atomic<uint64_t> audio_frames_{0};
   std::atomic<uint64_t> present_ok_{0};
   std::atomic<bool> video_enabled_{false};
-  int latency_target_ms_ = 200;
-  int latency_max_ms_ = 700;
+  int latency_target_ms_ = 100;
+  int latency_max_ms_ = 320;
 };
 
 }  // namespace
@@ -491,8 +552,8 @@ Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeAttachSurface(JNIEnv* env
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeDetachSurface(JNIEnv*, jobject,
+Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeDetachSurface(JNIEnv* env, jobject,
                                                                     jlong ptr) {
   auto* s = reinterpret_cast<Session*>(ptr);
-  if (s) s->DetachSurface();
+  if (s) s->DetachSurface(env);
 }

@@ -7,11 +7,15 @@ import 'package:lixh_player/lixh_player.dart';
 
 import 'abr_supervisor.dart';
 import 'app_settings.dart';
+import 'douyin_expand.dart';
+import 'live_input.dart';
+import 'playback_keepalive.dart';
 import 'room_resolve.dart';
 import 'settings_sheet.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  PlaybackKeepAlive.bind();
   runApp(const LiveCatchApp());
 }
 
@@ -52,7 +56,7 @@ class PlayerPage extends StatefulWidget {
 }
 
 class _PlayerPageState extends State<PlayerPage>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final _player = LixhPlayer();
   final _urlCtrl = TextEditingController();
   late final AnimationController _pulse;
@@ -65,6 +69,9 @@ class _PlayerPageState extends State<PlayerPage>
   bool _busy = false;
   bool _playing = false;
   bool _videoOn = false;
+  /// User wants video when foreground; may be suppressed while backgrounded.
+  bool _videoDesired = false;
+  bool _appInBackground = false;
   String? _headers;
   String? _roomInput;
   int _lastProgress = 0;
@@ -85,10 +92,18 @@ class _PlayerPageState extends State<PlayerPage>
 
   AbrSupervisor? _abr;
   bool _abrBusy = false;
+  bool _statsInFlight = false;
   String _abrLabel = '';
+  /// Bumped on stop/start so in-flight ABR open/play can bail out.
+  int _playGen = 0;
   AppSettings _settings = AppSettings();
   final List<String> _logs = <String>[];
+  final ValueNotifier<int> _logsTick = ValueNotifier<int>(0);
   String? _lastLoggedNativeErr;
+  /// Last clipboard payload we auto-filled (avoid re-applying the same paste).
+  String? _lastAutoClipboardRaw;
+  /// URL last written by clipboard auto-fill (so we can refresh if user hasn't edited).
+  String? _lastAutoFillUrl;
 
   void _appendLog(String message) {
     final t = DateTime.now();
@@ -100,11 +115,17 @@ class _PlayerPageState extends State<PlayerPage>
     if (_logs.length > 400) {
       _logs.removeRange(0, _logs.length - 400);
     }
+    _logsTick.value++;
   }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    PlaybackKeepAlive.onStopFromNotification = () {
+      _appendLog('通知栏停止');
+      _stop();
+    };
     _pulse = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2400),
@@ -112,11 +133,142 @@ class _PlayerPageState extends State<PlayerPage>
     _boot();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Only paused/hidden = real background. inactive fires for sheets/dialogs.
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _enterBackground();
+    } else if (state == AppLifecycleState.resumed) {
+      _enterForeground();
+      // ignore: unawaited_futures
+      _maybePasteClipboard();
+    }
+  }
+
+  /// Pull live URL / Douyin share text from the system clipboard into the field.
+  Future<void> _maybePasteClipboard() async {
+    if (!mounted || _busy) return;
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      final text = data?.text;
+      if (text == null || text.trim().isEmpty) return;
+      if (!isPasteableLiveClipboard(text)) return;
+      if (text == _lastAutoClipboardRaw) return;
+
+      final extracted = extractLiveInput(text);
+      if (extracted == null) return;
+
+      final current = _urlCtrl.text.trim();
+      if (current.isNotEmpty &&
+          current != _lastAutoFillUrl &&
+          current != extracted) {
+        // User typed a different URL — do not overwrite.
+        return;
+      }
+
+      _lastAutoClipboardRaw = text;
+      var filled = extracted;
+      _lastAutoFillUrl = filled;
+      _urlCtrl.value = TextEditingValue(
+        text: filled,
+        selection: TextSelection.collapsed(offset: filled.length),
+      );
+      _appendLog('剪切板填入: $filled');
+      if (mounted) setState(() {});
+
+      // Best-effort: rewrite v.douyin short links to live.douyin.com/{web_rid}.
+      if (looksLikeDouyinShortUrl(filled)) {
+        try {
+          final expanded = await expandDouyinShortUrl(filled);
+          if (!mounted || _busy) return;
+          // Only update if the field still shows what we just filled.
+          if (_urlCtrl.text.trim() != filled) return;
+          if (expanded == filled) return;
+          _lastAutoFillUrl = expanded;
+          _urlCtrl.value = TextEditingValue(
+            text: expanded,
+            selection: TextSelection.collapsed(offset: expanded.length),
+          );
+          _appendLog('短链 → $expanded');
+          if (mounted) setState(() {});
+        } catch (_) {
+          // Keep short link; _start() will expand again before resolve.
+        }
+      }
+    } catch (_) {
+      // Clipboard may be blocked (Android privacy / empty).
+    }
+  }
+
+  Future<void> _enterBackground() async {
+    if (_appInBackground) return;
+    _appInBackground = true;
+    if (!_playing) return;
+    await PlaybackKeepAlive.start(
+      title: _title.isEmpty ? 'LiveCatch' : _title,
+      text: '后台听播中',
+    );
+    // Drop video sink so MediaCodec Surface isn't required while screen-off.
+    if (_videoOn) {
+      _videoDesired = true;
+      try {
+        await _player.setVideoEnabled(false);
+        if (mounted) setState(() => _videoOn = false);
+        _appendLog('后台：切听播保活');
+      } catch (e) {
+        _appendLog('后台听播: $e');
+      }
+    }
+  }
+
+  Future<void> _enterForeground() async {
+    if (!_appInBackground) return;
+    _appInBackground = false;
+    if (!_playing) {
+      await PlaybackKeepAlive.stop();
+      return;
+    }
+    await PlaybackKeepAlive.update(
+      title: _title.isEmpty ? 'LiveCatch' : _title,
+      text: _videoDesired ? '播放中' : '听播中',
+    );
+    if (_videoDesired && !_videoOn) {
+      try {
+        await _player.setVideoEnabled(true);
+        if (mounted) {
+          setState(() {
+            _videoOn = true;
+            _graceTicks = 6;
+            _status = '画面';
+          });
+        }
+        _appendLog('前台：恢复画面');
+      } catch (e) {
+        _appendLog('恢复画面: $e');
+      }
+    }
+  }
+
+  Future<void> _syncKeepAlive({required bool playing}) async {
+    if (!playing) {
+      await PlaybackKeepAlive.stop();
+      return;
+    }
+    await PlaybackKeepAlive.start(
+      title: _title.isEmpty ? 'LiveCatch' : _title,
+      text: _appInBackground
+          ? '后台听播中'
+          : (_videoOn ? '播放中' : '听播中'),
+    );
+  }
+
   Future<void> _openSettings() async {
     final next = await showSettingsSheet(
       context,
       initial: _settings,
-      logs: List<String>.from(_logs),
+      logs: _logs,
+      logsTick: _logsTick,
     );
     if (next == null || !mounted) return;
     setState(() => _settings = next);
@@ -142,8 +294,12 @@ class _PlayerPageState extends State<PlayerPage>
         _status = '就绪';
       });
       _appendLog('就绪');
-      _statsTimer = Timer.periodic(const Duration(milliseconds: 500), (_) async {
-        if (!_playing || _busy) return;
+      await _maybePasteClipboard();
+      // Guard overlapping getStats / reconnect work — otherwise a wedged
+      // stop/open on the platform thread freezes the whole UI.
+      _statsTimer = Timer.periodic(const Duration(milliseconds: 750), (_) async {
+        if (!_playing || _busy || _statsInFlight || _abrBusy) return;
+        _statsInFlight = true;
         try {
           final s = await _player.getStats();
           if (!mounted) return;
@@ -171,7 +327,8 @@ class _PlayerPageState extends State<PlayerPage>
             _stallTicks++;
             if (_stallTicks >= 10 && !_abrBusy) {
               final abr = _abr;
-              if (abr != null && _settings.abrEnabled) {
+              // Even with ABR off: fail over to another candidate before full re-resolve.
+              if (abr != null) {
                 final action = abr.reportFailure('stall ticks');
                 _stallTicks = 0;
                 if (action.kind == AbrActionKind.switchTo &&
@@ -210,33 +367,53 @@ class _PlayerPageState extends State<PlayerPage>
             return lag;
           }();
 
-          setState(() {
-            _audioFrames = s.audioFrames;
-            _presentOk = s.presentOk;
-            // Effective delay: clock lag + PCM queue (lag alone is often 0 after re-anchor).
-            _audioQueueMs = s.audioQueueMs;
-            _lagMs = effLag;
-            _bitrateKbps = kbps;
-            _dropped = s.droppedFrames;
-            if (s.videoWidth > 0 && s.videoHeight > 0) {
-              _videoW = s.videoWidth;
-              _videoH = s.videoHeight;
-            }
-            // decodeHw: 0=SW, 1=D3D11, 2=VT, 3=MediaCodec
-            final hw = s.decodeHw > 0 ? 'HW' : (s.decodeHw == 0 ? 'SW' : '—');
-            final abr = _abrLabel.isEmpty ? '' : ' · $_abrLabel';
-            _status = (_videoOn ? '画面 · $hw' : '听播 · $hw') + abr;
-            if (s.lastError.isNotEmpty && s.lastError != _lastLoggedNativeErr) {
-              _lastLoggedNativeErr = s.lastError;
-              _appendLog('native: ${s.lastError}');
-            }
-          });
+          if (s.lastError.isNotEmpty && s.lastError != _lastLoggedNativeErr) {
+            _lastLoggedNativeErr = s.lastError;
+            _appendLog('native: ${s.lastError}');
+          }
           if (_stallTicks == 4 || (_stallTicks > 0 && _stallTicks % 10 == 0)) {
             _appendLog(
               'stall tick=$_stallTicks a=${s.audioFrames} '
               'p=${s.presentOk} lag=${s.lagMs} q=${s.audioQueueMs} '
               'br=$kbps drop=${s.droppedFrames}',
             );
+          }
+
+          // decodeHw: 0=SW, 1=D3D11, 2=VT, 3=MediaCodec
+          // presentMode: 0=none, 1=Surface zero-copy, 2=RGBA
+          final hw = s.decodeHw > 0 ? 'HW' : (s.decodeHw == 0 ? 'SW' : '—');
+          final present = switch (s.presentMode) {
+            1 => 'Zc',
+            2 => 'RGBA',
+            _ => '',
+          };
+          final abrTag = _abrLabel.isEmpty ? '' : ' · $_abrLabel';
+          final presentTag = present.isEmpty ? '' : ' · $present';
+          final nextStatus =
+              (_videoOn ? '画面 · $hw$presentTag' : '听播 · $hw') + abrTag;
+          final nextW = s.videoWidth > 0 ? s.videoWidth : _videoW;
+          final nextH = s.videoHeight > 0 ? s.videoHeight : _videoH;
+          final changed = _audioFrames != s.audioFrames ||
+              _presentOk != s.presentOk ||
+              _audioQueueMs != s.audioQueueMs ||
+              _lagMs != effLag ||
+              _bitrateKbps != kbps ||
+              _dropped != s.droppedFrames ||
+              _videoW != nextW ||
+              _videoH != nextH ||
+              _status != nextStatus;
+          if (changed && mounted) {
+            setState(() {
+              _audioFrames = s.audioFrames;
+              _presentOk = s.presentOk;
+              _audioQueueMs = s.audioQueueMs;
+              _lagMs = effLag;
+              _bitrateKbps = kbps;
+              _dropped = s.droppedFrames;
+              _videoW = nextW;
+              _videoH = nextH;
+              _status = nextStatus;
+            });
           }
 
           // ABR / candidate switch (room resolve only).
@@ -261,13 +438,15 @@ class _PlayerPageState extends State<PlayerPage>
                 _reconnects < 3) {
               _reconnects++;
               _appendLog('ABR 耗尽，重解析 #$_reconnects');
-              setState(() => _status = '重解析 #$_reconnects…');
+              if (mounted) setState(() => _status = '重解析 #$_reconnects…');
               // ignore: unawaited_futures
               _start();
             }
           }
         } catch (e) {
           _appendLog('getStats: $e');
+        } finally {
+          _statsInFlight = false;
         }
       });
     } catch (e) {
@@ -283,6 +462,7 @@ class _PlayerPageState extends State<PlayerPage>
     if (abr == null || _abrBusy || index < 0 || index >= abr.candidates.length) {
       return;
     }
+    final gen = _playGen;
     _abrBusy = true;
     final pick = abr.candidates[index];
     final keepVideo = _videoOn;
@@ -298,11 +478,17 @@ class _PlayerPageState extends State<PlayerPage>
       });
     }
     try {
+      if (gen != _playGen) return;
       await _player.stop();
+      if (gen != _playGen) return;
       await _player.setVideoEnabled(false);
+      if (gen != _playGen) return;
       await _player.open(pick.url, headers: _headers);
+      if (gen != _playGen) return;
       await _player.play();
+      if (gen != _playGen) return;
       if (keepVideo) await _player.setVideoEnabled(true);
+      if (gen != _playGen) return;
       abr.setCurrent(index);
       _lastProgress = 0;
       _stallTicks = 0;
@@ -312,10 +498,16 @@ class _PlayerPageState extends State<PlayerPage>
       if (!mounted) return;
       setState(() {
         _playing = true;
-        _videoOn = keepVideo;
+        _videoOn = keepVideo && !_appInBackground;
+        _videoDesired = keepVideo;
         _status = keepVideo ? '画面' : '听播中';
       });
+      if (keepVideo && _appInBackground) {
+        await _player.setVideoEnabled(false);
+      }
+      await _syncKeepAlive(playing: true);
     } catch (e) {
+      if (gen != _playGen) return;
       debugPrint('[LiveCatch] ABR switch failed: $e');
       final next = abr.reportFailure('open failed: $e');
       if (next.kind == AbrActionKind.switchTo && next.index != null) {
@@ -335,6 +527,7 @@ class _PlayerPageState extends State<PlayerPage>
       }
       final msg = formatResolveError(e);
       _appendLog('ABR 失败: $msg');
+      await PlaybackKeepAlive.stop();
       if (mounted) {
         setState(() {
           _playing = false;
@@ -342,18 +535,30 @@ class _PlayerPageState extends State<PlayerPage>
         });
       }
     } finally {
-      _abrBusy = false;
+      if (gen == _playGen) _abrBusy = false;
     }
   }
 
   Future<void> _start() async {
-    final input = _urlCtrl.text.trim();
-    if (input.isEmpty || _busy) return;
+    final rawInput = _urlCtrl.text.trim();
+    if (rawInput.isEmpty || _busy) return;
+    // Douyin share cards → short link; plain room URLs pass through.
+    var input = extractLiveInput(rawInput) ?? rawInput;
+    if (input != rawInput) {
+      _urlCtrl.value = TextEditingValue(
+        text: input,
+        selection: TextSelection.collapsed(offset: input.length),
+      );
+      _lastAutoFillUrl = input;
+      _appendLog('已提取链接: $input');
+    }
     final wantVideo = _settings.startWithVideo;
+    final startGen = ++_playGen;
     setState(() {
       _busy = true;
       _playing = false;
       _videoOn = false;
+      _videoDesired = false;
       _status = '准备…';
       _title = '';
       _platform = '';
@@ -367,6 +572,19 @@ class _PlayerPageState extends State<PlayerPage>
     });
 
     try {
+      if (looksLikeDouyinShortUrl(input)) {
+        setState(() => _status = '展开短链…');
+        _appendLog('展开短链: $input');
+        input = await expandDouyinShortUrl(input);
+        _urlCtrl.value = TextEditingValue(
+          text: input,
+          selection: TextSelection.collapsed(offset: input.length),
+        );
+        _lastAutoFillUrl = input;
+        _appendLog('短链 → $input');
+      }
+
+      await PlaybackKeepAlive.stop();
       final (t, m) = _settings.latency.latencyMs;
       await _player.setLatency(targetMs: t, maxMs: m);
       await _player.stop();
@@ -380,11 +598,12 @@ class _PlayerPageState extends State<PlayerPage>
 
       final urls = <StreamPick>[];
       String? headers;
+      var preferAbrIndex = 0;
       if (!looksLikeDirectStream(input)) {
         _roomInput = input;
         setState(() => _status = '解析直播间…');
         _appendLog('解析: $input');
-        final room = await resolveRoom(
+        var room = await resolveRoom(
           input,
           preferFlv: _settings.preferFlv,
         );
@@ -392,7 +611,35 @@ class _PlayerPageState extends State<PlayerPage>
           '解析成功 ${room.platform} live=${room.isLive} '
           'streams=${room.candidates.length}',
         );
-        if (!mounted) return;
+        if (!mounted || startGen != _playGen) return;
+        // Listen / ABR-off: stick to lowest bitrate (index 0) — skip TTFB so we
+        // don't waste ~1s and accidentally start on 原画 for "snappy CDN".
+        // ABR-on: TTFB only seeds the initial index; ladder stays bitrate-asc.
+        if (_settings.abrEnabled && room.candidates.length > 1) {
+          setState(() => _status = '探测线路…');
+          final ranked = await rankCandidatesByProbe(
+            room.candidates,
+            headerMap: room.headers,
+            siteUrl: room.siteUrl,
+          );
+          if (!mounted || startGen != _playGen) return;
+          final bestUrl = ranked.isNotEmpty ? ranked.first.url : '';
+          final found = room.candidates.indexWhere((c) => c.url == bestUrl);
+          if (found >= 0) preferAbrIndex = found;
+          final label = found >= 0 && room.candidates[found].quality.isNotEmpty
+              ? room.candidates[found].quality
+              : (found >= 0 ? room.candidates[found].protocol : '?');
+          _appendLog(
+            'TTFB 首选: $label（档位 ${preferAbrIndex + 1}/${room.candidates.length}）',
+          );
+        } else if (room.candidates.isNotEmpty) {
+          final c = room.candidates.first;
+          final label = c.quality.isNotEmpty
+              ? c.quality
+              : (c.bitrate > 0 ? '${c.bitrate ~/ 1000}k' : c.protocol);
+          _appendLog('听播选源: $label（最低码率，跳过 TTFB）');
+        }
+        if (!mounted || startGen != _playGen) return;
         headers = room.ffmpegHeaders;
         _headers = headers;
         setState(() {
@@ -419,10 +666,11 @@ class _PlayerPageState extends State<PlayerPage>
         );
       }
 
+      if (startGen != _playGen) return;
       final abr = AbrSupervisor(candidates: urls);
       _abr = abr;
       Object? lastErr;
-      var idx = abr.selectInitial();
+      var idx = abr.selectInitial(preferIndex: preferAbrIndex);
       while (idx != null) {
         final pick = urls[idx];
         abr.setCurrent(idx);
@@ -446,9 +694,11 @@ class _PlayerPageState extends State<PlayerPage>
             _playing = true;
             _busy = false;
             _videoOn = wantVideo;
+            _videoDesired = wantVideo;
             _status = wantVideo ? '画面' : '听播中';
             _graceTicks = 4;
           });
+          await _syncKeepAlive(playing: true);
           return;
         } catch (e) {
           lastErr = e;
@@ -461,6 +711,7 @@ class _PlayerPageState extends State<PlayerPage>
       if (!mounted) return;
       final msg = formatResolveError(e);
       _appendLog('失败: $msg');
+      await PlaybackKeepAlive.stop();
       setState(() {
         _busy = false;
         _playing = false;
@@ -470,26 +721,48 @@ class _PlayerPageState extends State<PlayerPage>
   }
 
   Future<void> _stop() async {
+    final gen = ++_playGen;
     _reconnects = 0;
     _stallTicks = 0;
     _abrBusy = false;
     _abr = null;
-    await _player.setVideoEnabled(false);
-    await _player.stop();
-    if (!mounted) return;
-    setState(() {
-      _playing = false;
-      _busy = false;
-      _videoOn = false;
-      _abrLabel = '';
-      _status = '已停止';
-    });
+    _videoDesired = false;
+    // Paint UI immediately so Stop never looks dead during a wedged open/ABR.
+    if (mounted) {
+      setState(() {
+        _playing = false;
+        _busy = false;
+        _videoOn = false;
+        _abrLabel = '';
+        _status = '停止中…';
+      });
+    }
+    try {
+      await PlaybackKeepAlive.stop();
+      await _player.setVideoEnabled(false);
+      await _player.stop();
+    } catch (e) {
+      _appendLog('停止: ${formatResolveError(e)}');
+    }
+    if (!mounted || gen != _playGen) return;
+    setState(() => _status = '已停止');
   }
 
   Future<void> _toggleVideo() async {
     if (!_playing || _busy) return;
-    final next = !_videoOn;
-    debugPrint('[LiveCatch] toggleVideo -> $next');
+    final next = !_videoDesired;
+    _videoDesired = next;
+    debugPrint('[LiveCatch] toggleVideo -> $next (bg=$_appInBackground)');
+    // While backgrounded only remember preference; surface stays off.
+    if (_appInBackground) {
+      if (mounted) {
+        setState(() {
+          _status = next ? '后台保持听播（回前台开画面）' : '听播中';
+        });
+      }
+      await _syncKeepAlive(playing: true);
+      return;
+    }
     setState(() {
       _videoOn = next;
       _graceTicks = 6;
@@ -506,13 +779,18 @@ class _PlayerPageState extends State<PlayerPage>
     setState(() {
       _status = next ? '画面' : '听播中';
     });
+    await _syncKeepAlive(playing: true);
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    PlaybackKeepAlive.onStopFromNotification = null;
     _statsTimer?.cancel();
+    _logsTick.dispose();
     _pulse.dispose();
     _urlCtrl.dispose();
+    PlaybackKeepAlive.stop();
     _player.disposeVideoTexture();
     super.dispose();
   }
@@ -541,7 +819,7 @@ class _PlayerPageState extends State<PlayerPage>
                 children: [
                   _Header(
                     status: _status,
-                    title: _playing ? _title : '',
+                    title: _title,
                     platform: _platform,
                     bitrateKbps: _bitrateKbps,
                     lagMs: _lagMs,
@@ -624,7 +902,6 @@ class _Header extends StatelessWidget {
   String get _logLine {
     final parts = <String>[
       if (platform.isNotEmpty) platform,
-      if (title.isNotEmpty && title != 'LiveCatch') title,
       if (status.isNotEmpty) status,
       _speed,
       '${lagMs.clamp(0, 99999)}ms',
@@ -639,6 +916,8 @@ class _Header extends StatelessWidget {
   Widget build(BuildContext context) {
     final foam = Theme.of(context).colorScheme.onSurface;
     final signal = Theme.of(context).colorScheme.primary;
+    final roomName =
+        (title.isNotEmpty && title != 'LiveCatch') ? title.trim() : '';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -654,7 +933,23 @@ class _Header extends StatelessWidget {
                 color: foam,
               ),
             ),
-            const SizedBox(width: 10),
+            if (roomName.isNotEmpty) ...[
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  roomName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: foam.withValues(alpha: 0.88),
+                  ),
+                ),
+              ),
+            ] else
+              const Spacer(),
+            const SizedBox(width: 8),
             Container(
               width: 7,
               height: 7,
@@ -663,7 +958,7 @@ class _Header extends StatelessWidget {
                 shape: BoxShape.circle,
               ),
             ),
-            const Spacer(),
+            const SizedBox(width: 4),
             IconButton(
               tooltip: '配置',
               onPressed: onSettings,
@@ -942,7 +1237,7 @@ class _Dock extends StatelessWidget {
           style: const TextStyle(fontSize: 13.5),
           cursorColor: signal,
           decoration: InputDecoration(
-            hintText: '直播间地址 或 m3u8 / flv 直链',
+            hintText: '直播间 / 抖音分享口令 / m3u8·flv',
             hintStyle: TextStyle(color: foam.withValues(alpha: 0.35)),
             filled: true,
             fillColor: Colors.white.withValues(alpha: 0.04),

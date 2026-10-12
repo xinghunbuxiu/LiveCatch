@@ -29,6 +29,12 @@ typedef struct LixhCallbacks {
     void (*on_event)(void *opaque, int type, int code, const char *message);
 } LixhCallbacks;
 
+enum {
+    LIXH_PRESENT_NONE = 0,
+    LIXH_PRESENT_SURFACE = 1, /* MediaCodec → Surface (zero-copy) */
+    LIXH_PRESENT_RGBA = 2     /* CPU sws → ANativeWindow */
+};
+
 typedef struct LixhStats {
     int state;
     uint64_t video_frames;
@@ -42,6 +48,8 @@ typedef struct LixhStats {
     uint64_t bytes_read;
     int video_width;
     int video_height;
+    /* Last successful present path: LIXH_PRESENT_*. */
+    int present_mode;
 } LixhStats;
 
 void *lixh_player_create(const LixhCallbacks *cb);
@@ -54,8 +62,14 @@ int lixh_player_get_stats(void *p, LixhStats *out);
 void lixh_player_set_latency(void *p, int64_t target_ms, int64_t max_ms);
 /* Extra HTTP headers for avformat ("Key: Value\\r\\n..."). NULL/empty clears. */
 void lixh_player_set_headers(void *p, const char *headers);
-/* When 0, video packets are discarded (audio-only / listen mode). */
+/* When 0 before open: skip video decoder (listen-first). When toggled on
+   while playing, decoder is opened on the play thread. Packets are discarded
+   while sink is 0. */
 void lixh_player_set_video_sink(void *p, int enabled);
+/* Android only: jobject Surface for MediaCodec zero-copy output.
+   Pass NULL to clear. Must be set before open (or after stop, before re-open).
+   Ownership of the JNI GlobalRef stays with the caller. */
+void lixh_player_set_android_surface(void *p, void *surface);
 
 #ifdef __cplusplus
 }

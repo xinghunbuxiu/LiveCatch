@@ -16,6 +16,7 @@ src-tauri/gen/
 dumps/
 *.log
 PORTABLEPLACEHOLDER/
+.tools/
 
 # Flutter
 flutter_app/.dart_tool/
@@ -35,6 +36,9 @@ packages/lixh_player/ios/Frameworks/
 packages/lixh_player/macos/Frameworks/
 packages/lixh_player/macos/lixh_player/Sources/lixh_player_corec/include/lixh_player.h
 packages/lixh_player/ios/lixh_player/Sources/lixh_player_corec/include/lixh_player.h
+
+# Local toolchains (e.g. portable protoc for platforms-parser builds)
+.tools/
 
 # IDE / OS
 .idea/

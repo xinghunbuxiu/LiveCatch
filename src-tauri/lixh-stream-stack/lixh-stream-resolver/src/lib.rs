@@ -11,6 +11,7 @@ use std::collections::{HashMap, HashSet};
 
 #[cfg(target_os = "android")]
 mod android_jni;
+mod douyin_expand;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StreamCandidate {
@@ -66,6 +67,16 @@ pub async fn resolve_with_options(
     if url.is_empty() {
         return Err(anyhow!("stream URL is empty"));
     }
+
+    // platforms-parser only matches live.douyin.com/{web_rid}; expand share short links first.
+    let url = if douyin_expand::looks_like_douyin_short_url(url) {
+        let expand_client = douyin_expand::no_redirect_client()?;
+        douyin_expand::expand_douyin_input(&expand_client, url).await?
+    } else {
+        url.to_string()
+    };
+    let url = url.as_str();
+
     #[cfg(target_os = "android")]
     let client = android_http_client().context("build HTTP client")?;
     #[cfg(not(target_os = "android"))]
@@ -173,6 +184,12 @@ fn map_resolve_error(err: anyhow::Error) -> anyhow::Error {
     }
     if full.contains("Failed to extract ttwid") {
         return anyhow!("获取抖音凭证失败，请检查网络后重试");
+    }
+    if full.contains("展开抖音短链")
+        || full.contains("短链未返回")
+        || full.contains("响应中无 web_rid")
+    {
+        return anyhow!("抖音短链展开失败，请改用 live.douyin.com 直播间号");
     }
     // Keep the cause chain for transport failures (cert/DNS/reset), not just the leaf.
     if full.contains("error sending request")

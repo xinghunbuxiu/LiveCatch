@@ -113,6 +113,9 @@ String formatResolveError(Object error) {
   if (s.contains('直播已结束') || s.contains('不在播')) {
     return '直播已结束或不在播';
   }
+  if (s.contains('短链') && (s.contains('展开') || s.contains('跳转') || s.contains('web_rid'))) {
+    return s;
+  }
   return s.isEmpty ? '房间解析失败' : s;
 }
 
@@ -167,6 +170,121 @@ Future<ResolvedRoom> resolveRoom(
     candidates: picks,
     headers: headers,
   );
+}
+
+/// Copy [room] with candidates reordered (e.g. after TTFB probe).
+ResolvedRoom roomWithCandidates(ResolvedRoom room, List<StreamPick> picks) {
+  if (picks.isEmpty) return room;
+  return ResolvedRoom(
+    platform: room.platform,
+    siteUrl: room.siteUrl,
+    title: room.title,
+    artist: room.artist,
+    isLive: room.isLive,
+    streamUrl: picks.first.url,
+    protocol: picks.first.protocol,
+    candidates: picks,
+    headers: room.headers,
+  );
+}
+
+/// Parallel lightweight TTFB probe; reorder so the snappiest CDN is first.
+///
+/// Uses Range GET (not ICMP). Failures keep original relative order at the end.
+Future<List<StreamPick>> rankCandidatesByProbe(
+  List<StreamPick> candidates, {
+  Map<String, String> headerMap = const {},
+  String siteUrl = '',
+  Duration timeout = const Duration(milliseconds: 1100),
+}) async {
+  if (candidates.length <= 1) return List<StreamPick>.from(candidates);
+
+  final headers = <String, String>{};
+  headerMap.forEach((k, v) {
+    if (k.trim().isEmpty || v.trim().isEmpty) return;
+    headers[k] = v;
+  });
+  if (!headers.keys.any((k) => k.toLowerCase() == 'referer') &&
+      siteUrl.isNotEmpty) {
+    headers['Referer'] = siteUrl;
+  }
+  if (!headers.keys.any((k) => k.toLowerCase() == 'user-agent')) {
+    headers['User-Agent'] =
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+  }
+
+  final scored = await Future.wait(
+    List.generate(candidates.length, (i) async {
+      final ms = await _probeStreamTtfb(
+        candidates[i].url,
+        headers: headers,
+        timeout: timeout,
+      );
+      return (i, ms);
+    }),
+  );
+
+  scored.sort((a, b) {
+    final aOk = a.$2 != null;
+    final bOk = b.$2 != null;
+    if (aOk != bOk) return aOk ? -1 : 1;
+    if (aOk && bOk) {
+      final c = a.$2!.compareTo(b.$2!);
+      if (c != 0) return c;
+    }
+    return a.$1.compareTo(b.$1);
+  });
+
+  return [for (final s in scored) candidates[s.$1]];
+}
+
+Future<int?> _probeStreamTtfb(
+  String url, {
+  required Map<String, String> headers,
+  required Duration timeout,
+}) async {
+  final uri = Uri.tryParse(url);
+  if (uri == null || !(uri.isScheme('http') || uri.isScheme('https'))) {
+    return null;
+  }
+
+  final sw = Stopwatch()..start();
+  final client = HttpClient()
+    ..connectionTimeout = timeout
+    ..idleTimeout = timeout
+    ..autoUncompress = false;
+  try {
+    final req = await client.openUrl('GET', uri).timeout(timeout);
+    req.followRedirects = true;
+    req.maxRedirects = 4;
+    headers.forEach(req.headers.set);
+    req.headers.set(HttpHeaders.rangeHeader, 'bytes=0-1');
+    // Avoid holding a live FLV forever.
+    req.headers.set(HttpHeaders.connectionHeader, 'close');
+
+    final resp = await req.close().timeout(timeout);
+    final ttfb = sw.elapsedMilliseconds;
+    // Drain a tiny amount then abort so we don't pull the whole stream.
+    try {
+      await resp
+          .take(1)
+          .timeout(const Duration(milliseconds: 250))
+          .drain<void>();
+    } catch (_) {}
+    try {
+      await resp.detachSocket().then((s) => s.destroy());
+    } catch (_) {}
+
+    final code = resp.statusCode;
+    if (code >= 200 && code < 400) return ttfb;
+    // Some CDNs reject Range but still answer quickly — usable signal.
+    if (code == 416 || code == 405) return ttfb;
+    return null;
+  } catch (_) {
+    return null;
+  } finally {
+    client.close(force: true);
+  }
 }
 
 /// Android in-process JNI (app UID). Falls back to Process if lib missing.
@@ -288,11 +406,17 @@ List<StreamPick> _selectStreams(List<dynamic> raw, {bool preferFlv = true}) {
     final url = (m['url'] as String?)?.trim() ?? '';
     final audioOnly = m['audio_only'] as bool? ?? false;
     if (url.isEmpty || audioOnly || url.contains('only_audio=1')) continue;
+    final quality = (m['quality'] as String?)?.trim() ?? '';
+    // Douyin often returns an unusable "md" rung with bitrate 0.
+    if (quality.toLowerCase() == 'md' &&
+        ((m['bitrate'] as num?)?.toInt() ?? 0) <= 0) {
+      continue;
+    }
     list.add(
       StreamPick(
         url: url,
         format: m['format'] as String? ?? '',
-        quality: m['quality'] as String? ?? '',
+        quality: quality,
         bitrate: (m['bitrate'] as num?)?.toInt() ?? 0,
         priority: (m['priority'] as num?)?.toInt() ?? 0,
       ),
@@ -301,6 +425,11 @@ List<StreamPick> _selectStreams(List<dynamic> raw, {bool preferFlv = true}) {
 
   if (preferFlv && list.any((s) => s.format.toLowerCase().contains('flv'))) {
     list = list.where((s) => s.format.toLowerCase().contains('flv')).toList();
+  }
+
+  // Drop unknown 0bps rungs when real bitrates exist (ABR must not "upshift" into them).
+  if (list.any((s) => s.bitrate > 0)) {
+    list = list.where((s) => s.bitrate > 0).toList();
   }
 
   // Low latency: resolver priority first, then lower bitrate (not max).

@@ -46,7 +46,7 @@ if (-not $env:PROTOC -and (Test-Path "C:\Users\admin\tools\protoc\bin\protoc.exe
 }
 
 Write-Host "NDK=$NdkRoot"
-Write-Host "Building lixh-stream-resolver lib+bin (aarch64-linux-android)…"
+Write-Host "Building lixh-stream-resolver lib+bin (aarch64-linux-android)..."
 Push-Location $stack
 try {
   cargo build -p lixh-stream-resolver --release --target aarch64-linux-android
@@ -61,4 +61,4 @@ New-Item -ItemType Directory -Force -Path $jniDir | Out-Null
 Copy-Item -Force $outBin $jniSo
 Copy-Item -Force $outLib $jniFfi
 $sizeMb = [math]::Round((Get-Item $jniFfi).Length / 1MB, 1)
-Write-Host "Staged $jniFfi ($sizeMb MB) + Process helper $jniSo"
+Write-Host ("Staged " + $jniFfi + " (" + $sizeMb + " MB) and " + $jniSo)

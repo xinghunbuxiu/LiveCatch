@@ -57,6 +57,7 @@ class MockLixhPlayerPlatform
           audioFrames: 0,
           decodeHw: -1,
           lastError: '',
+          presentMode: 0,
         ),
       );
 

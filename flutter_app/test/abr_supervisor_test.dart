@@ -55,6 +55,57 @@ void main() {
     expect(last.reason, contains('upshift'));
   });
 
+  test('upshift uses bitrate not index after mid-ladder start', () {
+    // Simulates TTFB starting on 原画 (highest), must not climb into 0bps "md".
+    final s = AbrSupervisor(
+      candidates: [
+        pick('sd', bitrate: 1000),
+        pick('origin', bitrate: 3000),
+        pick('md', bitrate: 0),
+      ],
+      healthyTicksForUpshift: 2,
+      upshiftLagMs: 400,
+    );
+    s.setCurrent(1); // already on highest real bitrate
+    var t = DateTime.utc(2026, 1, 1);
+    AbrAction? last;
+    for (var i = 1; i <= 3; i++) {
+      t = t.add(const Duration(milliseconds: 500));
+      last = s.observe(
+        progress: i * 10,
+        lagMs: 100,
+        playing: true,
+        now: t,
+      );
+    }
+    expect(last!.kind, AbrActionKind.keep);
+  });
+
+  test('selectInitial respects preferIndex', () {
+    final s = AbrSupervisor(
+      candidates: [
+        pick('lo', bitrate: 500),
+        pick('hi', bitrate: 2000),
+      ],
+    );
+    expect(s.selectInitial(preferIndex: 1), 1);
+    expect(s.selectInitial(), 0);
+  });
+
+  test('failure prefers lower bitrate rung', () {
+    final s = AbrSupervisor(
+      candidates: [
+        pick('lo', bitrate: 500),
+        pick('mid', bitrate: 1000),
+        pick('hi', bitrate: 2000),
+      ],
+    );
+    s.setCurrent(2);
+    final a = s.reportFailure('stall');
+    expect(a.kind, AbrActionKind.switchTo);
+    expect(a.index, 1); // closest lower bitrate
+  });
+
   test('hard lag triggers downshift', () {
     final s = AbrSupervisor(
       candidates: [

@@ -27,17 +27,18 @@ extension LatencyProfileX on LatencyProfile {
 
   /// Target / max live latency (ms) for native player when wired.
   (int targetMs, int maxMs) get latencyMs => switch (this) {
-        LatencyProfile.smooth => (280, 900),
-        LatencyProfile.balanced => (160, 520),
-        // Matches prior macOS engine default (tight live window).
-        LatencyProfile.low => (120, 450),
+        LatencyProfile.smooth => (200, 600),
+        LatencyProfile.balanced => (120, 400),
+        // Tight live window: chase re-anchors on keyframe once over target.
+        LatencyProfile.low => (80, 280),
       };
 }
 
 class AppSettings {
   AppSettings({
     this.startWithVideo = false,
-    this.abrEnabled = true,
+    // Listen-first: avoid mid-play quality switches (each switch re-opens the stream).
+    this.abrEnabled = false,
     this.preferFlv = true,
     // Default to former macOS live window so fresh installs stay snappy.
     this.latency = LatencyProfile.low,
@@ -64,11 +65,11 @@ class AppSettings {
     final latName = p.getString(_kLatency);
     final latency = LatencyProfile.values.firstWhere(
       (e) => e.name == latName,
-      orElse: () => LatencyProfile.balanced,
+      orElse: () => LatencyProfile.low,
     );
     return AppSettings(
       startWithVideo: p.getBool(_kVideo) ?? false,
-      abrEnabled: p.getBool(_kAbr) ?? true,
+      abrEnabled: p.getBool(_kAbr) ?? false,
       preferFlv: p.getBool(_kFlv) ?? true,
       latency: latency,
     );

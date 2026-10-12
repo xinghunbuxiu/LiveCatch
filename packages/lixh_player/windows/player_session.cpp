@@ -179,14 +179,14 @@ bool PlayerSession::Open(const std::string& url, const std::string& headers) {
   if (!headers.empty()) {
     lixh_player_set_headers(player, headers.c_str());
   }
+  // Before open: listen-only skips video decoder/HW init.
+  lixh_player_set_video_sink(player, video_enabled_.load() ? 1 : 0);
+  lixh_player_set_latency(player, latency_target_ms_, latency_max_ms_);
   if (lixh_player_open(player, url.c_str()) < 0) {
     SetError("lixh_player_open failed");
     lixh_player_destroy(player);
     return false;
   }
-  lixh_player_set_latency(player, latency_target_ms_, latency_max_ms_);
-  // Default listen-only: discard video packets until UI enables picture.
-  lixh_player_set_video_sink(player, video_enabled_.load() ? 1 : 0);
   {
     std::lock_guard<std::mutex> lock(mu_);
     player_ = player;

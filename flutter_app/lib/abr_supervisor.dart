@@ -81,8 +81,16 @@ class AbrSupervisor {
     _lastObserveAt = null;
   }
 
-  /// Initial pick: first non-failed (resolver already ranked for low latency).
-  int? selectInitial() {
+  /// Initial pick: optional TTFB preferred index, else first non-failed.
+  ///
+  /// Candidates should stay bitrate-asc for ABR; [preferIndex] only seeds start.
+  int? selectInitial({int? preferIndex}) {
+    if (preferIndex != null &&
+        preferIndex >= 0 &&
+        preferIndex < _candidates.length &&
+        !_failed.contains(preferIndex)) {
+      return preferIndex;
+    }
     for (var i = 0; i < _candidates.length; i++) {
       if (!_failed.contains(i)) return i;
     }
@@ -136,12 +144,13 @@ class AbrSupervisor {
       return const AbrAction.keep();
     }
 
-    // Healthy: consider upshift to higher bitrate rung.
+    // Healthy: step up to the next higher *bitrate* (not index+1 — TTFB may
+    // start mid-ladder, and index order is not guaranteed after probes).
     if (lagMs <= upshiftLagMs && progressed) {
       _healthyTicks++;
       if (_healthyTicks >= healthyTicksForUpshift) {
-        final next = _current! + 1;
-        if (next < _candidates.length && !_failed.contains(next)) {
+        final next = _nextHigherBitrate(_current!);
+        if (next != null) {
           _healthyTicks = 0;
           _current = next;
           _consecutiveStalls = 0;
@@ -161,16 +170,8 @@ class AbrSupervisor {
     final cur = _current;
     if (cur != null) _failed.add(cur);
 
-    // Prefer a lower-bitrate rung first, then any unused higher index.
-    int? next;
-    if (cur != null) {
-      for (var i = cur - 1; i >= 0; i--) {
-        if (!_failed.contains(i)) {
-          next = i;
-          break;
-        }
-      }
-    }
+    // Prefer closest lower bitrate, then any unused candidate.
+    int? next = cur != null ? _nextLowerBitrate(cur) : null;
     next ??= () {
       for (var i = 0; i < _candidates.length; i++) {
         if (i != cur && !_failed.contains(i)) return i;
@@ -189,5 +190,34 @@ class AbrSupervisor {
       return AbrAction.switchTo(next, reason);
     }
     return AbrAction.reResolve(reason);
+  }
+
+  int? _nextHigherBitrate(int from) {
+    final curBr = _candidates[from].bitrate;
+    int? best;
+    for (var i = 0; i < _candidates.length; i++) {
+      if (i == from || _failed.contains(i)) continue;
+      final br = _candidates[i].bitrate;
+      if (br <= curBr) continue;
+      if (best == null || br < _candidates[best].bitrate) best = i;
+    }
+    return best;
+  }
+
+  int? _nextLowerBitrate(int from) {
+    final curBr = _candidates[from].bitrate;
+    int? best;
+    for (var i = 0; i < _candidates.length; i++) {
+      if (i == from || _failed.contains(i)) continue;
+      final br = _candidates[i].bitrate;
+      // Prefer a real lower rung; if current is unknown (0), any other is fine.
+      if (curBr > 0 && br >= curBr) continue;
+      if (curBr > 0) {
+        if (best == null || br > _candidates[best].bitrate) best = i;
+      } else {
+        best ??= i;
+      }
+    }
+    return best;
   }
 }

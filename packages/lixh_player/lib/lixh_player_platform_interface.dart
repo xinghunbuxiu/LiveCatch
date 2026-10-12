@@ -30,6 +30,7 @@ class PlayerStats {
     this.audioQueueMs = 0,
     this.videoWidth = 0,
     this.videoHeight = 0,
+    this.presentMode = 0,
   });
 
   final int textureId;
@@ -44,6 +45,8 @@ class PlayerStats {
   final int audioQueueMs;
   final int videoWidth;
   final int videoHeight;
+  /// 0=none, 1=MediaCodec Surface (zero-copy), 2=RGBA CPU path.
+  final int presentMode;
 }
 
 abstract class LixhPlayerPlatform extends PlatformInterface {
