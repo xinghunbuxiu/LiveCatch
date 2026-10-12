@@ -24,14 +24,14 @@ enum { kLixhRingCap = 48000 * 2 * 2 };
 
 - (instancetype)init {
   self = [super init];
-  if (self) _maxQueueMs = 160;
+  if (self) _maxQueueMs = 120;
   return self;
 }
 
 - (void)setMaxQueueMs:(int)ms {
   @synchronized(self) {
-    // PCM cushion floor — chase targets like 80ms underrun and crackle.
-    if (ms < 160) ms = 160;
+    // Lean floor; grows toward 280ms if fill underruns.
+    if (ms < 120) ms = 120;
     if (ms > 2000) ms = 2000;
     _maxQueueMs = ms;
   }
@@ -66,6 +66,11 @@ static void LixhAqCallback(void *user, AudioQueueRef q, AudioQueueBufferRef buf)
     }
     if (got < need) {
       memset(dst + got, 0, (size_t)(need - got) * sizeof(float));
+      if (_maxQueueMs < 280) {
+        int next = _maxQueueMs + 40;
+        if (next > 280) next = 280;
+        _maxQueueMs = next;
+      }
     }
     buf->mAudioDataByteSize = (UInt32)(frames * _ch * (int)sizeof(float));
   }
@@ -144,11 +149,12 @@ static void LixhAqCallback(void *user, AudioQueueRef q, AudioQueueBufferRef buf)
     int max_samples = kLixhRingCap;
     if (_maxQueueMs > 0 && _rate > 0 && _ch > 0) {
       max_samples = _ch * _rate * _maxQueueMs / 1000;
-      if (max_samples < _ch * _rate * 160 / 1000) max_samples = _ch * _rate * 160 / 1000;
+      if (max_samples < _ch * _rate * 120 / 1000) max_samples = _ch * _rate * 120 / 1000;
       if (max_samples > kLixhRingCap) max_samples = kLixhRingCap;
     }
     int trim_at = max_samples + max_samples / 4;
-    int min_keep = _ch * _rate * 80 / 1000;
+    int keep_ms = _maxQueueMs >= 160 ? 80 : 60;
+    int min_keep = _ch * _rate * keep_ms / 1000;
     while (_count + n > trim_at && _count > min_keep) {
       int drop = _ch > 0 ? _ch * (_rate / 50) : n;
       if (drop < 1) drop = n;

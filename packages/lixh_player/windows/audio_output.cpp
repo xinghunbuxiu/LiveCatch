@@ -71,10 +71,11 @@ void AudioOutput::ClearQueue() {
 void AudioOutput::Flush() { ClearQueue(); }
 
 void AudioOutput::SetMaxQueueMs(int ms) {
-  // Floor: chase target can be 80ms; PCM needs more to avoid WASAPI underruns.
-  if (ms < 160) ms = 160;
+  // Lean floor; grows on underrun (see RenderLoop) so stable links stay snappy.
+  if (ms < 120) ms = 120;
   if (ms > 2000) ms = 2000;
   std::lock_guard<std::mutex> lock(mu_);
+  base_queue_ms_ = ms;
   max_queue_ms_ = ms;
   const int rate = out_rate_ > 0 ? out_rate_ : src_rate_;
   const int ch = out_channels_ > 0 ? out_channels_ : src_channels_;
@@ -432,12 +433,13 @@ void AudioOutput::Push(const float* samples, int frames, int channels,
     ring_cap_ = max_queue_;
     r_ = w_ = count_ = 0;
   }
-  // Hysteresis: trim only past 125% of cap; keep ≥~80ms to avoid crackle.
+  // Hysteresis: trim only past 125% of cap; keep a fraction to avoid crackle.
   const size_t cap = max_queue_ < ring_cap_ ? max_queue_ : ring_cap_;
   const size_t trim_at = cap + cap / 4;
+  const int keep_ms = max_queue_ms_ >= 160 ? 80 : 60;
   const size_t min_keep =
       static_cast<size_t>(std::max(1, out_channels_)) *
-      static_cast<size_t>(std::max(1, out_rate_)) * 80 / 1000;
+      static_cast<size_t>(std::max(1, out_rate_)) * keep_ms / 1000;
   while (count_ + chunk.size() > trim_at && count_ > min_keep) {
     size_t drop = static_cast<size_t>(std::max(1, out_channels_)) *
                   static_cast<size_t>(std::max(1, out_rate_ / 50));
@@ -496,6 +498,16 @@ void AudioOutput::RenderLoop() {
         const size_t have = RingRead(out, need);
         if (have < need) {
           std::memset(out + have, 0, (need - have) * sizeof(float));
+          if (max_queue_ms_ < 280) {
+            int next = max_queue_ms_ + 40;
+            if (next > 280) next = 280;
+            if (next < base_queue_ms_) next = base_queue_ms_;
+            max_queue_ms_ = next;
+            max_queue_ = static_cast<size_t>(std::max(1, out_rate_)) *
+                         static_cast<size_t>(std::max(1, out_channels_)) *
+                         static_cast<size_t>(max_queue_ms_) / 1000;
+            if (max_queue_ < 2048) max_queue_ = 2048;
+          }
         }
       } else {
         thread_local std::vector<float> tmp;

@@ -55,7 +55,8 @@ class AudioOutput {
   size_t w_ = 0;
   size_t count_ = 0;
   size_t max_queue_ = 48000 * 2;
-  int max_queue_ms_ = 160;
+  int base_queue_ms_ = 120;
+  int max_queue_ms_ = 120;
   int src_rate_ = 48000;
   int src_channels_ = 2;
   std::string last_error_;

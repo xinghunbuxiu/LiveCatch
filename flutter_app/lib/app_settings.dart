@@ -22,11 +22,11 @@ extension LatencyProfileX on LatencyProfile {
   String get hint => switch (this) {
         LatencyProfile.smooth => '缓冲更大，弱网更稳',
         LatencyProfile.balanced => '延迟与稳定性折中',
-        LatencyProfile.low => '追帧更紧；音频仍保留 ≥160ms 缓冲防爆音',
+        LatencyProfile.low => '追帧更紧；音频约 120ms 起，卡顿时自动加厚',
       };
 
   /// Target / max live latency (ms) for native player when wired.
-  /// Note: platform PCM queues use ≥max(target×2, 160)ms — not equal to target.
+  /// Note: PCM starts near max(target×2, 120)ms and grows on underrun.
   (int targetMs, int maxMs) get latencyMs => switch (this) {
         LatencyProfile.smooth => (200, 600),
         LatencyProfile.balanced => (120, 400),

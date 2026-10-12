@@ -184,7 +184,7 @@ bool PlayerSession::Open(const std::string& url, const std::string& headers) {
   lixh_player_set_latency(player, latency_target_ms_, latency_max_ms_);
   {
     int pcm_ms = latency_target_ms_ * 2;
-    if (pcm_ms < 160) pcm_ms = 160;
+    if (pcm_ms < 120) pcm_ms = 120;
     if (pcm_ms > 400) pcm_ms = 400;
     audio_.SetMaxQueueMs(pcm_ms);
   }
@@ -316,9 +316,9 @@ void PlayerSession::SetLatency(int target_ms, int max_ms) {
   if (max_ms < target_ms) max_ms = target_ms;
   latency_target_ms_ = target_ms;
   latency_max_ms_ = max_ms;
-  // PCM cushion ≠ video chase target (80ms chase → ≥160ms audio).
+  // PCM cushion ≠ video chase (80ms chase → ~120ms audio, grows on underrun).
   int pcm_ms = target_ms * 2;
-  if (pcm_ms < 160) pcm_ms = 160;
+  if (pcm_ms < 120) pcm_ms = 120;
   if (pcm_ms > 400) pcm_ms = 400;
   audio_.SetMaxQueueMs(pcm_ms);
   void* player = nullptr;

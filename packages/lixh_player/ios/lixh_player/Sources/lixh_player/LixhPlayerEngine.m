@@ -103,7 +103,7 @@ static CVPixelBufferRef LixhUploadSoftwareFrame(const AVFrame *f) {
     _latencyMaxMs = 700;
     {
       int pcmMs = _latencyTargetMs * 2;
-      if (pcmMs < 160) pcmMs = 160;
+      if (pcmMs < 120) pcmMs = 120;
       if (pcmMs > 400) pcmMs = 400;
       [_audio setMaxQueueMs:pcmMs];
     }
@@ -339,7 +339,7 @@ static void OnEvent(void *opaque, int type, int code, const char *message) {
   _latencyMaxMs = maxMs;
   // PCM cushion ≠ video chase (80ms chase → ≥160ms audio).
   int pcmMs = targetMs * 2;
-  if (pcmMs < 160) pcmMs = 160;
+  if (pcmMs < 120) pcmMs = 120;
   if (pcmMs > 400) pcmMs = 400;
   [self.audio setMaxQueueMs:pcmMs];
   void *player = NULL;

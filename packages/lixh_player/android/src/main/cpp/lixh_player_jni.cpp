@@ -27,11 +27,11 @@ namespace {
 /* ~500ms stereo @48k — physical ceiling; live trim keeps far less. */
 constexpr int kRingCap = 48000 * 2 / 2;
 
-/* Video chase target ≠ safe PCM depth. Sub-100ms app queues underrun under
-   AAudio LOW_LATENCY + mutex, which sounds like crackle / stutter. */
+/* Video chase target ≠ safe PCM depth. Start lean (~120ms), grow on underrun
+   so stable links stay snappy while weak ones stop crackling. */
 static int PcmQueueMsFromChase(int chase_target_ms) {
   int pcm = chase_target_ms * 2;
-  if (pcm < 160) pcm = 160;
+  if (pcm < 120) pcm = 120;
   if (pcm > 400) pcm = 400;
   return pcm;
 }
@@ -42,8 +42,9 @@ class AudioOut {
 
   void SetMaxQueueMs(int ms) {
     std::lock_guard<std::mutex> lock(mu_);
-    if (ms < 160) ms = 160;
+    if (ms < 120) ms = 120;
     if (ms > 400) ms = 400;
+    base_queue_ms_ = ms;
     max_queue_ms_ = ms;
   }
 
@@ -55,10 +56,11 @@ class AudioOut {
     if (n > kRingCap / 2) n = kRingCap / 2;
     // Cap with hysteresis (trim only past 125%) so we do not hover near empty.
     int max_samples = ch_ * rate_ * max_queue_ms_ / 1000;
-    if (max_samples < ch_ * rate_ * 160 / 1000) max_samples = ch_ * rate_ * 160 / 1000;
+    if (max_samples < ch_ * rate_ * 120 / 1000) max_samples = ch_ * rate_ * 120 / 1000;
     if (max_samples > kRingCap - n) max_samples = kRingCap - n;
     const int trim_at = max_samples + max_samples / 4;
-    const int min_keep = ch_ * rate_ * 80 / 1000;  // never drain below ~80ms
+    const int keep_ms = max_queue_ms_ >= 160 ? 80 : 60;
+    const int min_keep = ch_ * rate_ * keep_ms / 1000;
     while (count_ + n > trim_at && count_ > min_keep) {
       int drop = ch_ * (rate_ / 50);  // ~20ms
       if (drop < 1) drop = n;
@@ -102,12 +104,22 @@ class AudioOut {
     return self->OnAudio(static_cast<float*>(audio), num_frames);
   }
 
+  void NoteUnderrunLocked() {
+    if (max_queue_ms_ < 280) {
+      int next = max_queue_ms_ + 40;
+      if (next > 280) next = 280;
+      if (next < base_queue_ms_) next = base_queue_ms_;
+      max_queue_ms_ = next;
+    }
+  }
+
   aaudio_data_callback_result_t OnAudio(float* dst, int32_t num_frames) {
     int need = num_frames * ch_;
     /* Never block the realtime callback on the decoder Push() lock. */
     std::unique_lock<std::mutex> lock(mu_, std::try_to_lock);
     if (!lock.owns_lock()) {
       memset(dst, 0, (size_t)need * sizeof(float));
+      /* Can't bump under lock — rare; next underrun with lock will grow. */
       return AAUDIO_CALLBACK_RESULT_CONTINUE;
     }
     int got = 0;
@@ -121,7 +133,10 @@ class AudioOut {
       count_ -= n;
       got += n;
     }
-    if (got < need) memset(dst + got, 0, (size_t)(need - got) * sizeof(float));
+    if (got < need) {
+      memset(dst + got, 0, (size_t)(need - got) * sizeof(float));
+      NoteUnderrunLocked();
+    }
     return AAUDIO_CALLBACK_RESULT_CONTINUE;
   }
 
@@ -154,7 +169,8 @@ class AudioOut {
   mutable std::mutex mu_;
   std::vector<float> ring_ = std::vector<float>(kRingCap);
   int r_ = 0, w_ = 0, count_ = 0, rate_ = 48000, ch_ = 2;
-  int max_queue_ms_ = 160;
+  int base_queue_ms_ = 120;
+  int max_queue_ms_ = 120;
   AAudioStream* stream_ = nullptr;
 };
 
