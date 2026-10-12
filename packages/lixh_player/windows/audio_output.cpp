@@ -66,6 +66,7 @@ AudioOutput::~AudioOutput() { Stop(); }
 void AudioOutput::ClearQueue() {
   std::lock_guard<std::mutex> lock(mu_);
   r_ = w_ = count_ = 0;
+  primed_ = false;
 }
 
 void AudioOutput::Flush() { ClearQueue(); }
@@ -77,6 +78,7 @@ void AudioOutput::SetMaxQueueMs(int ms) {
   std::lock_guard<std::mutex> lock(mu_);
   base_queue_ms_ = ms;
   max_queue_ms_ = ms;
+  // Keep current primed_ — only Stop/Start resets warm-start.
   const int rate = out_rate_ > 0 ? out_rate_ : src_rate_;
   const int ch = out_channels_ > 0 ? out_channels_ : src_channels_;
   size_t next = static_cast<size_t>(std::max(1, rate)) *
@@ -433,13 +435,25 @@ void AudioOutput::Push(const float* samples, int frames, int channels,
     ring_cap_ = max_queue_;
     r_ = w_ = count_ = 0;
   }
+  // Warm-start: allow a fatter burst before first audible frame.
+  size_t effective_max = max_queue_;
+  if (!primed_) {
+    int p = base_queue_ms_;
+    if (p < 180) p = 180;
+    if (p > 240) p = 240;
+    size_t prime_cap = static_cast<size_t>(std::max(1, out_rate_)) *
+                       static_cast<size_t>(std::max(1, out_channels_)) *
+                       static_cast<size_t>(p) / 1000;
+    if (prime_cap > effective_max) effective_max = prime_cap;
+  }
   // Hysteresis: trim only past 125% of cap; keep a fraction to avoid crackle.
-  const size_t cap = max_queue_ < ring_cap_ ? max_queue_ : ring_cap_;
+  const size_t cap = effective_max < ring_cap_ ? effective_max : ring_cap_;
   const size_t trim_at = cap + cap / 4;
   const int keep_ms = max_queue_ms_ >= 160 ? 80 : 60;
-  const size_t min_keep =
-      static_cast<size_t>(std::max(1, out_channels_)) *
-      static_cast<size_t>(std::max(1, out_rate_)) * keep_ms / 1000;
+  const size_t min_keep = primed_
+      ? (static_cast<size_t>(std::max(1, out_channels_)) *
+         static_cast<size_t>(std::max(1, out_rate_)) * keep_ms / 1000)
+      : 0;
   while (count_ + chunk.size() > trim_at && count_ > min_keep) {
     size_t drop = static_cast<size_t>(std::max(1, out_channels_)) *
                   static_cast<size_t>(std::max(1, out_rate_ / 50));
@@ -493,6 +507,29 @@ void AudioOutput::RenderLoop() {
 
     {
       std::lock_guard<std::mutex> lock(mu_);
+      if (!primed_) {
+        const int rate = out_rate_ > 0 ? out_rate_ : 48000;
+        int qms = 0;
+        if (ch > 0 && rate > 0 && count_ > 0) {
+          qms = static_cast<int>((count_ / static_cast<size_t>(ch) * 1000ull) /
+                                 static_cast<unsigned>(rate));
+        }
+        int need_prime = base_queue_ms_;
+        if (need_prime < 180) need_prime = 180;
+        if (need_prime > 240) need_prime = 240;
+        if (qms >= need_prime) {
+          primed_ = true;
+        } else {
+          // Hold silence; keep ring for the prime burst (decode thread still fills).
+          if (out_kind_ == SampleKind::Float32) {
+            std::memset(data, 0, need * sizeof(float));
+          } else {
+            std::memset(data, 0, need * sizeof(int16_t));
+          }
+          render->ReleaseBuffer(available, 0);
+          continue;
+        }
+      }
       if (out_kind_ == SampleKind::Float32) {
         auto* out = reinterpret_cast<float*>(data);
         const size_t have = RingRead(out, need);

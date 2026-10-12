@@ -48,19 +48,33 @@ class AudioOut {
     max_queue_ms_ = ms;
   }
 
+  /* Warm-start: hold output until ~180–240ms is buffered, then play.
+     Decode/demux keeps filling on another thread (live chase continues). */
+  int PrimeNeedMsLocked() const {
+    int p = base_queue_ms_;
+    if (p < 180) p = 180;
+    if (p > 240) p = 240;
+    return p;
+  }
+
   void Push(const float* samples, int frames, int channels, int rate) {
     if (!samples || frames <= 0 || channels <= 0) return;
     std::lock_guard<std::mutex> lock(mu_);
     if (!Ensure(rate, channels)) return;
     int n = frames * channels;
     if (n > kRingCap / 2) n = kRingCap / 2;
-    // Cap with hysteresis (trim only past 125%) so we do not hover near empty.
-    int max_samples = ch_ * rate_ * max_queue_ms_ / 1000;
+    // While priming, allow a slightly fatter cap so the first burst can land.
+    int cap_ms = max_queue_ms_;
+    if (!primed_) {
+      int p = PrimeNeedMsLocked();
+      if (cap_ms < p) cap_ms = p;
+    }
+    int max_samples = ch_ * rate_ * cap_ms / 1000;
     if (max_samples < ch_ * rate_ * 120 / 1000) max_samples = ch_ * rate_ * 120 / 1000;
     if (max_samples > kRingCap - n) max_samples = kRingCap - n;
     const int trim_at = max_samples + max_samples / 4;
     const int keep_ms = max_queue_ms_ >= 160 ? 80 : 60;
-    const int min_keep = ch_ * rate_ * keep_ms / 1000;
+    const int min_keep = primed_ ? (ch_ * rate_ * keep_ms / 1000) : 0;
     while (count_ + n > trim_at && count_ > min_keep) {
       int drop = ch_ * (rate_ / 50);  // ~20ms
       if (drop < 1) drop = n;
@@ -89,6 +103,7 @@ class AudioOut {
       stream_ = nullptr;
     }
     r_ = w_ = count_ = 0;
+    primed_ = false;
   }
 
   int QueuedMs() const {
@@ -122,6 +137,16 @@ class AudioOut {
       /* Can't bump under lock — rare; next underrun with lock will grow. */
       return AAUDIO_CALLBACK_RESULT_CONTINUE;
     }
+    if (!primed_) {
+      int qms = (rate_ > 0 && ch_ > 0) ? (int)((count_ / ch_) * 1000L / rate_) : 0;
+      if (qms >= PrimeNeedMsLocked()) {
+        primed_ = true;
+      } else {
+        /* Hold silence; keep the ring intact until the prime burst arrives. */
+        memset(dst, 0, (size_t)need * sizeof(float));
+        return AAUDIO_CALLBACK_RESULT_CONTINUE;
+      }
+    }
     int got = 0;
     while (got < need && count_ > 0) {
       int n = need - got;
@@ -151,6 +176,7 @@ class AudioOut {
     ch_ = ch > 0 ? ch : 2;
     ring_.assign(kRingCap, 0.f);
     r_ = w_ = count_ = 0;
+    primed_ = false;
     AAudioStreamBuilder* b = nullptr;
     if (AAudio_createStreamBuilder(&b) != AAUDIO_OK) return false;
     AAudioStreamBuilder_setDirection(b, AAUDIO_DIRECTION_OUTPUT);
@@ -171,6 +197,7 @@ class AudioOut {
   int r_ = 0, w_ = 0, count_ = 0, rate_ = 48000, ch_ = 2;
   int base_queue_ms_ = 120;
   int max_queue_ms_ = 120;
+  bool primed_ = false;
   AAudioStream* stream_ = nullptr;
 };
 

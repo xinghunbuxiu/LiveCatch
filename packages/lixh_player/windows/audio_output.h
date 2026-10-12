@@ -57,6 +57,7 @@ class AudioOutput {
   size_t max_queue_ = 48000 * 2;
   int base_queue_ms_ = 120;
   int max_queue_ms_ = 120;
+  bool primed_ = false;
   int src_rate_ = 48000;
   int src_channels_ = 2;
   std::string last_error_;

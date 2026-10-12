@@ -13,6 +13,7 @@ enum { kLixhRingCap = 48000 * 2 * 2 };
   int _rate;
   int _ch;
   int _maxQueueMs;
+  BOOL _primed;
   BOOL _started;
 }
 - (void)fillBuffer:(AudioQueueBufferRef)buf queue:(AudioQueueRef)q;
@@ -24,7 +25,10 @@ enum { kLixhRingCap = 48000 * 2 * 2 };
 
 - (instancetype)init {
   self = [super init];
-  if (self) _maxQueueMs = 120;
+  if (self) {
+    _maxQueueMs = 120;
+    _primed = NO;
+  }
   return self;
 }
 
@@ -53,6 +57,20 @@ static void LixhAqCallback(void *user, AudioQueueRef q, AudioQueueBufferRef buf)
     }
     float *dst = (float *)buf->mAudioData;
     int need = frames * _ch;
+    if (!_primed) {
+      int qms = (_rate > 0 && _ch > 0) ? (int)((_count / _ch) * 1000L / _rate) : 0;
+      int needPrime = _maxQueueMs;
+      if (needPrime < 180) needPrime = 180;
+      if (needPrime > 240) needPrime = 240;
+      if (qms >= needPrime) {
+        _primed = YES;
+      } else {
+        memset(dst, 0, (size_t)need * sizeof(float));
+        buf->mAudioDataByteSize = (UInt32)(need * (int)sizeof(float));
+        AudioQueueEnqueueBuffer(q, buf, 0, NULL);
+        return;
+      }
+    }
     int got = 0;
     while (got < need && _count > 0) {
       int n = need - got;
@@ -122,6 +140,7 @@ static void LixhAqCallback(void *user, AudioQueueRef q, AudioQueueBufferRef buf)
   }
   memset(_bufs, 0, sizeof(_bufs));
   _started = NO;
+  _primed = NO;
   _r = _w = _count = 0;
 }
 
@@ -132,6 +151,7 @@ static void LixhAqCallback(void *user, AudioQueueRef q, AudioQueueBufferRef buf)
 - (void)flush {
   @synchronized(self) {
     _r = _w = _count = 0;
+    _primed = NO;
   }
 }
 
@@ -147,14 +167,21 @@ static void LixhAqCallback(void *user, AudioQueueRef q, AudioQueueBufferRef buf)
     /* Cap app-side PCM to latency target (same semantics as Android).
        Ring capacity (~2s) is only a hard ceiling, not the live target. */
     int max_samples = kLixhRingCap;
-    if (_maxQueueMs > 0 && _rate > 0 && _ch > 0) {
-      max_samples = _ch * _rate * _maxQueueMs / 1000;
+    int cap_ms = _maxQueueMs;
+    if (!_primed) {
+      int p = _maxQueueMs;
+      if (p < 180) p = 180;
+      if (p > 240) p = 240;
+      if (cap_ms < p) cap_ms = p;
+    }
+    if (cap_ms > 0 && _rate > 0 && _ch > 0) {
+      max_samples = _ch * _rate * cap_ms / 1000;
       if (max_samples < _ch * _rate * 120 / 1000) max_samples = _ch * _rate * 120 / 1000;
       if (max_samples > kLixhRingCap) max_samples = kLixhRingCap;
     }
     int trim_at = max_samples + max_samples / 4;
     int keep_ms = _maxQueueMs >= 160 ? 80 : 60;
-    int min_keep = _ch * _rate * keep_ms / 1000;
+    int min_keep = _primed ? (_ch * _rate * keep_ms / 1000) : 0;
     while (_count + n > trim_at && _count > min_keep) {
       int drop = _ch > 0 ? _ch * (_rate / 50) : n;
       if (drop < 1) drop = n;
