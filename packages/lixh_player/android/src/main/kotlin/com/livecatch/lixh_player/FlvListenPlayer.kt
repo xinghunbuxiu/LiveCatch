@@ -37,12 +37,13 @@ class FlvListenPlayer {
     private var url: String = ""
     @Volatile
     private var headers: String? = null
+    /** Hard catch-up threshold only — below this we never drop (avoids choppy audio). */
     @Volatile
-    private var maxQueueMs: Int = 50
+    private var hardDropMs: Int = 220
 
     fun setLatency(targetMs: Int, maxMs: Int) {
-        val t = targetMs.coerceAtLeast(30)
-        maxQueueMs = (t + t / 2).coerceIn(40, 120)
+        val t = targetMs.coerceAtLeast(40)
+        hardDropMs = maxMs.coerceAtLeast(t + 100).coerceIn(180, 400)
     }
 
     fun prepare(url: String, headers: String?) {
@@ -61,7 +62,7 @@ class FlvListenPlayer {
         var conn: HttpURLConnection? = null
         try {
             conn = openConn(url, headers)
-            val ins = BufferedInputStream(conn.inputStream, 16 * 1024)
+            val ins = BufferedInputStream(conn.inputStream, 64 * 1024)
             if (!readFlvHeader(ins)) {
                 lastError = "not flv"
                 conn.disconnect()
@@ -71,7 +72,7 @@ class FlvListenPlayer {
             val held = conn
             worker = Thread({
                 try {
-                    runLoop(held, ins)
+                    runLoop(ins)
                 } catch (t: Throwable) {
                     lastError = t.message ?: t.toString()
                     Log.w(TAG, "listen loop", t)
@@ -84,6 +85,7 @@ class FlvListenPlayer {
                 }
             }, "lixh-flv-listen").apply {
                 isDaemon = true
+                priority = Thread.NORM_PRIORITY + 1
                 start()
             }
             conn = null
@@ -117,15 +119,21 @@ class FlvListenPlayer {
             (b[off + 2].toInt() and 0xff)
     }
 
-    private fun runLoop(@Suppress("UNUSED_PARAMETER") conn: HttpURLConnection, ins: InputStream) {
+    private fun runLoop(ins: InputStream) {
         var codec: MediaCodec? = null
         var track: AudioTrack? = null
+        var sampleRate = 44100
+        var channels = 2
+        var pcmWrittenFrames = 0L
+        var presentationUs = 0L
+        val info = MediaCodec.BufferInfo()
+        val hdr = ByteArray(11)
+        val prev = ByteArray(4)
+        var payload = ByteArray(4096)
+        val skipBuf = ByteArray(8192)
+        val pcmScratch = ByteArray(8192)
+
         try {
-            val info = MediaCodec.BufferInfo()
-            var sampleRate = 44100
-            var channels = 2
-            var pcmWritten = 0L
-            val hdr = ByteArray(11)
             while (running.get() && !Thread.currentThread().isInterrupted) {
                 if (!readFully(ins, hdr, 0, 11)) break
                 val tagType = hdr[0].toInt() and 0xff
@@ -134,81 +142,77 @@ class FlvListenPlayer {
                     lastError = "bad flv tag"
                     break
                 }
-                val payload = if (dataSize > 0) ByteArray(dataSize) else EMPTY
-                if (dataSize > 0 && !readFully(ins, payload, 0, dataSize)) break
-                val prev = ByteArray(4)
-                if (!readFully(ins, prev, 0, 4)) break
 
                 if (tagType != 8) {
-                    // 9=video 18=script — listen-only discards.
+                    if (!skipFully(ins, dataSize, skipBuf)) break
+                    if (!readFully(ins, prev, 0, 4)) break
                     continue
                 }
-                if (payload.size < 2) continue
+
+                if (dataSize > payload.size) {
+                    payload = ByteArray(dataSize.coerceAtLeast(payload.size * 2))
+                }
+                if (dataSize > 0 && !readFully(ins, payload, 0, dataSize)) break
+                if (!readFully(ins, prev, 0, 4)) break
+                if (dataSize < 2) continue
+
                 val soundFormat = (payload[0].toInt() and 0xff) ushr 4
-                if (soundFormat != 10) continue // AAC only
+                if (soundFormat != 10) continue
                 val pktType = payload[1].toInt() and 0xff
-                val aac = payload.copyOfRange(2, payload.size)
+                val aacLen = dataSize - 2
+                if (aacLen <= 0) continue
+
                 if (pktType == 0) {
-                    if (aac.isEmpty()) continue
-                    val parsed = parseAsc(aac)
+                    val asc = payload.copyOfRange(2, dataSize)
+                    val parsed = parseAsc(asc)
                     sampleRate = parsed.first
                     channels = parsed.second
-                    codec?.stop()
-                    codec?.release()
-                    codec = openAacCodec(aac, sampleRate, channels)
+                    releaseCodec(codec)
+                    codec = openAacCodec(asc, sampleRate, channels)
                     continue
                 }
+
                 val dec = codec ?: continue
-                val inIx = dec.dequeueInputBuffer(5_000)
-                if (inIx >= 0) {
-                    val buf = dec.getInputBuffer(inIx)
-                    if (buf != null) {
-                        buf.clear()
-                        buf.put(aac)
-                        dec.queueInputBuffer(inIx, 0, aac.size, 0, 0)
-                    }
-                }
-                while (true) {
-                    val outIx = dec.dequeueOutputBuffer(info, 0)
-                    if (outIx == MediaCodec.INFO_TRY_AGAIN_LATER) break
-                    if (outIx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                        val fmt = dec.outputFormat
-                        sampleRate = fmt.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                        channels = fmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-                        track?.release()
-                        track = openTrack(sampleRate, channels)
-                        continue
-                    }
-                    if (outIx < 0) continue
-                    val out = dec.getOutputBuffer(outIx)
-                    if (out != null && info.size > 0 && track != null) {
-                        val pcm = ByteArray(info.size)
-                        out.position(info.offset)
-                        out.get(pcm)
-                        val qms = queuedMs(track, pcmWritten, sampleRate)
-                        audioQueueMs.set(qms)
-                        if (qms > maxQueueMs) {
-                            droppedFrames.addAndGet(1)
-                        } else {
-                            val n = track.write(pcm, 0, pcm.size, AudioTrack.WRITE_NON_BLOCKING)
-                            if (n > 0) {
-                                pcmWritten += n / (2 * channels.coerceAtLeast(1))
-                                audioFrames.addAndGet(1)
-                            }
+
+                // Feed every AAC frame; retry on EAGAIN so we don't create gaps.
+                var fed = false
+                for (attempt in 0 until 40) {
+                    val inIx = dec.dequeueInputBuffer(8_000)
+                    if (inIx >= 0) {
+                        val buf = dec.getInputBuffer(inIx)
+                        if (buf != null) {
+                            buf.clear()
+                            buf.put(payload, 2, aacLen)
+                            dec.queueInputBuffer(inIx, 0, aacLen, presentationUs, 0)
+                            presentationUs += 23_000L
+                            fed = true
                         }
+                        break
                     }
-                    dec.releaseOutputBuffer(outIx, false)
+                    // Drain while waiting for an input slot.
+                    val r = drainOnce(
+                        dec, info, track, sampleRate, channels, pcmWrittenFrames, pcmScratch
+                    )
+                    track = r.track
+                    sampleRate = r.rate
+                    channels = r.ch
+                    pcmWrittenFrames = r.written
                 }
+                if (!fed) {
+                    droppedFrames.addAndGet(1)
+                    continue
+                }
+
+                val r = drainOnce(
+                    dec, info, track, sampleRate, channels, pcmWrittenFrames, pcmScratch
+                )
+                track = r.track
+                sampleRate = r.rate
+                channels = r.ch
+                pcmWrittenFrames = r.written
             }
         } finally {
-            try {
-                codec?.stop()
-            } catch (_: Throwable) {
-            }
-            try {
-                codec?.release()
-            } catch (_: Throwable) {
-            }
+            releaseCodec(codec)
             try {
                 track?.pause()
                 track?.flush()
@@ -218,8 +222,106 @@ class FlvListenPlayer {
         }
     }
 
-    private fun queuedMs(track: AudioTrack?, writtenFrames: Long, rate: Int): Int {
-        if (track == null || rate <= 0) return 0
+    private data class DrainResult(
+        val track: AudioTrack?,
+        val rate: Int,
+        val ch: Int,
+        val written: Long,
+    )
+
+    private fun drainOnce(
+        dec: MediaCodec,
+        info: MediaCodec.BufferInfo,
+        trackIn: AudioTrack?,
+        rateIn: Int,
+        chIn: Int,
+        writtenIn: Long,
+        pcmScratch: ByteArray,
+    ): DrainResult {
+        var track = trackIn
+        var sampleRate = rateIn
+        var channels = chIn
+        var written = writtenIn
+
+        while (true) {
+            val outIx = dec.dequeueOutputBuffer(info, 0)
+            when {
+                outIx == MediaCodec.INFO_TRY_AGAIN_LATER -> break
+                outIx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                    val fmt = dec.outputFormat
+                    sampleRate = fmt.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                    channels = fmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                    releaseTrack(track)
+                    track = openTrack(sampleRate, channels)
+                    written = 0L
+                }
+                outIx >= 0 -> {
+                    val out = dec.getOutputBuffer(outIx)
+                    if (out != null && info.size > 0) {
+                        if (track == null) {
+                            track = openTrack(sampleRate, channels)
+                            written = 0L
+                        }
+                        val t = track!!
+                        val qms = queuedMs(t, written, sampleRate)
+                        audioQueueMs.set(qms)
+                        if (qms > hardDropMs) {
+                            try {
+                                t.pause()
+                                t.flush()
+                                t.play()
+                            } catch (_: Throwable) {
+                            }
+                            written = 0L
+                            droppedFrames.addAndGet(1)
+                            audioQueueMs.set(0)
+                        } else {
+                            val n = writePcm(t, out, info.offset, info.size, pcmScratch)
+                            if (n > 0) {
+                                written += n / (2L * channels.coerceAtLeast(1))
+                                audioFrames.addAndGet(1)
+                            }
+                        }
+                    }
+                    dec.releaseOutputBuffer(outIx, false)
+                }
+                else -> break
+            }
+        }
+        return DrainResult(track, sampleRate, channels, written)
+    }
+
+    private fun writePcm(
+        track: AudioTrack,
+        buf: ByteBuffer,
+        offset: Int,
+        size: Int,
+        scratch: ByteArray,
+    ): Int {
+        val tmp = if (size <= scratch.size) scratch else ByteArray(size)
+        val saved = buf.position()
+        buf.position(offset)
+        buf.get(tmp, 0, size)
+        buf.position(saved)
+        var off = 0
+        var wrote = 0
+        var emptySpins = 0
+        while (off < size && running.get() && emptySpins < 100) {
+            val n = track.write(tmp, off, size - off, AudioTrack.WRITE_BLOCKING)
+            if (n < 0) break
+            if (n == 0) {
+                emptySpins++
+                continue
+            }
+            off += n
+            wrote += n
+            emptySpins = 0
+        }
+        return wrote
+    }
+
+    private fun queuedMs(track: AudioTrack, writtenFrames: Long, rate: Int): Int {
+        if (rate <= 0) return 0
         val head = track.playbackHeadPosition.toLong() and 0xffffffffL
         val q = (writtenFrames - head).coerceAtLeast(0)
         return ((q * 1000L) / rate).toInt()
@@ -228,7 +330,7 @@ class FlvListenPlayer {
     private fun openAacCodec(asc: ByteArray, rate: Int, ch: Int): MediaCodec {
         val format = MediaFormat.createAudioFormat(MediaFormat.MIMETYPE_AUDIO_AAC, rate, ch)
         format.setByteBuffer("csd-0", ByteBuffer.wrap(asc))
-        format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 4096)
+        format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, 8192)
         val codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_AUDIO_AAC)
         codec.configure(format, null, null, 0)
         codec.start()
@@ -240,7 +342,8 @@ class FlvListenPlayer {
         val channelMask =
             if (ch >= 2) AudioFormat.CHANNEL_OUT_STEREO else AudioFormat.CHANNEL_OUT_MONO
         val min = AudioTrack.getMinBufferSize(rate, channelMask, AudioFormat.ENCODING_PCM_16BIT)
-        val want = (rate * ch.coerceAtLeast(1) * 2 * maxQueueMs / 1000).coerceAtLeast(min)
+        // ~180ms device buffer absorbs jitter; hardDropMs trims live lag.
+        val want = (rate * ch.coerceAtLeast(1) * 2 * 180 / 1000).coerceAtLeast(min * 2)
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -263,6 +366,28 @@ class FlvListenPlayer {
         return track
     }
 
+    private fun releaseCodec(codec: MediaCodec?) {
+        if (codec == null) return
+        try {
+            codec.stop()
+        } catch (_: Throwable) {
+        }
+        try {
+            codec.release()
+        } catch (_: Throwable) {
+        }
+    }
+
+    private fun releaseTrack(track: AudioTrack?) {
+        if (track == null) return
+        try {
+            track.pause()
+            track.flush()
+            track.release()
+        } catch (_: Throwable) {
+        }
+    }
+
     private fun readFlvHeader(ins: InputStream): Boolean {
         val h = ByteArray(9)
         if (!readFully(ins, h, 0, 9)) return false
@@ -282,6 +407,18 @@ class FlvListenPlayer {
         return readFully(ins, prev, 0, 4)
     }
 
+    private fun skipFully(ins: InputStream, len: Int, scratch: ByteArray): Boolean {
+        var left = len
+        while (left > 0) {
+            if (Thread.currentThread().isInterrupted) return false
+            val n = ins.read(scratch, 0, minOf(left, scratch.size))
+            if (n < 0) return false
+            left -= n
+            bytesRead.addAndGet(n.toLong())
+        }
+        return true
+    }
+
     private fun readFully(ins: InputStream, buf: ByteArray, off: Int, len: Int): Boolean {
         var n = 0
         while (n < len) {
@@ -296,7 +433,6 @@ class FlvListenPlayer {
 
     companion object {
         private const val TAG = "lixh-flv"
-        private val EMPTY = ByteArray(0)
         private val RATES = intArrayOf(
             96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050,
             16000, 12000, 11025, 8000, 7350, 0, 0, 0
@@ -310,7 +446,7 @@ class FlvListenPlayer {
         fun openConn(url: String, headers: String?): HttpURLConnection {
             val conn = URL(url).openConnection() as HttpURLConnection
             conn.connectTimeout = 4000
-            conn.readTimeout = 8000
+            conn.readTimeout = 15000
             conn.instanceFollowRedirects = true
             conn.setRequestProperty(
                 "User-Agent",
