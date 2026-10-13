@@ -329,9 +329,15 @@ class LixhPlayerPlugin :
             stats["droppedFrames"] = p.droppedFrames.get()
             stats["bytesRead"] = p.bytesRead.get()
             stats["audioQueueMs"] = p.audioQueueMs.get()
-            stats["decodeHw"] = p.decodeHw.get()
-            stats["lagMs"] = p.audioQueueMs.get().toLong()
-            stats["lastError"] = p.lastError
+            // 3 = MediaCodec (same convention as native video HW).
+            stats["decodeHw"] = 3
+            // Do NOT mirror queue into lagMs — ABR would think we're always late.
+            stats["lagMs"] = 0L
+            var err = p.lastError
+            if (!p.isRunning() && p.audioFrames.get() > 0 && err.isEmpty()) {
+                err = "listen stalled"
+            }
+            stats["lastError"] = err
             stats["presentMode"] = 0
             stats["textureId"] = textureEntry?.id() ?: -1L
             return stats

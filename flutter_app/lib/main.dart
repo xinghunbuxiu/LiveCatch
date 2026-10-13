@@ -385,7 +385,12 @@ class _PlayerPageState extends State<PlayerPage>
 
           // decodeHw: 0=SW, 1=D3D11, 2=VT, 3=MediaCodec
           // presentMode: 0=none, 1=Surface zero-copy, 2=RGBA
-          final hw = s.decodeHw > 0 ? 'HW' : (s.decodeHw == 0 ? 'SW' : '—');
+          final hw = switch (s.decodeHw) {
+            3 => 'MC',
+            > 0 => 'HW',
+            0 => 'SW',
+            _ => '—',
+          };
           final present = switch (s.presentMode) {
             1 => 'Zc',
             2 => 'RGBA',
@@ -420,10 +425,11 @@ class _PlayerPageState extends State<PlayerPage>
             });
           }
 
-          // ABR / candidate switch (room resolve only).
+          // ABR only while picture is on — listen path uses only_audio / lean FLV.
           final abr = _abr;
           if (_settings.abrEnabled &&
               abr != null &&
+              _videoOn &&
               !_abrBusy &&
               _playing &&
               !_busy &&
@@ -611,6 +617,8 @@ class _PlayerPageState extends State<PlayerPage>
         var room = await resolveRoom(
           input,
           preferFlv: _settings.preferFlv,
+          // Always start listen-first — pick only_audio FLV when CDN offers it.
+          preferAudioOnly: true,
         );
         _appendLog(
           '解析成功 ${room.platform} live=${room.isLive} '
@@ -642,7 +650,8 @@ class _PlayerPageState extends State<PlayerPage>
           final label = c.quality.isNotEmpty
               ? c.quality
               : (c.bitrate > 0 ? '${c.bitrate ~/ 1000}k' : c.protocol);
-          _appendLog('听播选源: $label（最低码率，跳过 TTFB）');
+          final ao = c.audioOnly ? ' · only_audio' : '';
+          _appendLog('听播选源: $label$ao（跳过 TTFB）');
         }
         if (!mounted || startGen != _playGen) return;
         headers = room.ffmpegHeaders;
@@ -786,6 +795,30 @@ class _PlayerPageState extends State<PlayerPage>
       _status = next ? '开启画面…' : '返回听播…';
     });
     try {
+      // only_audio CDN has no video — jump to A/V; return listen → prefer only_audio.
+      final abr = _abr;
+      final cur = abr?.current;
+      if (next) {
+        if (abr != null && (cur == null || cur.audioOnly)) {
+          final ix = abr.candidates.indexWhere((c) => !c.audioOnly);
+          if (ix >= 0) {
+            await _switchAbr(ix, 'picture needs A/V');
+            if (!mounted) return;
+            setState(() => _status = '画面');
+            await _syncKeepAlive(playing: true);
+            return;
+          }
+        }
+      } else if (abr != null && cur != null && !cur.audioOnly) {
+        final ix = abr.candidates.indexWhere((c) => c.audioOnly);
+        if (ix >= 0) {
+          await _switchAbr(ix, 'listen prefers only_audio');
+          if (!mounted) return;
+          setState(() => _status = '听播中');
+          await _syncKeepAlive(playing: true);
+          return;
+        }
+      }
       await _player.setVideoEnabled(next);
       await _applyLatency(videoOn: next);
       debugPrint('[LiveCatch] setVideoEnabled ok ($next)');

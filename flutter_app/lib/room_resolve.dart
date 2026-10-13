@@ -57,6 +57,7 @@ class StreamPick {
     required this.quality,
     required this.bitrate,
     required this.priority,
+    this.audioOnly = false,
   });
 
   final String url;
@@ -64,6 +65,8 @@ class StreamPick {
   final String quality;
   final int bitrate;
   final int priority;
+  /// CDN audio-only / only_audio=1 — best for listen-first latency.
+  final bool audioOnly;
 
   String get protocol =>
       format.toLowerCase().contains('flv') ? 'FLV' : 'HLS';
@@ -151,6 +154,8 @@ Future<ResolvedRoom> resolveRoom(
   String roomUrl, {
   String? cookies,
   bool preferFlv = true,
+  /// Prefer only_audio / audio_only FLV first (秒听-style listen).
+  bool preferAudioOnly = true,
 }) async {
   final raw = Platform.isAndroid
       ? await _resolveViaAndroidJni(roomUrl, cookies: cookies)
@@ -165,6 +170,7 @@ Future<ResolvedRoom> resolveRoom(
   final picks = _selectStreams(
     map['streams'] as List<dynamic>? ?? const [],
     preferFlv: preferFlv,
+    preferAudioOnly: preferAudioOnly,
   );
   if (picks.isEmpty) {
     // is_live can still be true while CDN lists are empty at end-of-stream.
@@ -418,15 +424,22 @@ Future<String> _resolveViaProcess(
   return raw;
 }
 
-/// Candidate filtering for ABR (top 3; optionally prefer FLV).
-List<StreamPick> _selectStreams(List<dynamic> raw, {bool preferFlv = true}) {
+/// Candidate filtering for ABR (top few; optionally prefer FLV / audio-only).
+List<StreamPick> _selectStreams(
+  List<dynamic> raw, {
+  bool preferFlv = true,
+  bool preferAudioOnly = true,
+}) {
   var list = <StreamPick>[];
   for (final item in raw) {
     if (item is! Map) continue;
     final m = Map<String, dynamic>.from(item);
     final url = (m['url'] as String?)?.trim() ?? '';
-    final audioOnly = m['audio_only'] as bool? ?? false;
-    if (url.isEmpty || audioOnly || url.contains('only_audio=1')) continue;
+    if (url.isEmpty) continue;
+    final audioOnly = (m['audio_only'] as bool? ?? false) ||
+        url.contains('only_audio=1');
+    // Picture mode: skip pure-audio CDN rungs.
+    if (!preferAudioOnly && audioOnly) continue;
     final quality = (m['quality'] as String?)?.trim() ?? '';
     // Douyin often returns an unusable "md" rung with bitrate 0.
     if (quality.toLowerCase() == 'md' &&
@@ -440,6 +453,7 @@ List<StreamPick> _selectStreams(List<dynamic> raw, {bool preferFlv = true}) {
         quality: quality,
         bitrate: (m['bitrate'] as num?)?.toInt() ?? 0,
         priority: (m['priority'] as num?)?.toInt() ?? 0,
+        audioOnly: audioOnly,
       ),
     );
   }
@@ -449,17 +463,30 @@ List<StreamPick> _selectStreams(List<dynamic> raw, {bool preferFlv = true}) {
   }
 
   // Drop unknown 0bps rungs when real bitrates exist (ABR must not "upshift" into them).
-  if (list.any((s) => s.bitrate > 0)) {
-    list = list.where((s) => s.bitrate > 0).toList();
+  // Keep audio-only even at 0bps — CDN often omits bitrate for only_audio.
+  if (list.any((s) => s.bitrate > 0 && !s.audioOnly)) {
+    list = list
+        .where((s) => s.audioOnly || s.bitrate > 0)
+        .toList();
   }
 
-  // Low latency: resolver priority first, then lower bitrate (not max).
+  // Listen: audio-only first, then lean A/V. Picture ladder: priority + bitrate.
   list.sort((a, b) {
+    if (preferAudioOnly) {
+      final ao = (b.audioOnly ? 1 : 0).compareTo(a.audioOnly ? 1 : 0);
+      if (ao != 0) return ao;
+    }
     final p = a.priority.compareTo(b.priority);
     if (p != 0) return p;
     return a.bitrate.compareTo(b.bitrate);
   });
-  if (list.length > 3) {
+
+  if (preferAudioOnly && list.any((s) => s.audioOnly)) {
+    // Keep all audio-only + up to 2 A/V rungs for later 开画面.
+    final audio = list.where((s) => s.audioOnly).toList();
+    final av = list.where((s) => !s.audioOnly).take(2).toList();
+    list = [...audio, ...av];
+  } else if (list.length > 3) {
     list = list.sublist(0, 3);
   }
   return list;
