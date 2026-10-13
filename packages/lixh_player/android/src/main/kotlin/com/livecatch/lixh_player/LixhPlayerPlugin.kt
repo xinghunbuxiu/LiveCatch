@@ -12,6 +12,10 @@ import io.flutter.view.TextureRegistry
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
+/**
+ * Android player bridge — FFmpeg only (listen uses AVDISCARD + play_rate).
+ * System MediaCodec FLV path removed; decode silicon is the same via FFmpeg mediacodec for video.
+ */
 class LixhPlayerPlugin :
     FlutterPlugin,
     MethodCallHandler {
@@ -23,13 +27,11 @@ class LixhPlayerPlugin :
     private var nativeReady = false
     private var lastBufW = 0
     private var lastBufH = 0
-    private var listen: FlvListenPlayer? = null
     private var pendingUrl: String? = null
     private var pendingHeaders: String? = null
     private var videoWanted = false
     private var latencyTarget = 40
     private var latencyMax = 160
-    private var usingListen = false
 
     // open/stop/play join demux threads — never block Flutter's platform thread.
     private val nativeExecutor = Executors.newSingleThreadExecutor { r ->
@@ -149,16 +151,9 @@ class LixhPlayerPlugin :
                 val enabled = call.argument<Boolean>("enabled") ?: false
                 nativeExecutor.execute {
                     try {
-                        val was = videoWanted
                         videoWanted = enabled
-                        val url = pendingUrl
-                        if (was != enabled && url != null) {
-                            stopAll()
-                            if (!openCurrent(url, pendingHeaders) || !playCurrent()) {
-                                result.error("video_failed", lastOpenError(), null)
-                                return@execute
-                            }
-                        } else if (nativeReady && !usingListen) {
+                        if (nativeReady) {
+                            // Same FFmpeg session: toggle sink + play_rate (no reopen).
                             nativeSetVideoEnabled(nativeHandle, enabled)
                         }
                         result.success(null)
@@ -178,7 +173,6 @@ class LixhPlayerPlugin :
                     try {
                         latencyTarget = target
                         latencyMax = maxv
-                        listen?.setLatency(target, maxv)
                         if (nativeReady) nativeSetLatency(nativeHandle, target, maxv)
                         result.success(null)
                     } catch (e: Throwable) {
@@ -198,23 +192,18 @@ class LixhPlayerPlugin :
             "disposeVideoTexture" -> {
                 val handle = nativeHandle
                 val ready = nativeReady
-                val oldSurface = surface
+                awaitNative {
+                    try {
+                        if (ready) nativeDetachSurface(handle)
+                    } catch (_: Throwable) {
+                    }
+                }
+                surface?.release()
                 surface = null
                 textureEntry?.release()
                 textureEntry = null
                 lastBufW = 0
                 lastBufH = 0
-                if (ready) {
-                    nativeExecutor.execute {
-                        try {
-                            nativeDetachSurface(handle)
-                        } catch (_: Throwable) {
-                        }
-                        mainHandler.post { oldSurface?.release() }
-                    }
-                } else {
-                    oldSurface?.release()
-                }
                 result.success(null)
             }
             else -> result.notImplemented()
@@ -229,14 +218,11 @@ class LixhPlayerPlugin :
         surface = null
         textureEntry?.release()
         textureEntry = null
-        nativeReady = false
-        nativeHandle = 0
-        listen?.stop()
-        listen = null
         if (ready) {
-            nativeExecutor.execute {
+            awaitNative {
                 try {
                     nativeDetachSurface(handle)
+                    nativeStop(handle)
                     nativeDestroy(handle)
                 } catch (_: Throwable) {
                 }
@@ -248,59 +234,27 @@ class LixhPlayerPlugin :
         nativeExecutor.shutdown()
     }
 
-    private fun preferListen(url: String): Boolean {
-        return !videoWanted && !FlvListenPlayer.looksLikeHls(url)
-    }
-
     private fun stopAll() {
-        listen?.stop()
-        listen = null
-        usingListen = false
         if (nativeReady) nativeStop(nativeHandle)
     }
 
     private fun lastOpenError(): String {
-        val l = listen?.lastError
-        if (!l.isNullOrEmpty()) return l
         if (nativeReady) {
             val e = nativeLastError(nativeHandle)
             if (e.isNotEmpty()) return e
         }
-        return "open failed"
+        return if (!nativeReady) "android native not loaded" else "open failed"
     }
 
     private fun openCurrent(url: String, headers: String?): Boolean {
         stopAll()
-        if (preferListen(url)) {
-            val p = FlvListenPlayer()
-            p.setLatency(latencyTarget, latencyMax)
-            p.prepare(url, headers)
-            listen = p
-            usingListen = true
-            return true
-        }
         if (!nativeReady) return false
-        usingListen = false
         nativeSetVideoEnabled(nativeHandle, videoWanted)
         nativeSetLatency(nativeHandle, latencyTarget, latencyMax)
         return nativeOpen(nativeHandle, url, headers)
     }
 
     private fun playCurrent(): Boolean {
-        if (usingListen) {
-            val p = listen ?: return false
-            if (p.start()) return true
-            // Not FLV / connect failed — fall back to FFmpeg if present.
-            val url = pendingUrl ?: return false
-            listen?.stop()
-            listen = null
-            usingListen = false
-            if (!nativeReady) return false
-            nativeSetVideoEnabled(nativeHandle, videoWanted)
-            nativeSetLatency(nativeHandle, latencyTarget, latencyMax)
-            if (!nativeOpen(nativeHandle, url, pendingHeaders)) return false
-            return nativePlay(nativeHandle)
-        }
         if (!nativeReady) return false
         return nativePlay(nativeHandle)
     }
@@ -314,7 +268,7 @@ class LixhPlayerPlugin :
                 "audioFrames" to 0L,
                 "decodeHw" to -1,
                 "presentMode" to 0,
-                "lastError" to if (nativeReady || usingListen) "" else "android native not loaded",
+                "lastError" to if (nativeReady) "" else "android native not loaded",
                 "droppedFrames" to 0L,
                 "bytesRead" to 0L,
                 "lagMs" to 0L,
@@ -323,25 +277,6 @@ class LixhPlayerPlugin :
                 "videoHeight" to 0,
             )
         )
-        val p = listen
-        if (usingListen && p != null) {
-            stats["audioFrames"] = p.audioFrames.get()
-            stats["droppedFrames"] = p.droppedFrames.get()
-            stats["bytesRead"] = p.bytesRead.get()
-            stats["audioQueueMs"] = p.audioQueueMs.get()
-            // 3 = MediaCodec (same convention as native video HW).
-            stats["decodeHw"] = 3
-            // Do NOT mirror queue into lagMs — ABR would think we're always late.
-            stats["lagMs"] = 0L
-            var err = p.lastError
-            if (!p.isRunning() && p.audioFrames.get() > 0 && err.isEmpty()) {
-                err = "listen stalled"
-            }
-            stats["lastError"] = err
-            stats["presentMode"] = 0
-            stats["textureId"] = textureEntry?.id() ?: -1L
-            return stats
-        }
         if (nativeReady) {
             nativeFillStats(nativeHandle, stats)
             stats["textureId"] = textureEntry?.id() ?: -1L
@@ -380,16 +315,6 @@ class LixhPlayerPlugin :
             Thread.currentThread().interrupt()
         }
         error?.let { throw it }
-    }
-
-    private fun ensureNative(result: Result): Boolean {
-        if (nativeReady) return true
-        result.error(
-            "unimplemented",
-            "lixh_player Android: native lib missing. Fetch sdk/android-arm64 FFmpeg zip.",
-            null
-        )
-        return false
     }
 
     private external fun nativeCreate(): Long

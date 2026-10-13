@@ -88,6 +88,10 @@ typedef struct LixhPlayer {
     int d3d11_fail_streak;
     int sample_rate;
     int channels;
+    /* Audio play rate ×1000 (1000=1.0x). Listen catch-up often ~1300. */
+    atomic_int play_rate_milli;
+    float *audio_speed;
+    size_t audio_speed_capacity;
 } LixhPlayer;
 
 static void emit(LixhPlayer *p, int type, int code, const char *msg) {
@@ -116,6 +120,8 @@ static void release_mc_buffer(AVFrame *f, int render) {
 #endif
 
 static void free_player_media(LixhPlayer *p) {
+    av_freep(&p->audio_speed);
+    p->audio_speed_capacity = 0;
     if (p->swr) swr_free(&p->swr);
 #if defined(LIXH_ANDROID)
     free_mediacodec_surface(p);
@@ -556,11 +562,59 @@ static int ensure_audio_out(LixhPlayer *p, size_t needed) {
     return 0;
 }
 
+static int ensure_audio_speed(LixhPlayer *p, size_t needed) {
+    if (needed <= p->audio_speed_capacity) return 0;
+    float *grown = (float *)av_realloc_array(p->audio_speed, needed, sizeof(float));
+    if (!grown) return -1;
+    p->audio_speed = grown;
+    p->audio_speed_capacity = needed;
+    return 0;
+}
+
+/* Linear time-compress (秒听-style). rate>1 → fewer samples, higher pitch. */
+static int apply_play_rate(LixhPlayer *p, const float *in, int n_in, int ch,
+                           const float **out) {
+    int milli = atomic_load_explicit(&p->play_rate_milli, memory_order_acquire);
+    if (milli <= 1010 || n_in < 2 || ch <= 0) {
+        *out = in;
+        return n_in;
+    }
+    float rate = milli / 1000.f;
+    int n_out = (int)(n_in / rate);
+    if (n_out < 1) n_out = 1;
+    size_t need = (size_t)n_out * (size_t)ch;
+    if (ensure_audio_speed(p, need) < 0) {
+        *out = in;
+        return n_in;
+    }
+    for (int i = 0; i < n_out; ++i) {
+        float pos = i * rate;
+        int i0 = (int)pos;
+        if (i0 >= n_in - 1) i0 = n_in - 2;
+        int i1 = i0 + 1;
+        float frac = pos - (float)i0;
+        for (int c = 0; c < ch; ++c) {
+            float s0 = in[i0 * ch + c];
+            float s1 = in[i1 * ch + c];
+            p->audio_speed[i * ch + c] = s0 + (s1 - s0) * frac;
+        }
+    }
+    *out = p->audio_speed;
+    return n_out;
+}
+
+static void emit_audio(LixhPlayer *p, int ch, int64_t pts, const float *samples, int n) {
+    if (!samples || n <= 0) return;
+    const float *out = NULL;
+    int n_out = apply_play_rate(p, samples, n, ch, &out);
+    p->cb.on_audio(p->cb.opaque, p->sample_rate, ch, AV_SAMPLE_FMT_FLT, pts, out, n_out);
+}
+
 static void deliver_audio(LixhPlayer *p, AVFrame *f, AVRational tb) {
     int64_t pts = frame_pts_ms(f, tb);
     if (pts == AV_NOPTS_VALUE || !p->cb.on_audio) return;
     /* Never soft-chase audio; never touch video chase anchors. Live edge is
-       trimmed in the platform PCM queue. */
+       trimmed in the platform PCM queue (+ optional play_rate). */
     if (atomic_load_explicit(&p->audio_anchor_pts_ms, memory_order_acquire) == AV_NOPTS_VALUE) {
         atomic_store_explicit(&p->audio_anchor_pts_ms, pts, memory_order_release);
         atomic_store_explicit(&p->audio_anchor_wall_ms, now_ms(), memory_order_release);
@@ -582,13 +636,11 @@ static void deliver_audio(LixhPlayer *p, AVFrame *f, AVRational tb) {
                 p->audio_out[i * ch + c] = plane ? plane[i] : 0.f;
             }
         }
-        p->cb.on_audio(p->cb.opaque, p->sample_rate, ch, AV_SAMPLE_FMT_FLT, pts,
-                       p->audio_out, n_in);
+        emit_audio(p, ch, pts, p->audio_out, n_in);
         return;
     }
     if (f->format == AV_SAMPLE_FMT_FLT && f->data[0]) {
-        p->cb.on_audio(p->cb.opaque, p->sample_rate, ch, AV_SAMPLE_FMT_FLT, pts,
-                       (float *)f->data[0], n_in);
+        emit_audio(p, ch, pts, (const float *)f->data[0], n_in);
         return;
     }
 
@@ -599,7 +651,7 @@ static void deliver_audio(LixhPlayer *p, AVFrame *f, AVRational tb) {
     if (ensure_audio_out(p, needed) < 0) return;
     uint8_t *dst[1] = { (uint8_t *)p->audio_out };
     int n = swr_convert(p->swr, dst, out_samples, (const uint8_t **)f->extended_data, n_in);
-    if (n > 0) p->cb.on_audio(p->cb.opaque, p->sample_rate, ch, AV_SAMPLE_FMT_FLT, pts, p->audio_out, n);
+    if (n > 0) emit_audio(p, ch, pts, p->audio_out, n);
 }
 
 static int decode_packet(LixhPlayer *p, AVPacket *pkt) {
@@ -651,6 +703,8 @@ void *lixh_player_create(const LixhCallbacks *cb) {
     atomic_init(&p->last_video_pts_ms, AV_NOPTS_VALUE);
     atomic_init(&p->last_audio_pts_ms, AV_NOPTS_VALUE);
     atomic_init(&p->latest_video_pkt_pts_ms, AV_NOPTS_VALUE);
+    /* Listen-first default: mild catch-up (秒听 uses ~1.3x). */
+    atomic_init(&p->play_rate_milli, 1300);
     p->target_latency_ms = 100;
     p->max_latency_ms = 320;
     p->chase_mode = CHASE_NONE;
@@ -818,11 +872,24 @@ void lixh_player_set_headers(void *opaque, const char *headers) {
 #endif
 }
 
+void lixh_player_set_play_rate(void *opaque, float rate) {
+    LixhPlayer *p = (LixhPlayer *)opaque;
+    if (!p) return;
+    if (rate < 1.f) rate = 1.f;
+    if (rate > 1.5f) rate = 1.5f;
+    int milli = (int)(rate * 1000.f + 0.5f);
+    if (milli < 1000) milli = 1000;
+    if (milli > 1500) milli = 1500;
+    atomic_store_explicit(&p->play_rate_milli, milli, memory_order_release);
+}
+
 void lixh_player_set_video_sink(void *opaque, int enabled) {
     LixhPlayer *p = (LixhPlayer *)opaque;
     if (!p) return;
     int on = enabled ? 1 : 0;
     int prev = atomic_exchange_explicit(&p->video_sink, on, memory_order_acq_rel);
+    /* Picture: realtime pitch. Listen: 1.3x catch-up like 秒听. */
+    atomic_store_explicit(&p->play_rate_milli, on ? 1000 : 1300, memory_order_release);
     /* Never touch AVCodecContext from the UI thread — play loop opens/flushes. */
     if (on && !prev) {
         if (!p->vdec) {

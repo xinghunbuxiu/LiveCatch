@@ -186,15 +186,15 @@
     "semantic_hash": "cf9a008eebc97f1c57132f5e2bf57b8b"
   },
   "packages/lixh_player/android/src/main/cpp/lixh_player_jni.cpp": {
-    "mtime": 1791854524.0931363,
-    "seen": 1791856301.6085567,
-    "ast_hash": "7e3d6b95bdae10132aaa92080bd6c5af",
+    "mtime": 1791864087.7416744,
+    "seen": 1791864270.2942433,
+    "ast_hash": "145b512d532ca2e98cda773e0df85475",
     "semantic_hash": ""
   },
   "packages/lixh_player/android/src/main/kotlin/com/livecatch/lixh_player/LixhPlayerPlugin.kt": {
-    "mtime": 1791860453.907632,
-    "seen": 1791862242.82431,
-    "ast_hash": "e10565a67a81b23e465037bafd875862",
+    "mtime": 1791864087.7426913,
+    "seen": 1791864270.2942433,
+    "ast_hash": "ad04e7e86f5def9a8f211aade19fe54c",
     "semantic_hash": ""
   },
   "packages/lixh_player/android/src/test/kotlin/com/livecatch/lixh_player/LixhPlayerPluginTest.kt": {
@@ -624,10 +624,10 @@
     "semantic_hash": "ef756fd57a24f89827f4c8c2cebefefd"
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/include/lixh_player.h": {
-    "mtime": 1791806249.0391476,
-    "seen": 1791806951.4862483,
-    "ast_hash": "d549ed9bd13dfe6bb7fd949f410ca7b1",
-    "semantic_hash": "d549ed9bd13dfe6bb7fd949f410ca7b1"
+    "mtime": 1791864087.7416744,
+    "seen": 1791864270.2942433,
+    "ast_hash": "39af061fce197fdeb837ef69ea292ca2",
+    "semantic_hash": ""
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/include/lixh_surface.h": {
     "mtime": 1791514187.9418268,
@@ -636,9 +636,9 @@
     "semantic_hash": "14da36467694105e4cad3e087307c8da"
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/native/lixh_player.c": {
-    "mtime": 1791854524.0992546,
-    "seen": 1791856301.6085567,
-    "ast_hash": "e7e41b471f61e229737da1341d9c0705",
+    "mtime": 1791864087.7426913,
+    "seen": 1791864270.2942433,
+    "ast_hash": "f0cd20094bced3723eca9dc60d2df393",
     "semantic_hash": ""
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/native/lixh_surface_macos.m": {
@@ -1401,12 +1401,6 @@
     "mtime": 1791594426.554102,
     "seen": 1791809124.1666973,
     "ast_hash": "04e7b6ef05346c70b663ca1d97de3ad5",
-    "semantic_hash": ""
-  },
-  "packages/lixh_player/android/src/main/kotlin/com/livecatch/lixh_player/FlvListenPlayer.kt": {
-    "mtime": 1791862837.0988274,
-    "seen": 1791862870.8305426,
-    "ast_hash": "8fa90edf037fc9ce4ceef7d18d6c0842",
     "semantic_hash": ""
   }
 }

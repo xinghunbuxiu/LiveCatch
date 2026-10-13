@@ -312,8 +312,10 @@ class Session {
       std::lock_guard<std::mutex> lock(win_mu_);
       lixh_player_set_android_surface(p, surface_global_);
     }
-    // Before open: listen-only skips video decoder init (major join latency win).
-    lixh_player_set_video_sink(p, video_enabled_.load() ? 1 : 0);
+    // Before open: listen-only skips video decoder (AVDISCARD) + 1.3x catch-up.
+    const bool picture = video_enabled_.load();
+    lixh_player_set_video_sink(p, picture ? 1 : 0);
+    lixh_player_set_play_rate(p, picture ? 1.f : 1.3f);
     lixh_player_set_latency(p, latency_target_ms_, latency_max_ms_);
     if (lixh_player_open(p, url.c_str()) < 0) {
       SetError("lixh_player_open failed");
@@ -372,7 +374,10 @@ class Session {
       p = player_;
       if (on) last_error_.clear();
     }
-    if (p) lixh_player_set_video_sink(p, on ? 1 : 0);
+    if (p) {
+      lixh_player_set_video_sink(p, on ? 1 : 0);
+      lixh_player_set_play_rate(p, on ? 1.f : 1.3f);
+    }
     /* Re-lean PCM when returning to listen-only. */
     audio_.SetMaxQueueMs(
         PcmQueueMsFromChase((int)latency_target_ms_, !on));
