@@ -32,7 +32,7 @@ constexpr int kRingCap = 48000 * 2 / 2;
 static int PcmQueueMsFromChase(int chase_target_ms, bool listen_only) {
   int pcm = listen_only ? (chase_target_ms + chase_target_ms / 2)
                         : (chase_target_ms * 2);
-  const int floor = listen_only ? 60 : 100;
+  const int floor = listen_only ? 50 : 100;
   if (pcm < floor) pcm = floor;
   if (pcm > 400) pcm = 400;
   return pcm;
@@ -44,7 +44,7 @@ class AudioOut {
 
   void SetMaxQueueMs(int ms) {
     std::lock_guard<std::mutex> lock(mu_);
-    if (ms < 60) ms = 60;
+    if (ms < 50) ms = 50;
     if (ms > 400) ms = 400;
     base_queue_ms_ = ms;
     max_queue_ms_ = ms;
@@ -77,16 +77,19 @@ class AudioOut {
       if (cap_ms < p) cap_ms = p;
     }
     int max_samples = ch_ * rate_ * cap_ms / 1000;
-    const int floor_ms = max_queue_ms_ < 100 ? 60 : (max_queue_ms_ < 140 ? 80 : 100);
+    const int floor_ms = max_queue_ms_ < 100 ? 50 : (max_queue_ms_ < 140 ? 80 : 100);
     if (max_samples < ch_ * rate_ * floor_ms / 1000) {
       max_samples = ch_ * rate_ * floor_ms / 1000;
     }
     if (max_samples > kRingCap - n) max_samples = kRingCap - n;
-    const int trim_at = max_samples + max_samples / 4;
-    const int keep_ms = max_queue_ms_ >= 160 ? 80 : (max_queue_ms_ >= 100 ? 50 : 35);
+    /* Snap: trim at cap (no 125% slack) and keep less — chase the live edge. */
+    const bool snap = max_queue_ms_ <= 80;
+    const int trim_at = snap ? max_samples : (max_samples + max_samples / 4);
+    const int keep_ms =
+        max_queue_ms_ >= 160 ? 80 : (max_queue_ms_ >= 100 ? 50 : (snap ? 20 : 35));
     const int min_keep = primed_ ? (ch_ * rate_ * keep_ms / 1000) : 0;
     while (count_ + n > trim_at && count_ > min_keep) {
-      int drop = ch_ * (rate_ / 50);  // ~20ms
+      int drop = ch_ * (snap ? (rate_ / 25) : (rate_ / 50));  // ~40ms / ~20ms
       if (drop < 1) drop = n;
       if (drop > count_ - min_keep) drop = count_ - min_keep;
       if (drop < 1) break;
@@ -187,28 +190,41 @@ class AudioOut {
     ring_.assign(kRingCap, 0.f);
     r_ = w_ = count_ = 0;
     primed_ = false;
-    AAudioStreamBuilder* b = nullptr;
-    if (AAudio_createStreamBuilder(&b) != AAUDIO_OK) return false;
-    AAudioStreamBuilder_setDirection(b, AAUDIO_DIRECTION_OUTPUT);
-    AAudioStreamBuilder_setSharingMode(b, AAUDIO_SHARING_MODE_SHARED);
-    AAudioStreamBuilder_setFormat(b, AAUDIO_FORMAT_PCM_FLOAT);
-    AAudioStreamBuilder_setChannelCount(b, ch_);
-    AAudioStreamBuilder_setSampleRate(b, rate_);
-    AAudioStreamBuilder_setPerformanceMode(b, AAUDIO_PERFORMANCE_MODE_LOW_LATENCY);
-    AAudioStreamBuilder_setDataCallback(b, Callback, this);
-    /* Aim for a small callback burst; device may round up. */
-    AAudioStreamBuilder_setFramesPerDataCallback(b, rate_ / 100); /* ~10ms */
-    aaudio_result_t rc = AAudioStreamBuilder_openStream(b, &stream_);
-    AAudioStreamBuilder_delete(b);
-    if (rc != AAUDIO_OK || !stream_) return false;
-    {
+    auto open_with = [&](aaudio_sharing_mode_t share) -> bool {
+      AAudioStreamBuilder* b = nullptr;
+      if (AAudio_createStreamBuilder(&b) != AAUDIO_OK) return false;
+      AAudioStreamBuilder_setDirection(b, AAUDIO_DIRECTION_OUTPUT);
+      AAudioStreamBuilder_setSharingMode(b, share);
+      AAudioStreamBuilder_setFormat(b, AAUDIO_FORMAT_PCM_FLOAT);
+      AAudioStreamBuilder_setChannelCount(b, ch_);
+      AAudioStreamBuilder_setSampleRate(b, rate_);
+      AAudioStreamBuilder_setPerformanceMode(b, AAUDIO_PERFORMANCE_MODE_LOW_LATENCY);
+      AAudioStreamBuilder_setDataCallback(b, Callback, this);
+      AAudioStreamBuilder_setFramesPerDataCallback(b, rate_ / 100); /* ~10ms */
+      aaudio_result_t rc = AAudioStreamBuilder_openStream(b, &stream_);
+      AAudioStreamBuilder_delete(b);
+      if (rc != AAUDIO_OK || !stream_) {
+        stream_ = nullptr;
+        return false;
+      }
       int32_t burst = AAudioStream_getFramesPerBurst(stream_);
       if (burst > 0) {
-        /* Keep device buffer near 2 bursts (~low latency shared mode). */
-        AAudioStream_setBufferSizeInFrames(stream_, burst * 2);
+        /* Exclusive: 1 burst; shared: 2 bursts. */
+        int32_t frames = (share == AAUDIO_SHARING_MODE_EXCLUSIVE) ? burst : (burst * 2);
+        AAudioStream_setBufferSizeInFrames(stream_, frames);
       }
+      if (AAudioStream_requestStart(stream_) != AAUDIO_OK) {
+        AAudioStream_close(stream_);
+        stream_ = nullptr;
+        return false;
+      }
+      return true;
+    };
+    /* Snap/listen: try exclusive first (lowest device latency), else shared. */
+    if (base_queue_ms_ <= 100) {
+      if (open_with(AAUDIO_SHARING_MODE_EXCLUSIVE)) return true;
     }
-    return AAudioStream_requestStart(stream_) == AAUDIO_OK;
+    return open_with(AAUDIO_SHARING_MODE_SHARED);
   }
 
   mutable std::mutex mu_;

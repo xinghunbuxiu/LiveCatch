@@ -279,8 +279,12 @@ static int open_input(LixhPlayer *p) {
         rc = open_decoder(p, p->fmt->streams[p->vstream], 1);
         if (rc < 0) return rc;
     } else {
-        /* Listen-only: require audio; skip video decoder/HW (big Android win). */
+        /* Listen-only: require audio; skip video decoder/HW (big Android win).
+           Discard video at demux so we don't pay to parse FLV video tags. */
         if (p->astream < 0) return AVERROR_STREAM_NOT_FOUND;
+        if (p->vstream >= 0) {
+            p->fmt->streams[p->vstream]->discard = AVDISCARD_ALL;
+        }
         atomic_store_explicit(&p->open_video_req, 0, memory_order_release);
     }
     if (p->astream >= 0) {
@@ -729,6 +733,7 @@ int lixh_player_play(void *opaque) {
         }
         if (atomic_exchange_explicit(&p->open_video_req, 0, memory_order_acq_rel)) {
             if (!p->vdec && p->vstream >= 0 && p->fmt) {
+                p->fmt->streams[p->vstream]->discard = AVDISCARD_DEFAULT;
                 setup_hw(p);
                 if (open_decoder(p, p->fmt->streams[p->vstream], 1) < 0) {
                     emit(p, LIXH_EVT_INFO, -1, "video decoder deferred-open failed");
@@ -741,6 +746,14 @@ int lixh_player_play(void *opaque) {
             if (p->vdec) avcodec_flush_buffers(p->vdec);
             atomic_store_explicit(&p->direct_d3d11, 0, memory_order_release);
             p->d3d11_fail_streak = 0;
+        }
+        /* Keep demux discard in sync with listen↔picture (play thread only). */
+        if (p->vstream >= 0 && p->fmt && p->fmt->streams[p->vstream]) {
+            int want_v = atomic_load_explicit(&p->video_sink, memory_order_acquire);
+            enum AVDiscard want_d = want_v ? AVDISCARD_DEFAULT : AVDISCARD_ALL;
+            if (p->fmt->streams[p->vstream]->discard != want_d) {
+                p->fmt->streams[p->vstream]->discard = want_d;
+            }
         }
         if (pkt->size > 0) {
             atomic_fetch_add_explicit(&p->bytes_read, (uint64_t)pkt->size, memory_order_relaxed);
