@@ -47,20 +47,38 @@ val lixhFfmpegLib = File(lixhRepoRoot, "src-tauri/lixh-stream-stack/sdk/android-
 val lixhRuntimeLib = File(lixhRepoRoot, "src-tauri/lixh-stream-stack/runtime/android-arm64")
 val lixhJniOut = File(project.projectDir, "src/main/jniLibs/arm64-v8a")
 
+// Only ship libs we link (CMake). avfilter is in the SDK but unused → drop ~135KB.
+val lixhFfmpegSoNames = listOf(
+    "libavcodec.so",
+    "libavformat.so",
+    "libavutil.so",
+    "libswresample.so",
+    "libswscale.so",
+)
+
 val syncFfmpegJni by tasks.registering(Copy::class) {
     onlyIf {
         lixhFfmpegLib.exists() || File(lixhFfmpegLib, "arm64-v8a").exists() ||
             lixhRuntimeLib.exists()
     }
     // LiveCatchFfmpeg android runtime ships under arm64-v8a/; sdk under lib/.
-    from(lixhFfmpegLib) { include("*.so") }
-    from(File(lixhFfmpegLib, "arm64-v8a")) { include("*.so") }
-    from(File(lixhRuntimeLib, "arm64-v8a")) { include("*.so") }
-    from(lixhRuntimeLib) { include("*.so") }
-    from(File(lixhRuntimeLib, "lib")) { include("*.so") }
-    from(File(lixhRuntimeLib, "lib/arm64-v8a")) { include("*.so") }
+    from(lixhFfmpegLib) { include(*lixhFfmpegSoNames.toTypedArray()) }
+    from(File(lixhFfmpegLib, "arm64-v8a")) { include(*lixhFfmpegSoNames.toTypedArray()) }
+    from(File(lixhRuntimeLib, "arm64-v8a")) { include(*lixhFfmpegSoNames.toTypedArray()) }
+    from(lixhRuntimeLib) { include(*lixhFfmpegSoNames.toTypedArray()) }
+    from(File(lixhRuntimeLib, "lib")) { include(*lixhFfmpegSoNames.toTypedArray()) }
+    from(File(lixhRuntimeLib, "lib/arm64-v8a")) { include(*lixhFfmpegSoNames.toTypedArray()) }
     into(lixhJniOut)
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    doLast {
+        // Remove stale copies from older syncs (e.g. libavfilter.so).
+        lixhJniOut.listFiles()?.forEach { f ->
+            if (f.isFile && f.name.endsWith(".so") && f.name !in lixhFfmpegSoNames) {
+                f.delete()
+                logger.lifecycle("Removed unused jniLib ${f.name}")
+            }
+        }
+    }
 }
 
 tasks.matching { it.name == "preBuild" }.configureEach {
