@@ -1,5 +1,10 @@
 package com.livecatch.lixh_player
 
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Surface
@@ -33,6 +38,10 @@ class LixhPlayerPlugin :
     private var latencyTarget = 40
     private var latencyMax = 160
     private var listenPlayRate = 1.3f
+    private var appContext: Context? = null
+    private var audioManager: AudioManager? = null
+    private var focusRequest: AudioFocusRequest? = null
+    private var hasAudioFocus = false
 
     // open/stop/play join demux threads — never block Flutter's platform thread.
     private val nativeExecutor = Executors.newSingleThreadExecutor { r ->
@@ -41,6 +50,9 @@ class LixhPlayerPlugin :
     private val mainHandler = Handler(Looper.getMainLooper())
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        appContext = binding.applicationContext
+        audioManager =
+            binding.applicationContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         textures = binding.textureRegistry
         channel = MethodChannel(binding.binaryMessenger, "lixh_player")
         channel.setMethodCallHandler(this)
@@ -248,11 +260,56 @@ class LixhPlayerPlugin :
         } else {
             oldSurface?.release()
         }
+        abandonAudioFocus()
+        audioManager = null
+        appContext = null
         nativeExecutor.shutdown()
     }
 
     private fun stopAll() {
         if (nativeReady) nativeStop(nativeHandle)
+        abandonAudioFocus()
+    }
+
+    private fun requestAudioFocus() {
+        val am = audioManager ?: return
+        if (hasAudioFocus) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val attrs =
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+            val req =
+                AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(attrs)
+                    .setOnAudioFocusChangeListener { }
+                    .build()
+            focusRequest = req
+            hasAudioFocus =
+                am.requestAudioFocus(req) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        } else {
+            @Suppress("DEPRECATION")
+            hasAudioFocus =
+                am.requestAudioFocus(
+                    null,
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.AUDIOFOCUS_GAIN,
+                ) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        }
+    }
+
+    private fun abandonAudioFocus() {
+        val am = audioManager ?: return
+        if (!hasAudioFocus) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            focusRequest?.let { am.abandonAudioFocusRequest(it) }
+            focusRequest = null
+        } else {
+            @Suppress("DEPRECATION")
+            am.abandonAudioFocus(null)
+        }
+        hasAudioFocus = false
     }
 
     private fun lastOpenError(): String {
@@ -274,6 +331,7 @@ class LixhPlayerPlugin :
 
     private fun playCurrent(): Boolean {
         if (!nativeReady) return false
+        requestAudioFocus()
         return nativePlay(nativeHandle)
     }
 

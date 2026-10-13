@@ -14,8 +14,17 @@ path = "src/lib.rs"
 name = "lixh_resolve"
 path = "src/bin/lixh_resolve.rs"
 
+[[bin]]
+name = "lixh_resolve_server"
+path = "src/bin/lixh_resolve_server.rs"
+
 [dependencies]
 anyhow = "1"
+axum = { version = "0.8", default-features = false, features = [
+  "http1",
+  "json",
+  "tokio",
+] }
 platforms-parser = { git = "https://github.com/hua0512/rust-srec", package = "platforms-parser" }
 reqwest = { version = "0.12", default-features = false, features = [
   "json",
@@ -25,11 +34,14 @@ reqwest = { version = "0.12", default-features = false, features = [
 ] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "net"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 url = "2"
 
-# Android: prefer in-process JNI (cdylib) so networking uses the app UID.
-# Forked Process + webpki TLS is kept as a fallback binary (lixh_resolve).
+# Optional Android cdylib (JNI) kept for offline/dev builds.
+# Production apps call remote lixh_resolve_server instead.
 [target.'cfg(target_os = "android")'.dependencies]
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "aws-lc-rs"] }
 webpki-roots = "1"

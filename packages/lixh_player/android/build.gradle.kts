@@ -4,17 +4,14 @@ group = "com.livecatch.lixh_player"
 version = "1.0-SNAPSHOT"
 
 buildscript {
-    val kotlinVersion = "2.4.0"
     repositories {
         maven(url = "https://mirrors.cloud.tencent.com/google/")
         maven(url = "https://mirrors.cloud.tencent.com/nexus/repository/maven-public/")
         google()
         mavenCentral()
     }
-
     dependencies {
         classpath("com.android.tools.build:gradle:9.1.0")
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
     }
 }
 
@@ -107,14 +104,15 @@ android {
     }
 
     defaultConfig {
-        minSdk = 26
+        minSdk = 24
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
         externalNativeBuild {
             cmake {
                 arguments += listOf(
-                    "-DANDROID_STL=c++_shared",
+                    // Static STL avoids shipping a separate libc++_shared.so (~400KB APK).
+                    "-DANDROID_STL=c++_static",
                     "-DANDROID_ARM_NEON=TRUE",
                 )
             }
@@ -129,8 +127,8 @@ android {
 
     packaging {
         jniLibs {
-            // Keep prebuilt FFmpeg SONAMEs; do not strip for runtime dlopen.
-            keepDebugSymbols += "**/*.so"
+            // Allow AGP to strip unneeded local symbols from our JNI .so.
+            // Prebuilt FFmpeg libs are already stripped upstream.
         }
     }
 
@@ -153,7 +151,7 @@ android {
 
 kotlin {
     compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 

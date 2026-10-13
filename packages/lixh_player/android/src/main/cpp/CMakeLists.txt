@@ -80,13 +80,16 @@ target_include_directories(lixh_player PRIVATE
 )
 
 find_library(log-lib log)
-find_library(aaudio-lib aaudio)
 find_library(mediandk-lib mediandk)
+find_library(opensles-lib OpenSLES)
+# libaaudio.so is dlopen'd at runtime (API 26+) so API 24–25 still load.
+find_library(dl-lib dl)
 
 target_link_libraries(lixh_player
   android
   ${log-lib}
-  ${aaudio-lib}
+  ${dl-lib}
+  ${opensles-lib}
   ${mediandk-lib}
   avformat
   avcodec

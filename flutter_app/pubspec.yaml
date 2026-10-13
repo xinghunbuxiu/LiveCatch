@@ -4,12 +4,13 @@ publish_to: "none"
 version: 0.48.0+1
 
 environment:
-  sdk: ^3.13.5
+  # CI uses Flutter stable; local FVM 3.29 (Dart 3.7) also works.
+  sdk: ">=3.7.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
+  http: ^1.5.0
   path: ^1.9.1
   lixh_player:
     path: ../packages/lixh_player

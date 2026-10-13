@@ -1,0 +1,17 @@
+[Unit]
+Description=LiveCatch remote room resolve (lixh_resolve_server)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/livecatch/resolve
+EnvironmentFile=-/etc/livecatch/resolve.env
+ExecStart=/opt/livecatch/resolve/lixh_resolve_server
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

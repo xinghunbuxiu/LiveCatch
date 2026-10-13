@@ -3,6 +3,7 @@
 #include <d3d11.h>
 #include <wrl/client.h>
 
+#include <algorithm>
 #include <cstdio>
 #include <vector>
 
@@ -182,7 +183,9 @@ bool PlayerSession::Open(const std::string& url, const std::string& headers) {
   // Before open: listen-only skips video decoder/HW init.
   const bool picture = video_enabled_.load();
   lixh_player_set_video_sink(player, picture ? 1 : 0);
-  lixh_player_set_play_rate(player, picture ? 1.f : listen_play_rate_);
+  const float open_rate =
+      picture ? (std::min)(listen_play_rate_, 1.15f) : listen_play_rate_;
+  lixh_player_set_play_rate(player, open_rate);
   lixh_player_set_latency(player, latency_target_ms_, latency_max_ms_);
   {
     const bool listen = !video_enabled_.load();
@@ -353,7 +356,9 @@ void PlayerSession::SetVideoEnabled(bool enabled) {
   std::fflush(stderr);
   if (player) {
     lixh_player_set_video_sink(player, enabled ? 1 : 0);
-    lixh_player_set_play_rate(player, enabled ? 1.f : listen_play_rate_);
+    const float rate =
+        enabled ? (std::min)(listen_play_rate_, 1.15f) : listen_play_rate_;
+    lixh_player_set_play_rate(player, rate);
   }
   // Re-lean PCM when returning to listen-only.
   SetLatency(latency_target_ms_, latency_max_ms_);
@@ -369,8 +374,10 @@ void PlayerSession::SetPlayRate(float rate) {
     player = player_;
   }
   if (player) {
-    lixh_player_set_play_rate(player,
-                              video_enabled_.load() ? 1.f : listen_play_rate_);
+    const bool picture = video_enabled_.load();
+    const float rate =
+        picture ? (std::min)(listen_play_rate_, 1.15f) : listen_play_rate_;
+    lixh_player_set_play_rate(player, rate);
   }
 }
 

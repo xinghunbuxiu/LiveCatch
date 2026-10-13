@@ -27,11 +27,6 @@ jobs:
         with:
           channel: stable
           cache: true
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Fetch FFmpeg windows-x64
         shell: bash
         run: |
@@ -41,17 +36,6 @@ jobs:
           bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh windows-x64 \
             "src-tauri/lixh-stream-stack/sdk/windows-x64"
           echo "LIXH_FFMPEG_DIR=${{ github.workspace }}\\src-tauri\\lixh-stream-stack\\sdk\\windows-x64" >> "$GITHUB_ENV"
-      # Build resolver before MSVC env is injected (msvc-dev-cmd can break rustc/git deps).
-      - name: Build lixh_resolve
-        shell: bash
-        env:
-          RUST_BACKTRACE: "1"
-        run: |
-          set -euo pipefail
-          cargo build -p lixh-stream-resolver --bin lixh_resolve --release \
-            --manifest-path src-tauri/lixh-stream-stack/Cargo.toml 2>&1 \
-            | tee "${RUNNER_TEMP}/lixh-resolve.log"
-          test -f src-tauri/lixh-stream-stack/target/release/lixh_resolve.exe
       - uses: ilammy/msvc-dev-cmd@v1
       - name: Pub get
         working-directory: flutter_app

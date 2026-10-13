@@ -54,9 +54,9 @@ Flutter CI fetches the platform SDK/runtime as part of each build.
 bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh windows-x64
 bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-runtime.sh windows-x64
 
-# Room resolve helper used by Flutter (Windows)
-cargo build -p lixh-stream-resolver --bin lixh_resolve \
-  --manifest-path src-tauri/lixh-stream-stack/Cargo.toml
+# Room resolve runs on the server (not bundled into the app):
+#   deploy/lixh-resolve/deploy.sh  →  http://101.35.40.114/livecatch/v1/resolve
+# Override: --dart-define=LIXH_RESOLVE_BASE_URL=... --dart-define=LIXH_RESOLVE_API_KEY=...
 
 cd flutter_app && flutter pub get && flutter run -d windows
 # macOS / iOS / Android: fetch that platform's sdk+runtime, then flutter run -d <device>

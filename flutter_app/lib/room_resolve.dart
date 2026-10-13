@@ -1,10 +1,9 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/services.dart';
-import 'package:path/path.dart' as p;
-
-const _nativePaths = MethodChannel('livecatch/native_paths');
+import 'package:http/http.dart' as http;
+import 'package:livecatch_app/resolve_config.dart';
 
 /// Result of [resolveRoom] — room metadata + ranked playable stream URLs.
 class ResolvedRoom {
@@ -110,7 +109,7 @@ String formatResolveError(Object error) {
         .replaceAll('error sending request for url', '请求失败');
     return compact.length > 180 ? '${compact.substring(0, 180)}…' : compact;
   }
-  if (s.contains('找不到') && s.contains('lixh_resolve')) {
+  if (s.contains('解析服务') || s.contains('resolve server')) {
     return s;
   }
   // Ended / offline — keep wording obvious so it is not mistaken for a bug.
@@ -149,7 +148,7 @@ bool looksLikeDirectStream(String input) {
   return u.contains('.m3u8') || u.contains('.flv') || u.contains('.mp4');
 }
 
-/// Resolve a live room page URL via stream-stack `lixh_resolve`.
+/// Resolve a live room page URL via remote `lixh_resolve_server`.
 Future<ResolvedRoom> resolveRoom(
   String roomUrl, {
   String? cookies,
@@ -157,11 +156,7 @@ Future<ResolvedRoom> resolveRoom(
   /// Prefer only_audio / audio_only FLV first (秒听-style listen).
   bool preferAudioOnly = true,
 }) async {
-  final raw = Platform.isAndroid
-      ? await _resolveViaAndroidJni(roomUrl, cookies: cookies)
-      : await _resolveViaProcess(roomUrl, cookies: cookies);
-
-  final map = jsonDecode(raw) as Map<String, dynamic>;
+  final map = await _resolveViaRemote(roomUrl, cookies: cookies);
   final isLive = map['is_live'] as bool? ?? false;
   if (!isLive) {
     throw StateError('直播已结束或不在播');
@@ -314,105 +309,67 @@ Future<int?> _probeStreamTtfb(
   }
 }
 
-/// Android in-process JNI → `liblixh_stream_resolver.so` (no Process helper).
-Future<String> _resolveViaAndroidJni(
+/// POST room URL to remote `lixh_resolve_server` → ResolvedStream JSON map.
+Future<Map<String, dynamic>> _resolveViaRemote(
   String roomUrl, {
   String? cookies,
 }) async {
-  final ready =
-      await _nativePaths.invokeMethod<bool>('resolveNativeReady') ?? false;
-  if (!ready) {
-    throw StateError(
-      'liblixh_stream_resolver 未加载。请先构建并打进 jniLibs:\n'
-      '  pwsh flutter_app/android/bundle_lixh_resolve.ps1',
-    );
+  final base = kResolveBaseUrl.replaceAll(RegExp(r'/+$'), '');
+  final uri = Uri.parse('$base/v1/resolve');
+  final headers = <String, String>{
+    HttpHeaders.contentTypeHeader: 'application/json; charset=utf-8',
+    HttpHeaders.acceptHeader: 'application/json',
+  };
+  if (kResolveApiKey.isNotEmpty) {
+    headers['X-Api-Key'] = kResolveApiKey;
   }
+
+  final body = <String, dynamic>{'url': roomUrl.trim()};
+  if (cookies != null && cookies.trim().isNotEmpty) {
+    body['cookies'] = cookies.trim();
+  }
+
+  late http.Response resp;
   try {
-    final payload = await _nativePaths.invokeMethod<String>(
-      'resolveRoom',
-      <String, dynamic>{
-        'url': roomUrl.trim(),
-        if (cookies != null && cookies.isNotEmpty) 'cookies': cookies,
-      },
-    );
-    if (payload == null || payload.isEmpty) {
-      throw StateError('JNI resolve returned empty');
-    }
-    if (payload.startsWith('OK:')) {
-      return payload.substring(3);
-    }
-    if (payload.startsWith('ERR:')) {
-      throw StateError(formatResolveError(payload.substring(4)));
-    }
-    return payload;
-  } on PlatformException catch (e) {
-    throw StateError(formatResolveError(e.message ?? e.toString()));
-  }
-}
-
-Future<String> _resolveViaProcess(
-  String roomUrl, {
-  String? cookies,
-}) async {
-  final exe = await findResolveExe();
-  if (exe == null) {
-    final bin = Platform.isWindows ? 'lixh_resolve.exe' : 'lixh_resolve';
-    throw StateError(
-      '找不到 $bin（房间解析器）。\n'
-      '开发时请先构建并保证可执行文件在 PATH/仓库 target 下:\n'
-      '  cargo build -p lixh-stream-resolver --bin lixh_resolve --release \\\n'
-      '    --manifest-path src-tauri/lixh-stream-stack/Cargo.toml\n'
-      'macOS 安装包需把二进制打进 App（CI 已自动 bundle）。\n'
-      '也可设置环境变量 LIXH_RESOLVE_EXE 指向该文件。',
-    );
+    resp = await http
+        .post(uri, headers: headers, body: jsonEncode(body))
+        .timeout(const Duration(seconds: 45));
+  } on SocketException catch (e) {
+    throw StateError('解析服务不可达: $e');
+  } on HttpException catch (e) {
+    throw StateError('解析服务请求失败: $e');
+  } on TimeoutException {
+    throw StateError('解析服务超时');
+  } catch (e) {
+    throw StateError(formatResolveError(e));
   }
 
-  final args = <String>[roomUrl.trim()];
-  if (cookies != null && cookies.isNotEmpty) {
-    args.addAll(['--cookies', cookies]);
+  final raw = utf8.decode(resp.bodyBytes).trim();
+  if (resp.statusCode == 401) {
+    throw StateError('解析服务鉴权失败');
   }
-
-  final env = Map<String, String>.from(Platform.environment);
-  if (Platform.isAndroid) {
-    env['LD_LIBRARY_PATH'] = p.dirname(exe);
-    for (final key in const [
-      'http_proxy',
-      'https_proxy',
-      'HTTP_PROXY',
-      'HTTPS_PROXY',
-      'ALL_PROXY',
-      'all_proxy',
-      'no_proxy',
-      'NO_PROXY',
-    ]) {
-      env.remove(key);
-    }
-  }
-
-  final result = await Process.run(
-    exe,
-    args,
-    environment: env,
-    stdoutEncoding: utf8,
-    stderrEncoding: utf8,
-  );
-  if (result.exitCode != 0) {
-    var err = (result.stderr as String).trim();
-    if (err.startsWith('lixh_resolve:')) {
-      err = err.substring('lixh_resolve:'.length).trim();
-    }
+  if (resp.statusCode >= 400) {
+    var msg = raw;
+    try {
+      final errMap = jsonDecode(raw);
+      if (errMap is Map && errMap['error'] != null) {
+        msg = '${errMap['error']}';
+      }
+    } catch (_) {}
     throw StateError(
       formatResolveError(
-        err.isEmpty ? '房间解析失败 (exit ${result.exitCode})' : err,
+        msg.isEmpty ? '房间解析失败 (HTTP ${resp.statusCode})' : msg,
       ),
     );
   }
-
-  final raw = (result.stdout as String).trim();
   if (raw.isEmpty) {
-    throw StateError('lixh_resolve returned empty stdout');
+    throw StateError('解析服务返回为空');
   }
-  return raw;
+  final decoded = jsonDecode(raw);
+  if (decoded is! Map<String, dynamic>) {
+    throw StateError('解析服务返回格式错误');
+  }
+  return decoded;
 }
 
 /// Candidate filtering for ABR (top few; optionally prefer FLV / audio-only).
@@ -481,68 +438,4 @@ List<StreamPick> _selectStreams(
     list = list.sublist(0, 3);
   }
   return list;
-}
-
-Future<String?> findResolveExe() async {
-  final fromEnv = Platform.environment['LIXH_RESOLVE_EXE'];
-  if (fromEnv != null && fromEnv.isNotEmpty && await File(fromEnv).exists()) {
-    return fromEnv;
-  }
-
-  // Android uses JNI resolveRoom — Process helper is desktop-only.
-  if (Platform.isAndroid) return null;
-
-  final names = Platform.isWindows
-      ? const ['lixh_resolve.exe']
-      : const ['lixh_resolve'];
-
-  final exePath = Platform.resolvedExecutable;
-  final exeDir = File(exePath).parent.path;
-  final candidates = <String>[
-    for (final name in names) p.join(exeDir, name),
-  ];
-
-  // macOS .app: Contents/MacOS/<bin> (same dir as main executable).
-  if (Platform.isMacOS) {
-    final contents = Directory(exeDir).parent.path; // …/Contents
-    for (final name in names) {
-      candidates.add(p.join(contents, 'MacOS', name));
-      candidates.add(p.join(contents, 'Resources', name));
-      candidates.add(p.join(contents, 'Helpers', name));
-    }
-  }
-
-  for (final candidate in candidates) {
-    if (await File(candidate).exists()) return candidate;
-  }
-
-  final roots = <String>{
-    Directory.current.path,
-    exeDir,
-    File(exePath).parent.parent.parent.path, // walk up from .app/Contents/MacOS
-  };
-  for (final root in roots) {
-    var dir = Directory(root);
-    for (var i = 0; i < 10; i++) {
-      for (final profile in const ['debug', 'release']) {
-        for (final name in names) {
-          final a = p.join(
-            dir.path,
-            'src-tauri',
-            'lixh-stream-stack',
-            'target',
-            profile,
-            name,
-          );
-          if (await File(a).exists()) return a;
-          final b = p.join(dir.path, 'target', profile, name);
-          if (await File(b).exists()) return b;
-        }
-      }
-      final parent = dir.parent;
-      if (parent.path == dir.path) break;
-      dir = parent;
-    }
-  }
-  return null;
 }

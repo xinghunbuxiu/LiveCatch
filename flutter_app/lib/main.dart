@@ -92,6 +92,8 @@ class _PlayerPageState extends State<PlayerPage>
   AbrSupervisor? _abr;
   bool _abrBusy = false;
   bool _statsInFlight = false;
+  /// Prevents repeated only_audio→A/V silent failovers in one session.
+  bool _onlyAudioSilentTried = false;
   String _abrLabel = '';
   /// Bumped on stop/start so in-flight ABR open/play can bail out.
   int _playGen = 0;
@@ -266,10 +268,22 @@ class _PlayerPageState extends State<PlayerPage>
     }
   }
 
+  Future<void> _onPlayRateChanged(double rate) async {
+    final snapped = AppSettings.snapListenPlayRate(rate);
+    setState(() => _settings = _settings.copyWith(listenPlayRate: snapped));
+    try {
+      await _settings.save();
+      await _player.setPlayRate(snapped);
+    } catch (e) {
+      _appendLog('setPlayRate: $e');
+    }
+  }
+
   Future<void> _boot() async {
     try {
       _settings = await AppSettings.load();
-      final info = await _player.createVideoTexture(width: 1920, height: 1080);
+      // Portrait-first buffer — landscape default made the first picture flash 横屏.
+      final info = await _player.createVideoTexture(width: 1080, height: 1920);
       try {
         // Boot is listen-first until the user opens picture.
         await _applyLatency(videoOn: _settings.startWithVideo);
@@ -343,11 +357,41 @@ class _PlayerPageState extends State<PlayerPage>
                 return;
               }
             }
+          } else if (!_videoOn &&
+              !_abrBusy &&
+              !_onlyAudioSilentTried &&
+              s.audioFrames == 0 &&
+              (_abr?.current?.audioOnly ?? false)) {
+            // only_audio opened but never produced PCM — fall back to lean A/V
+            // with video sink off (same listen UX, more reliable audio).
+            final abr = _abr;
+            if (abr != null) {
+              var ix = -1;
+              var bestBr = 1 << 30;
+              for (var i = 0; i < abr.candidates.length; i++) {
+                final c = abr.candidates[i];
+                if (c.audioOnly) continue;
+                final br = c.bitrate <= 0 ? 1 << 29 : c.bitrate;
+                if (br < bestBr) {
+                  bestBr = br;
+                  ix = i;
+                }
+              }
+              if (ix >= 0) {
+                _onlyAudioSilentTried = true;
+                _appendLog('only_audio 无声，改走 A/V 听播');
+                // ignore: unawaited_futures
+                _switchAbr(ix, 'only_audio silent → lean A/V');
+                return;
+              }
+            }
           }
 
           // lagMs = clock-drift / chase backlog (NOT absolute live delay).
           // audioQueueMs = app PCM backlog. Do not sum them as end-to-end latency.
-          final chaseLag = s.lagMs < 0 ? 0 : s.lagMs;
+          var chaseLag = s.lagMs < 0 ? 0 : s.lagMs;
+          // After listen↔picture, decoder open can spike wall-drift; don't flash 追3000ms.
+          if (_graceTicks > 0 && chaseLag > 800) chaseLag = 800;
           final queueMs = s.audioQueueMs < 0 ? 0 : s.audioQueueMs;
           final backlogMs =
               chaseLag > queueMs ? chaseLag : queueMs;
@@ -533,8 +577,11 @@ class _PlayerPageState extends State<PlayerPage>
   }
 
   Future<void> _start() async {
+    // Dismiss IME when starting (button or keyboard Done).
+    FocusManager.instance.primaryFocus?.unfocus();
     final rawInput = _urlCtrl.text.trim();
-    if (rawInput.isEmpty || _busy) return;
+    // Already playing: ignore keyboard Done / duplicate taps — do not re-resolve.
+    if (rawInput.isEmpty || _busy || _playing) return;
     // Douyin share cards → short link; plain room URLs pass through.
     var input = extractLiveInput(rawInput) ?? rawInput;
     if (input != rawInput) {
@@ -574,6 +621,7 @@ class _PlayerPageState extends State<PlayerPage>
       _graceTicks = 4;
       _lastBytes = 0;
       _lastBytesAt = null;
+      _onlyAudioSilentTried = false;
       _abr = null;
 
       final urls = <StreamPick>[];
@@ -586,8 +634,9 @@ class _PlayerPageState extends State<PlayerPage>
         var room = await resolveRoom(
           input,
           preferFlv: _settings.preferFlv,
-          // Always start listen-first — pick only_audio FLV when CDN offers it.
-          preferAudioOnly: true,
+          // Lean A/V with video sink off — only_audio forced a reopen on every
+          // picture toggle and was a common silent/gap path.
+          preferAudioOnly: false,
         );
         _appendLog(
           '解析成功 ${room.platform} live=${room.isLive} '
@@ -680,6 +729,8 @@ class _PlayerPageState extends State<PlayerPage>
           await _player.setVideoEnabled(false);
           await _player.open(pick.url, headers: headers ?? _headers);
           await _player.play();
+          // Re-bind listen PCM/play-rate after open (same as toggle-off path).
+          await _applyLatency(videoOn: wantVideo);
           if (wantVideo) {
             await _player.setVideoEnabled(true);
           }
@@ -730,6 +781,7 @@ class _PlayerPageState extends State<PlayerPage>
     _reconnects = 0;
     _stallTicks = 0;
     _abrBusy = false;
+    _onlyAudioSilentTried = false;
     _abr = null;
     _videoDesired = false;
     // Paint UI immediately so Stop never looks dead during a wedged open/ABR.
@@ -770,17 +822,28 @@ class _PlayerPageState extends State<PlayerPage>
     }
     setState(() {
       _videoOn = next;
-      _graceTicks = 6;
+      // Longer grace while MediaCodec opens / hard-chases to first keyframe.
+      _graceTicks = next ? 12 : 6;
       _stallTicks = 0;
       _status = next ? '开启画面…' : '返回听播…';
     });
     try {
-      // only_audio CDN has no video — jump to A/V; return listen → prefer only_audio.
       final abr = _abr;
       final cur = abr?.current;
       if (next) {
+        // only_audio CDN has no video — must reopen on a lean A/V rung.
         if (abr != null && (cur == null || cur.audioOnly)) {
-          final ix = abr.candidates.indexWhere((c) => !c.audioOnly);
+          var ix = -1;
+          var bestBr = 1 << 30;
+          for (var i = 0; i < abr.candidates.length; i++) {
+            final c = abr.candidates[i];
+            if (c.audioOnly) continue;
+            final br = c.bitrate <= 0 ? 1 << 29 : c.bitrate;
+            if (br < bestBr) {
+              bestBr = br;
+              ix = i;
+            }
+          }
           if (ix >= 0) {
             await _switchAbr(ix, 'picture needs A/V');
             if (!mounted) return;
@@ -789,16 +852,9 @@ class _PlayerPageState extends State<PlayerPage>
             return;
           }
         }
-      } else if (abr != null && cur != null && !cur.audioOnly) {
-        final ix = abr.candidates.indexWhere((c) => c.audioOnly);
-        if (ix >= 0) {
-          await _switchAbr(ix, 'listen prefers only_audio');
-          if (!mounted) return;
-          setState(() => _status = '听播中');
-          await _syncKeepAlive(playing: true);
-          return;
-        }
       }
+      // Returning to listen: keep the current A/V session (AVDISCARD + catch-up).
+      // Reopening only_audio caused audible gaps / "没声音" after every toggle.
       await _player.setVideoEnabled(next);
       await _applyLatency(videoOn: next);
       debugPrint('[LiveCatch] setVideoEnabled ok ($next)');
@@ -829,7 +885,8 @@ class _PlayerPageState extends State<PlayerPage>
   Widget build(BuildContext context) {
     final foam = Theme.of(context).colorScheme.onSurface;
     final signal = Theme.of(context).colorScheme.primary;
-    final aspect = (_videoW > 0 && _videoH > 0) ? _videoW / _videoH : 16 / 9;
+    // Unknown dims: assume portrait live (9:16). 16:9 default caused a landscape flash.
+    final aspect = (_videoW > 0 && _videoH > 0) ? _videoW / _videoH : 9 / 16;
 
     return Scaffold(
       body: AnnotatedRegion<SystemUiOverlayStyle>(
@@ -870,8 +927,12 @@ class _PlayerPageState extends State<PlayerPage>
                       title: _title,
                       audioFrames: _audioFrames,
                       presentOk: _presentOk,
-                      onToggleVideo: _playing ? _toggleVideo : null,
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  PlayRatePicker(
+                    value: _settings.listenPlayRate,
+                    onChanged: _onPlayRateChanged,
                   ),
                   const SizedBox(height: 12),
                   _Dock(
@@ -1029,7 +1090,6 @@ class _Stage extends StatelessWidget {
     required this.title,
     required this.audioFrames,
     required this.presentOk,
-    required this.onToggleVideo,
   });
 
   final double aspect;
@@ -1040,7 +1100,6 @@ class _Stage extends StatelessWidget {
   final String title;
   final int audioFrames;
   final int presentOk;
-  final VoidCallback? onToggleVideo;
 
   @override
   Widget build(BuildContext context) {
@@ -1054,12 +1113,12 @@ class _Stage extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // Fit stream aspect into stage (portrait window + landscape video OK).
+          // Cover the stage (crop overflow) — avoid left/right letterbox bars.
           final maxW = constraints.maxWidth;
           final maxH = constraints.maxHeight;
           var viewW = maxW;
           var viewH = viewW / aspect;
-          if (viewH > maxH) {
+          if (viewH < maxH) {
             viewH = maxH;
             viewW = viewH * aspect;
           }
@@ -1069,15 +1128,14 @@ class _Stage extends StatelessWidget {
             children: [
               // Keep Texture mounted — remounting it under Impeller/GLES
               // was causing EGL Context Lost and process death.
+              // Tap does not toggle video — only the dock 「开/关画面」 button.
               if (texture != null)
                 Visibility(
                   visible: videoOn,
                   maintainState: true,
                   maintainAnimation: true,
                   maintainSize: false,
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: onToggleVideo,
+                  child: ClipRect(
                     child: Center(
                       child: SizedBox(
                         width: viewW,
@@ -1088,42 +1146,21 @@ class _Stage extends StatelessWidget {
                   ),
                 ),
               if (!videoOn)
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: playing ? onToggleVideo : null,
-                  child: _ListenPane(
-                    pulse: pulse,
-                    playing: playing,
-                    title: title,
-                    audioFrames: audioFrames,
-                    signal: signal,
-                    foam: foam,
-                  ),
+                _ListenPane(
+                  pulse: pulse,
+                  playing: playing,
+                  title: title,
+                  audioFrames: audioFrames,
+                  signal: signal,
+                  foam: foam,
                 ),
-              if (playing)
-                Positioned(
-                  right: 12,
-                  bottom: 12,
-                  child: Material(
-                    color: Colors.black.withValues(alpha: 0.55),
-                    child: InkWell(
-                      onTap: onToggleVideo,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        child: Text(
-                          videoOn
-                              ? (presentOk > 0 ? '返回听播' : '等待首帧…')
-                              : '显示画面',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: signal,
-                          ),
-                        ),
-                      ),
+              if (videoOn && playing && presentOk == 0)
+                const Center(
+                  child: Text(
+                    '等待首帧…',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0x99FFFFFF),
                     ),
                   ),
                 ),
@@ -1266,6 +1303,7 @@ class _Dock extends StatelessWidget {
           controller: controller,
           style: const TextStyle(fontSize: 13.5),
           cursorColor: signal,
+          textInputAction: TextInputAction.go,
           decoration: InputDecoration(
             hintText: '直播间 / 抖音分享口令 / m3u8·flv',
             hintStyle: TextStyle(color: foam.withValues(alpha: 0.35)),
@@ -1285,7 +1323,11 @@ class _Dock extends StatelessWidget {
               borderSide: BorderSide(color: signal.withValues(alpha: 0.7)),
             ),
           ),
-          onSubmitted: (_) => onStart(),
+          // Keyboard Done/Go: start only when idle; while playing just dismiss IME.
+          onSubmitted: (_) {
+            FocusManager.instance.primaryFocus?.unfocus();
+            if (!busy && !playing) onStart();
+          },
         ),
         const SizedBox(height: 10),
         Row(

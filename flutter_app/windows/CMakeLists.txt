@@ -107,22 +107,4 @@ install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   CONFIGURATIONS Profile;Release
   COMPONENT Runtime)
 
-# Bundle lixh_resolve next to the app (room URL → stream candidates for ABR).
-set(_lixh_resolve "")
-foreach(_cand
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../src-tauri/lixh-stream-stack/target/release/lixh_resolve.exe"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../src-tauri/lixh-stream-stack/target/debug/lixh_resolve.exe")
-  if(EXISTS "${_cand}")
-    set(_lixh_resolve "${_cand}")
-    break()
-  endif()
-endforeach()
-if(_lixh_resolve)
-  install(FILES "${_lixh_resolve}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
-    COMPONENT Runtime)
-  message(STATUS "lixh_resolve bundle: ${_lixh_resolve}")
-else()
-  message(STATUS
-    "lixh_resolve.exe not found — build with: cargo build -p lixh-stream-resolver "
-    "--bin lixh_resolve --manifest-path src-tauri/lixh-stream-stack/Cargo.toml")
-endif()
+# Room resolve is remote (lixh_resolve_server); no local helper to bundle.

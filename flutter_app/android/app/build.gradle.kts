@@ -2,58 +2,28 @@ import java.io.File
 
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
-fun findRepoRoot(start: File): File {
-    var dir: File? = start
-    while (dir != null) {
-        if (File(dir, "src-tauri/lixh-stream-stack").isDirectory) return dir
-        dir = dir.parentFile
-    }
-    return start
-}
-
-val lixhRepoRoot = findRepoRoot(rootProject.projectDir)
-val lixhResolveLib = File(
-    lixhRepoRoot,
-    "src-tauri/lixh-stream-stack/target/aarch64-linux-android/release/liblixh_stream_resolver.so",
-)
+// Room resolve runs on the server — strip any leftover local resolver jniLibs.
 val lixhResolveJniDir = File(project.projectDir, "src/main/jniLibs/arm64-v8a")
-val lixhResolveJniSo = File(lixhResolveJniDir, "liblixh_resolve.so")
-val lixhResolveJniFfi = File(lixhResolveJniDir, "liblixh_stream_resolver.so")
-
-val syncLixhResolveJni by tasks.registering {
-    description = "Stage aarch64 resolve cdylib into jniLibs (JNI only; no Process helper)"
+val stripLocalResolveJni by tasks.registering {
+    description = "Remove local lixh resolve .so (remote HTTP resolve)"
     doLast {
-        lixhResolveJniDir.mkdirs()
-        var staged = false
-        if (lixhResolveLib.isFile) {
-            lixhResolveLib.copyTo(lixhResolveJniFfi, overwrite = true)
-            logger.lifecycle("Bundled ${lixhResolveJniFfi.absolutePath}")
-            staged = true
-        } else if (lixhResolveJniFfi.isFile) {
-            logger.lifecycle("Using existing ${lixhResolveJniFfi.absolutePath}")
-            staged = true
-        }
-        // Drop legacy Process helper (~9MB) — Dart uses JNI resolveRoom.
-        if (lixhResolveJniSo.isFile) {
-            lixhResolveJniSo.delete()
-            logger.lifecycle("Removed Process helper ${lixhResolveJniSo.absolutePath}")
-        }
-        if (!staged) {
-            throw GradleException(
-                "Missing Android liblixh_stream_resolver.so. Build/stage it first:\n" +
-                    "  bash flutter_app/android/bundle_lixh_resolve.sh\n" +
-                    "  or: pwsh flutter_app/android/bundle_lixh_resolve.ps1",
-            )
+        listOf("liblixh_resolve.so", "liblixh_stream_resolver.so").forEach { name ->
+            val f = File(lixhResolveJniDir, name)
+            if (f.isFile) {
+                f.delete()
+                logger.lifecycle("Removed local resolve native ${f.absolutePath}")
+            }
         }
     }
 }
 
 tasks.matching { it.name == "preBuild" }.configureEach {
-    dependsOn(syncLixhResolveJni)
+    dependsOn(stripLocalResolveJni)
 }
 
 android {
@@ -71,7 +41,8 @@ android {
         applicationId = "com.example.livecatch_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = maxOf(flutter.minSdkVersion, 26)
+        // Android 7.0+ (API 24). Audio: OpenSL <26, AAudio ≥26 (USAGE ≥28).
+        minSdk = maxOf(flutter.minSdkVersion, 24)
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
@@ -89,12 +60,18 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 
     packaging {
         jniLibs {
-            // Extract .so for System.loadLibrary (FFmpeg + resolve cdylib).
+            // Extract .so for System.loadLibrary (FFmpeg player natives).
             useLegacyPackaging = true
             // Keep APK arm64-only even if Flutter/AndroidX merge other ABIs
             // (bare `flutter build apk` without --target-platform used to inflate ~19→33MB).
@@ -110,7 +87,7 @@ android {
 
 kotlin {
     compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 

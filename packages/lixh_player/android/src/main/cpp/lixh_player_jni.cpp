@@ -570,7 +570,11 @@ class Session {
       self->audio_frames_.fetch_add(1);
       self->audio_.Push(s, n, ch, rate);
     };
-    cb.on_event = [](void* o, int type, int, const char* msg) {
+    cb.on_event = [](void* o, int type, int code, const char* msg) {
+      if (type == LIXH_EVT_INFO && msg) {
+        LOGI("evt info code=%d %s", code, msg);
+        return;
+      }
       if (type != LIXH_EVT_ERROR || !msg) return;
       static_cast<Session*>(o)->SetError(msg);
     };
@@ -658,6 +662,8 @@ class Session {
     /* Re-lean PCM when returning to listen-only. */
     audio_.SetMaxQueueMs(
         PcmQueueMsFromChase((int)latency_target_ms_, !on));
+    LOGI("setVideoEnabled=%d surface=%p present_ok=%llu", on ? 1 : 0,
+         (void*)surface_global_, (unsigned long long)present_ok_.load());
   }
 
   void SetPlayRate(float rate) {
@@ -777,6 +783,9 @@ class Session {
     /* MediaCodec Surface path: core releases with render=1 when we return 0. */
     if (kind == LIXH_VIDEO_MEDIACODEC) {
       present_ok_.fetch_add(1);
+      if (present_ok_.load() == 1) {
+        LOGI("first present MediaCodec %dx%d", width, height);
+      }
       return 0;
     }
 
