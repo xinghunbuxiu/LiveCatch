@@ -1,5 +1,6 @@
 #import "LixhAudioOutput.h"
 #import <AudioToolbox/AudioToolbox.h>
+#import <CoreFoundation/CoreFoundation.h>
 
 enum { kLixhRingCap = 48000 * 2 * 2 };
 
@@ -12,13 +13,17 @@ enum { kLixhRingCap = 48000 * 2 * 2 };
   int _count;
   int _rate;
   int _ch;
+  int _baseQueueMs;
   int _maxQueueMs;
+  CFAbsoluteTime _lastUnderrun;
+  CFAbsoluteTime _lastShrink;
   BOOL _primed;
   BOOL _started;
 }
 - (void)fillBuffer:(AudioQueueBufferRef)buf queue:(AudioQueueRef)q;
 - (void)stopUnlocked;
 - (BOOL)ensureQueueRate:(int)rate channels:(int)ch;
+- (void)maybeShrinkLocked;
 @end
 
 @implementation LixhAudioOutput
@@ -26,6 +31,7 @@ enum { kLixhRingCap = 48000 * 2 * 2 };
 - (instancetype)init {
   self = [super init];
   if (self) {
+    _baseQueueMs = 120;
     _maxQueueMs = 120;
     _primed = NO;
   }
@@ -34,11 +40,27 @@ enum { kLixhRingCap = 48000 * 2 * 2 };
 
 - (void)setMaxQueueMs:(int)ms {
   @synchronized(self) {
-    // Snap/listen may request ~60ms; grows toward 280ms on underrun.
+    // Snap/listen may request ~60ms; grows on underrun, shrinks when healthy.
     if (ms < 60) ms = 60;
     if (ms > 2000) ms = 2000;
+    _baseQueueMs = ms;
     _maxQueueMs = ms;
+    _lastUnderrun = 0;
+    _lastShrink = 0;
   }
+}
+
+- (void)maybeShrinkLocked {
+  if (_maxQueueMs <= _baseQueueMs || !_primed) return;
+  CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+  if (_lastUnderrun > 0 && (now - _lastUnderrun) < 3.0) return;
+  if (_lastShrink > 0 && (now - _lastShrink) < 1.0) return;
+  int qms = (_rate > 0 && _ch > 0) ? (int)((_count / _ch) * 1000L / _rate) : 0;
+  if (qms < 25) return;
+  _lastShrink = now;
+  int next = _maxQueueMs - 20;
+  if (next < _baseQueueMs) next = _baseQueueMs;
+  _maxQueueMs = next;
 }
 
 - (int)primeNeedMsLocked {
@@ -93,11 +115,15 @@ static void LixhAqCallback(void *user, AudioQueueRef q, AudioQueueBufferRef buf)
     }
     if (got < need) {
       memset(dst + got, 0, (size_t)(need - got) * sizeof(float));
+      _lastUnderrun = CFAbsoluteTimeGetCurrent();
       if (_maxQueueMs < 280) {
         int next = _maxQueueMs + 40;
         if (next > 280) next = 280;
+        if (next < _baseQueueMs) next = _baseQueueMs;
         _maxQueueMs = next;
       }
+    } else {
+      [self maybeShrinkLocked];
     }
     buf->mAudioDataByteSize = (UInt32)(frames * _ch * (int)sizeof(float));
   }
@@ -183,7 +209,8 @@ static void LixhAqCallback(void *user, AudioQueueRef q, AudioQueueBufferRef buf)
     }
     if (cap_ms > 0 && _rate > 0 && _ch > 0) {
       max_samples = _ch * _rate * cap_ms / 1000;
-      int floor_ms = _maxQueueMs < 100 ? 60 : (_maxQueueMs < 140 ? 80 : 100);
+      int floor_ms = _maxQueueMs < 100 ? 50 : (_maxQueueMs < 140 ? 80 : 100);
+      if (floor_ms > _maxQueueMs) floor_ms = _maxQueueMs;
       if (max_samples < _ch * _rate * floor_ms / 1000) {
         max_samples = _ch * _rate * floor_ms / 1000;
       }

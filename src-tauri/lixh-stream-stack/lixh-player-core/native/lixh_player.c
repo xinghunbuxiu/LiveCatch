@@ -381,7 +381,14 @@ static int live_chase_should_drop(LixhPlayer *p, int64_t pts, int is_key) {
     }
     if (p->target_latency_ms > 0 && live_lag > p->target_latency_ms) {
         p->chase_mode = CHASE_SOFT;
-        if (!is_key || p->chase_drop_streak < 6) {
+        /* Drop more when farther over target; re-anchor sooner near the edge. */
+        int over = (int)(live_lag - p->target_latency_ms);
+        int span = (int)(p->max_latency_ms - p->target_latency_ms);
+        if (span < 1) span = 1;
+        int need_streak = 6 - (over * 3) / span;
+        if (need_streak < 2) need_streak = 2;
+        if (need_streak > 6) need_streak = 6;
+        if (!is_key || p->chase_drop_streak < need_streak) {
             p->chase_drop_streak++;
             atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
             return 1;
@@ -571,14 +578,13 @@ static int ensure_audio_speed(LixhPlayer *p, size_t needed) {
     return 0;
 }
 
-/* Cap from play_rate_milli; actual rate follows audio clock drift so we
-   stay at 1.0x when already live (avoids constant-1.3x 发飘). */
+/* Settings value is a ceiling. Stay at 1.0x when already live; ramp when
+   audio clock drift shows backlog. Open burst uses full ceiling ~400ms. */
 static int effective_rate_milli(LixhPlayer *p, int64_t pts) {
     int max_milli = atomic_load_explicit(&p->play_rate_milli, memory_order_acquire);
     if (max_milli <= 1010) return 1000;
     int64_t wall0 = atomic_load_explicit(&p->audio_anchor_wall_ms, memory_order_acquire);
     int64_t age = now_ms() - wall0;
-    /* Open burst: use full catch-up for ~400ms to clear join backlog. */
     if (age >= 0 && age < 400) return max_milli;
     int64_t drift = audio_drift_ms(p, pts);
     if (drift < 80) return 1000;
@@ -906,9 +912,12 @@ void lixh_player_set_video_sink(void *opaque, int enabled) {
     if (!p) return;
     int on = enabled ? 1 : 0;
     int prev = atomic_exchange_explicit(&p->video_sink, on, memory_order_acq_rel);
-    /* Picture: force 1.0x. Listen: leave ceiling for set_play_rate / caller. */
+    /* Picture: cap mild catch-up; listen restores full ceiling via set_play_rate. */
     if (on) {
-        atomic_store_explicit(&p->play_rate_milli, 1000, memory_order_release);
+        int cur = atomic_load_explicit(&p->play_rate_milli, memory_order_acquire);
+        if (cur > 1150) {
+            atomic_store_explicit(&p->play_rate_milli, 1150, memory_order_release);
+        }
     }
     /* Never touch AVCodecContext from the UI thread — play loop opens/flushes. */
     if (on && !prev) {

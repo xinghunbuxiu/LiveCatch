@@ -2,6 +2,7 @@
 #define LIXH_PLAYER_AUDIO_OUTPUT_H_
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <mutex>
 #include <string>
@@ -58,6 +59,8 @@ class AudioOutput {
   int base_queue_ms_ = 120;
   int max_queue_ms_ = 120;
   bool primed_ = false;
+  std::chrono::steady_clock::time_point last_underrun_{};
+  std::chrono::steady_clock::time_point last_shrink_{};
   int src_rate_ = 48000;
   int src_channels_ = 2;
   std::string last_error_;

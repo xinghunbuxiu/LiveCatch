@@ -26,8 +26,8 @@ extension LatencyProfileX on LatencyProfile {
   String get hint => switch (this) {
         LatencyProfile.smooth => '缓冲更大，弱网更稳',
         LatencyProfile.balanced => '延迟与稳定性折中',
-        LatencyProfile.low => '追帧更紧；音频约 100ms 起，卡顿时自动加厚',
-        LatencyProfile.snap => '对标秒听听感：极短预缓冲，易刺啦时自动加厚',
+        LatencyProfile.low => '追帧更紧；听播约 60–100ms，卡顿加厚、平稳后回瘦',
+        LatencyProfile.snap => '听播极限：短预缓冲；刺啦加厚，平稳自动回瘦',
       };
 
   /// Target / max live latency (ms) for native chase when wired.
@@ -39,11 +39,16 @@ extension LatencyProfileX on LatencyProfile {
         LatencyProfile.snap => (40, 160),
       };
 
-  /// When picture is off, shave chase one notch so audio isn't waiting on video.
+  /// Listen keeps snap chase; picture lifts the floor so A/V decode doesn't stutter.
   (int targetMs, int maxMs) latencyMsFor({required bool videoOn}) {
-    final (t, m) = latencyMs;
-    if (videoOn) return (t, m);
-    // Already snap — keep as-is.
+    var (t, m) = latencyMs;
+    if (videoOn) {
+      // Snap (40/160) is too tight for 原画 — lift toward "低延迟".
+      if (t < 80) t = 80;
+      if (m < 280) m = 280;
+      return (t, m);
+    }
+    // Already snap — keep as-is for listen race.
     if (this == LatencyProfile.snap) return (t, m);
     final nt = (t * 3) ~/ 4;
     final nm = (m * 3) ~/ 4;
@@ -59,9 +64,26 @@ class AppSettings {
     this.preferFlv = true,
     // Race the listen edge by default (product is 抢听).
     this.latency = LatencyProfile.snap,
-    /// Max listen catch-up rate (1.0–1.5). Actual rate adapts to lag.
+    /// Listen play-rate ceiling (1.0–1.5). Native stays ~1.0x when live,
+    /// ramps toward this when backlog grows.
     this.listenPlayRate = 1.3,
   });
+
+  /// Discrete presets shown in the speed picker UI.
+  static const List<double> listenPlayRatePresets = [1.0, 1.1, 1.2, 1.3, 1.5];
+
+  static double snapListenPlayRate(double v) {
+    var best = listenPlayRatePresets.first;
+    var bestDist = (v - best).abs();
+    for (final p in listenPlayRatePresets.skip(1)) {
+      final d = (v - p).abs();
+      if (d < bestDist) {
+        best = p;
+        bestDist = d;
+      }
+    }
+    return best;
+  }
 
   /// Open with video sink on (otherwise audio-first listen mode).
   bool startWithVideo;
@@ -74,7 +96,7 @@ class AppSettings {
 
   LatencyProfile latency;
 
-  /// Ceiling for listen-only PCM time-compress (picture stays 1.0).
+  /// Listen-only play-rate ceiling (picture caps at 1.15x).
   double listenPlayRate;
 
   static const _kVideo = 'cfg.startWithVideo';
@@ -99,7 +121,9 @@ class AppSettings {
       (e) => e.name == latName,
       orElse: () => LatencyProfile.snap,
     );
-    final rate = (p.getDouble(_kListenRate) ?? 1.3).clamp(1.0, 1.5);
+    final rate = snapListenPlayRate(
+      (p.getDouble(_kListenRate) ?? 1.3).clamp(1.0, 1.5),
+    );
     return AppSettings(
       startWithVideo: p.getBool(_kVideo) ?? false,
       abrEnabled: p.getBool(_kAbr) ?? false,
@@ -115,7 +139,10 @@ class AppSettings {
     await p.setBool(_kAbr, abrEnabled);
     await p.setBool(_kFlv, preferFlv);
     await p.setString(_kLatency, latency.name);
-    await p.setDouble(_kListenRate, listenPlayRate.clamp(1.0, 1.5));
+    await p.setDouble(
+      _kListenRate,
+      snapListenPlayRate(listenPlayRate.clamp(1.0, 1.5)),
+    );
   }
 
   AppSettings copyWith({

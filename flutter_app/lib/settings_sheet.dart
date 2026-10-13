@@ -178,40 +178,14 @@ class _SettingsSheetState extends State<_SettingsSheet> {
             style: TextStyle(fontSize: 12, color: foam.withValues(alpha: 0.45)),
           ),
           const SizedBox(height: 16),
-          Text(
-            '听播追延时倍速',
-            style: TextStyle(color: foam, fontSize: 14, fontWeight: FontWeight.w600),
+          PlayRatePicker(
+            value: _draft.listenPlayRate,
+            onChanged: (v) => setState(() => _draft.listenPlayRate = v),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
-            '仅听播生效；追上后自动回 1.0x。开画面固定 1.0x',
+            '听播倍速上限；贴边约 1.0x，积压时再加速。开画面最多 1.15x',
             style: TextStyle(fontSize: 12, color: foam.withValues(alpha: 0.45)),
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: Slider(
-                  value: _draft.listenPlayRate.clamp(1.0, 1.5),
-                  min: 1.0,
-                  max: 1.5,
-                  divisions: 10,
-                  activeColor: signal,
-                  label: '${_draft.listenPlayRate.toStringAsFixed(2)}x',
-                  onChanged: (v) => setState(
-                    () => _draft.listenPlayRate =
-                        (v * 100).roundToDouble() / 100,
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: 52,
-                child: Text(
-                  '${_draft.listenPlayRate.toStringAsFixed(2)}x',
-                  textAlign: TextAlign.end,
-                  style: TextStyle(color: signal, fontSize: 13),
-                ),
-              ),
-            ],
           ),
           const SizedBox(height: 12),
           FilledButton(
@@ -227,6 +201,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
     );
   }
 
+
   Widget _logsListTile(Color foam, Color signal, int count) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
@@ -241,6 +216,122 @@ class _SettingsSheetState extends State<_SettingsSheet> {
         color: foam.withValues(alpha: 0.45),
       ),
       onTap: _openLogs,
+    );
+  }
+}
+
+/// Discrete listen play-rate chips (1x … 1.5x).
+class PlayRatePicker extends StatelessWidget {
+  const PlayRatePicker({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  static String labelOf(double v) {
+    if (v == v.roundToDouble()) return '${v.toInt()}x';
+    return '${v.toStringAsFixed(1)}x';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final foam = Theme.of(context).colorScheme.onSurface;
+    final signal = Theme.of(context).colorScheme.primary;
+    final selected = AppSettings.snapListenPlayRate(value);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.speed, size: 18, color: foam.withValues(alpha: 0.85)),
+            const SizedBox(width: 6),
+            Text(
+              '播放速度',
+              style: TextStyle(
+                color: foam,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              labelOf(selected),
+              style: TextStyle(
+                color: signal,
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            for (var i = 0; i < AppSettings.listenPlayRatePresets.length; i++) ...[
+              if (i > 0) const SizedBox(width: 8),
+              Expanded(
+                child: _PlayRateChip(
+                  label: labelOf(AppSettings.listenPlayRatePresets[i]),
+                  selected:
+                      (AppSettings.listenPlayRatePresets[i] - selected).abs() <
+                      0.001,
+                  signal: signal,
+                  foam: foam,
+                  onTap: () =>
+                      onChanged(AppSettings.listenPlayRatePresets[i]),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _PlayRateChip extends StatelessWidget {
+  const _PlayRateChip({
+    required this.label,
+    required this.selected,
+    required this.signal,
+    required this.foam,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final Color signal;
+  final Color foam;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? signal : Colors.white.withValues(alpha: 0.07),
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: SizedBox(
+          height: 36,
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: selected
+                    ? const Color(0xFF0B0F0E)
+                    : foam.withValues(alpha: 0.88),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

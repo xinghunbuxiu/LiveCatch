@@ -72,12 +72,14 @@ void AudioOutput::ClearQueue() {
 void AudioOutput::Flush() { ClearQueue(); }
 
 void AudioOutput::SetMaxQueueMs(int ms) {
-  // Snap/listen may request ~60ms; grows on underrun (see RenderLoop).
+  // Snap/listen may request ~60ms; grows on underrun, shrinks when healthy.
   if (ms < 60) ms = 60;
   if (ms > 2000) ms = 2000;
   std::lock_guard<std::mutex> lock(mu_);
   base_queue_ms_ = ms;
   max_queue_ms_ = ms;
+  last_underrun_ = {};
+  last_shrink_ = {};
   // Keep current primed_ — only Stop/Start resets warm-start.
   const int rate = out_rate_ > 0 ? out_rate_ : src_rate_;
   const int ch = out_channels_ > 0 ? out_channels_ : src_channels_;
@@ -544,9 +546,33 @@ void AudioOutput::RenderLoop() {
         const size_t have = RingRead(out, need);
         if (have < need) {
           std::memset(out + have, 0, (need - have) * sizeof(float));
+          last_underrun_ = std::chrono::steady_clock::now();
           if (max_queue_ms_ < 280) {
             int next = max_queue_ms_ + 40;
             if (next > 280) next = 280;
+            if (next < base_queue_ms_) next = base_queue_ms_;
+            max_queue_ms_ = next;
+            max_queue_ = static_cast<size_t>(std::max(1, out_rate_)) *
+                         static_cast<size_t>(std::max(1, out_channels_)) *
+                         static_cast<size_t>(max_queue_ms_) / 1000;
+            if (max_queue_ < 2048) max_queue_ = 2048;
+          }
+        } else if (max_queue_ms_ > base_queue_ms_ && primed_) {
+          const auto now = std::chrono::steady_clock::now();
+          const bool cooled =
+              last_underrun_.time_since_epoch().count() == 0 ||
+              now - last_underrun_ >= std::chrono::seconds(3);
+          const bool paced =
+              last_shrink_.time_since_epoch().count() == 0 ||
+              now - last_shrink_ >= std::chrono::milliseconds(1000);
+          int qms = 0;
+          if (ch > 0 && out_rate_ > 0 && count_ > 0) {
+            qms = static_cast<int>((count_ / static_cast<size_t>(ch) * 1000ull) /
+                                   static_cast<unsigned>(out_rate_));
+          }
+          if (cooled && paced && qms >= 25) {
+            last_shrink_ = now;
+            int next = max_queue_ms_ - 20;
             if (next < base_queue_ms_) next = base_queue_ms_;
             max_queue_ms_ = next;
             max_queue_ = static_cast<size_t>(std::max(1, out_rate_)) *
@@ -570,6 +596,17 @@ void AudioOutput::RenderLoop() {
         }
         if (have < need) {
           std::memset(out + have, 0, (need - have) * sizeof(int16_t));
+          last_underrun_ = std::chrono::steady_clock::now();
+          if (max_queue_ms_ < 280) {
+            int next = max_queue_ms_ + 40;
+            if (next > 280) next = 280;
+            if (next < base_queue_ms_) next = base_queue_ms_;
+            max_queue_ms_ = next;
+            max_queue_ = static_cast<size_t>(std::max(1, out_rate_)) *
+                         static_cast<size_t>(std::max(1, out_channels_)) *
+                         static_cast<size_t>(max_queue_ms_) / 1000;
+            if (max_queue_ < 2048) max_queue_ = 2048;
+          }
         }
       }
     }
