@@ -267,6 +267,7 @@ class _PlayerPageState extends State<PlayerPage>
     final on = videoOn ?? _videoOn;
     final (t, m) = _settings.latency.latencyMsFor(videoOn: on);
     await _player.setLatency(targetMs: t, maxMs: m);
+    await _player.setPlayRate(_settings.listenPlayRate);
   }
 
   Future<void> _openSettings() async {

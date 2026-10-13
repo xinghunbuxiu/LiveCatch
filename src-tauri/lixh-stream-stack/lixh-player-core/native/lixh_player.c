@@ -906,8 +906,10 @@ void lixh_player_set_video_sink(void *opaque, int enabled) {
     if (!p) return;
     int on = enabled ? 1 : 0;
     int prev = atomic_exchange_explicit(&p->video_sink, on, memory_order_acq_rel);
-    /* Picture: no speedup. Listen: allow up to 1.3x when lagging. */
-    atomic_store_explicit(&p->play_rate_milli, on ? 1000 : 1300, memory_order_release);
+    /* Picture: force 1.0x. Listen: leave ceiling for set_play_rate / caller. */
+    if (on) {
+        atomic_store_explicit(&p->play_rate_milli, 1000, memory_order_release);
+    }
     /* Never touch AVCodecContext from the UI thread — play loop opens/flushes. */
     if (on && !prev) {
         if (!p->vdec) {

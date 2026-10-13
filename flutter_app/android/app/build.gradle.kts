@@ -16,10 +16,6 @@ fun findRepoRoot(start: File): File {
 }
 
 val lixhRepoRoot = findRepoRoot(rootProject.projectDir)
-val lixhResolveBin = File(
-    lixhRepoRoot,
-    "src-tauri/lixh-stream-stack/target/aarch64-linux-android/release/lixh_resolve",
-)
 val lixhResolveLib = File(
     lixhRepoRoot,
     "src-tauri/lixh-stream-stack/target/aarch64-linux-android/release/liblixh_stream_resolver.so",
@@ -29,7 +25,7 @@ val lixhResolveJniSo = File(lixhResolveJniDir, "liblixh_resolve.so")
 val lixhResolveJniFfi = File(lixhResolveJniDir, "liblixh_stream_resolver.so")
 
 val syncLixhResolveJni by tasks.registering {
-    description = "Stage aarch64 resolve cdylib + Process helper into jniLibs"
+    description = "Stage aarch64 resolve cdylib into jniLibs (JNI only; no Process helper)"
     doLast {
         lixhResolveJniDir.mkdirs()
         var staged = false
@@ -41,11 +37,10 @@ val syncLixhResolveJni by tasks.registering {
             logger.lifecycle("Using existing ${lixhResolveJniFfi.absolutePath}")
             staged = true
         }
-        if (lixhResolveBin.isFile) {
-            lixhResolveBin.copyTo(lixhResolveJniSo, overwrite = true)
-            logger.lifecycle("Bundled ${lixhResolveJniSo.absolutePath}")
-        } else if (lixhResolveJniSo.isFile) {
-            logger.lifecycle("Using existing ${lixhResolveJniSo.absolutePath}")
+        // Drop legacy Process helper (~9MB) — Dart uses JNI resolveRoom.
+        if (lixhResolveJniSo.isFile) {
+            lixhResolveJniSo.delete()
+            logger.lifecycle("Removed Process helper ${lixhResolveJniSo.absolutePath}")
         }
         if (!staged) {
             throw GradleException(
@@ -99,7 +94,7 @@ android {
 
     packaging {
         jniLibs {
-            // Extract liblixh_resolve.so so Dart can Process.run it from nativeLibraryDir.
+            // Extract .so for System.loadLibrary (FFmpeg + resolve cdylib).
             useLegacyPackaging = true
             // Keep APK arm64-only even if Flutter/AndroidX merge other ABIs
             // (bare `flutter build apk` without --target-platform used to inflate ~19→33MB).

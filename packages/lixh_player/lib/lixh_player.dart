@@ -54,6 +54,11 @@ class LixhPlayer {
     );
   }
 
+  /// Max listen catch-up rate (1.0–1.5). No-op / ignored while picture is on.
+  Future<void> setPlayRate(double rate) {
+    return LixhPlayerPlatform.instance.setPlayRate(rate);
+  }
+
   Future<PlayerStats> getStats() {
     return LixhPlayerPlatform.instance.getStats();
   }

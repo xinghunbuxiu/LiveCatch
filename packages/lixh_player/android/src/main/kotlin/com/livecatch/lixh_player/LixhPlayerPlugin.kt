@@ -32,6 +32,7 @@ class LixhPlayerPlugin :
     private var videoWanted = false
     private var latencyTarget = 40
     private var latencyMax = 160
+    private var listenPlayRate = 1.3f
 
     // open/stop/play join demux threads — never block Flutter's platform thread.
     private val nativeExecutor = Executors.newSingleThreadExecutor { r ->
@@ -180,6 +181,22 @@ class LixhPlayerPlugin :
                     }
                 }
             }
+            "setPlayRate" -> {
+                val rate = call.argument<Number>("rate")?.toFloat()
+                if (rate == null) {
+                    result.error("bad_args", "rate required", null)
+                    return
+                }
+                nativeExecutor.execute {
+                    try {
+                        listenPlayRate = rate.coerceIn(1.0f, 1.5f)
+                        if (nativeReady) nativeSetPlayRate(nativeHandle, listenPlayRate)
+                        result.success(null)
+                    } catch (e: Throwable) {
+                        result.error("rate_failed", e.message ?: e.toString(), null)
+                    }
+                }
+            }
             "getStats" -> {
                 nativeExecutor.execute {
                     try {
@@ -251,6 +268,7 @@ class LixhPlayerPlugin :
         if (!nativeReady) return false
         nativeSetVideoEnabled(nativeHandle, videoWanted)
         nativeSetLatency(nativeHandle, latencyTarget, latencyMax)
+        nativeSetPlayRate(nativeHandle, listenPlayRate)
         return nativeOpen(nativeHandle, url, headers)
     }
 
@@ -330,6 +348,8 @@ class LixhPlayerPlugin :
     private external fun nativeSetVideoEnabled(ptr: Long, enabled: Boolean)
 
     private external fun nativeSetLatency(ptr: Long, targetMs: Int, maxMs: Int)
+
+    private external fun nativeSetPlayRate(ptr: Long, rate: Float)
 
     private external fun nativeLastError(ptr: Long): String
 

@@ -49,6 +49,9 @@ class MockLixhPlayerPlatform
       Future.value();
 
   @override
+  Future<void> setPlayRate(double rate) => Future.value();
+
+  @override
   Future<PlayerStats> getStats() => Future.value(
         const PlayerStats(
           textureId: -1,

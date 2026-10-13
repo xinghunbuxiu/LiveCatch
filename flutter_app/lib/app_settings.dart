@@ -59,6 +59,8 @@ class AppSettings {
     this.preferFlv = true,
     // Race the listen edge by default (product is 抢听).
     this.latency = LatencyProfile.snap,
+    /// Max listen catch-up rate (1.0–1.5). Actual rate adapts to lag.
+    this.listenPlayRate = 1.3,
   });
 
   /// Open with video sink on (otherwise audio-first listen mode).
@@ -72,10 +74,14 @@ class AppSettings {
 
   LatencyProfile latency;
 
+  /// Ceiling for listen-only PCM time-compress (picture stays 1.0).
+  double listenPlayRate;
+
   static const _kVideo = 'cfg.startWithVideo';
   static const _kAbr = 'cfg.abrEnabled';
   static const _kFlv = 'cfg.preferFlv';
   static const _kLatency = 'cfg.latency';
+  static const _kListenRate = 'cfg.listenPlayRate';
   static const _kSnapMigrate = 'cfg.latencySnapMigrate1';
 
   static Future<AppSettings> load() async {
@@ -93,11 +99,13 @@ class AppSettings {
       (e) => e.name == latName,
       orElse: () => LatencyProfile.snap,
     );
+    final rate = (p.getDouble(_kListenRate) ?? 1.3).clamp(1.0, 1.5);
     return AppSettings(
       startWithVideo: p.getBool(_kVideo) ?? false,
       abrEnabled: p.getBool(_kAbr) ?? false,
       preferFlv: p.getBool(_kFlv) ?? true,
       latency: latency,
+      listenPlayRate: rate,
     );
   }
 
@@ -107,6 +115,7 @@ class AppSettings {
     await p.setBool(_kAbr, abrEnabled);
     await p.setBool(_kFlv, preferFlv);
     await p.setString(_kLatency, latency.name);
+    await p.setDouble(_kListenRate, listenPlayRate.clamp(1.0, 1.5));
   }
 
   AppSettings copyWith({
@@ -114,12 +123,14 @@ class AppSettings {
     bool? abrEnabled,
     bool? preferFlv,
     LatencyProfile? latency,
+    double? listenPlayRate,
   }) {
     return AppSettings(
       startWithVideo: startWithVideo ?? this.startWithVideo,
       abrEnabled: abrEnabled ?? this.abrEnabled,
       preferFlv: preferFlv ?? this.preferFlv,
       latency: latency ?? this.latency,
+      listenPlayRate: listenPlayRate ?? this.listenPlayRate,
     );
   }
 }

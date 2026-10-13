@@ -103,6 +103,11 @@ abstract class LixhPlayerPlatform extends PlatformInterface {
     throw UnimplementedError('setLatency() has not been implemented.');
   }
 
+  /// Max listen catch-up play rate (1.0–1.5). Picture mode forces 1.0.
+  Future<void> setPlayRate(double rate) {
+    throw UnimplementedError('setPlayRate() has not been implemented.');
+  }
+
   Future<PlayerStats> getStats() {
     throw UnimplementedError('getStats() has not been implemented.');
   }

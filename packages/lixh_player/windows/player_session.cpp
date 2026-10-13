@@ -180,7 +180,9 @@ bool PlayerSession::Open(const std::string& url, const std::string& headers) {
     lixh_player_set_headers(player, headers.c_str());
   }
   // Before open: listen-only skips video decoder/HW init.
-  lixh_player_set_video_sink(player, video_enabled_.load() ? 1 : 0);
+  const bool picture = video_enabled_.load();
+  lixh_player_set_video_sink(player, picture ? 1 : 0);
+  lixh_player_set_play_rate(player, picture ? 1.f : listen_play_rate_);
   lixh_player_set_latency(player, latency_target_ms_, latency_max_ms_);
   {
     const bool listen = !video_enabled_.load();
@@ -351,9 +353,25 @@ void PlayerSession::SetVideoEnabled(bool enabled) {
   std::fflush(stderr);
   if (player) {
     lixh_player_set_video_sink(player, enabled ? 1 : 0);
+    lixh_player_set_play_rate(player, enabled ? 1.f : listen_play_rate_);
   }
   // Re-lean PCM when returning to listen-only.
   SetLatency(latency_target_ms_, latency_max_ms_);
+}
+
+void PlayerSession::SetPlayRate(float rate) {
+  if (rate < 1.f) rate = 1.f;
+  if (rate > 1.5f) rate = 1.5f;
+  listen_play_rate_ = rate;
+  void* player = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    player = player_;
+  }
+  if (player) {
+    lixh_player_set_play_rate(player,
+                              video_enabled_.load() ? 1.f : listen_play_rate_);
+  }
 }
 
 PlayerSession::Stats PlayerSession::GetStats() const {

@@ -312,10 +312,10 @@ class Session {
       std::lock_guard<std::mutex> lock(win_mu_);
       lixh_player_set_android_surface(p, surface_global_);
     }
-    // Before open: listen-only skips video decoder (AVDISCARD) + 1.3x catch-up.
+    // Before open: listen-only skips video decoder (AVDISCARD) + catch-up rate.
     const bool picture = video_enabled_.load();
     lixh_player_set_video_sink(p, picture ? 1 : 0);
-    lixh_player_set_play_rate(p, picture ? 1.f : 1.3f);
+    lixh_player_set_play_rate(p, picture ? 1.f : listen_play_rate_);
     lixh_player_set_latency(p, latency_target_ms_, latency_max_ms_);
     if (lixh_player_open(p, url.c_str()) < 0) {
       SetError("lixh_player_open failed");
@@ -376,11 +376,26 @@ class Session {
     }
     if (p) {
       lixh_player_set_video_sink(p, on ? 1 : 0);
-      lixh_player_set_play_rate(p, on ? 1.f : 1.3f);
+      lixh_player_set_play_rate(p, on ? 1.f : listen_play_rate_);
     }
     /* Re-lean PCM when returning to listen-only. */
     audio_.SetMaxQueueMs(
         PcmQueueMsFromChase((int)latency_target_ms_, !on));
+  }
+
+  void SetPlayRate(float rate) {
+    if (rate < 1.f) rate = 1.f;
+    if (rate > 1.5f) rate = 1.5f;
+    listen_play_rate_ = rate;
+    void* p = nullptr;
+    {
+      std::lock_guard<std::mutex> lock(mu_);
+      p = player_;
+    }
+    if (p) {
+      lixh_player_set_play_rate(
+          p, video_enabled_.load() ? 1.f : listen_play_rate_);
+    }
   }
 
   void SetLatency(int target_ms, int max_ms) {
@@ -562,6 +577,7 @@ class Session {
   std::atomic<uint64_t> audio_frames_{0};
   std::atomic<uint64_t> present_ok_{0};
   std::atomic<bool> video_enabled_{false};
+  float listen_play_rate_ = 1.3f;
   int latency_target_ms_ = 40;
   int latency_max_ms_ = 160;
 };
@@ -627,6 +643,14 @@ Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeSetLatency(JNIEnv*, jobje
                                                                   jint maxMs) {
   auto* s = reinterpret_cast<Session*>(ptr);
   if (s) s->SetLatency((int)targetMs, (int)maxMs);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeSetPlayRate(JNIEnv*, jobject,
+                                                                   jlong ptr,
+                                                                   jfloat rate) {
+  auto* s = reinterpret_cast<Session*>(ptr);
+  if (s) s->SetPlayRate((float)rate);
 }
 
 extern "C" JNIEXPORT jstring JNICALL

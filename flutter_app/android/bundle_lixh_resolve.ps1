@@ -1,4 +1,4 @@
-# Cross-compile stream-stack lixh_resolve for Android arm64 and stage as jniLibs.
+# Cross-compile stream-stack resolve cdylib for Android arm64 and stage as jniLibs.
 # Usage (from repo root or anywhere):
 #   pwsh flutter_app/android/bundle_lixh_resolve.ps1
 param(
@@ -9,7 +9,6 @@ param(
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $stack = Join-Path $repo "src-tauri\lixh-stream-stack"
-$outBin = Join-Path $stack "target\aarch64-linux-android\release\lixh_resolve"
 $outLib = Join-Path $stack "target\aarch64-linux-android\release\liblixh_stream_resolver.so"
 $jniDir = Join-Path $PSScriptRoot "app\src\main\jniLibs\arm64-v8a"
 $jniSo = Join-Path $jniDir "liblixh_resolve.so"
@@ -46,19 +45,19 @@ if (-not $env:PROTOC -and (Test-Path "C:\Users\admin\tools\protoc\bin\protoc.exe
 }
 
 Write-Host "NDK=$NdkRoot"
-Write-Host "Building lixh-stream-resolver lib+bin (aarch64-linux-android)..."
+Write-Host "Building lixh-stream-resolver cdylib (aarch64-linux-android)..."
 Push-Location $stack
 try {
-  cargo build -p lixh-stream-resolver --release --target aarch64-linux-android
+  cargo build -p lixh-stream-resolver --lib --release --target aarch64-linux-android
   if ($LASTEXITCODE -ne 0) { throw "cargo build failed: $LASTEXITCODE" }
 } finally {
   Pop-Location
 }
 
-if (-not (Test-Path $outBin)) { throw "Missing $outBin" }
 if (-not (Test-Path $outLib)) { throw "Missing $outLib" }
 New-Item -ItemType Directory -Force -Path $jniDir | Out-Null
-Copy-Item -Force $outBin $jniSo
 Copy-Item -Force $outLib $jniFfi
+# Drop legacy Process helper if present (~9MB).
+if (Test-Path $jniSo) { Remove-Item -Force $jniSo }
 $sizeMb = [math]::Round((Get-Item $jniFfi).Length / 1MB, 1)
-Write-Host ("Staged " + $jniFfi + " (" + $sizeMb + " MB) and " + $jniSo)
+Write-Host ("Staged " + $jniFfi + " (" + $sizeMb + " MB)")

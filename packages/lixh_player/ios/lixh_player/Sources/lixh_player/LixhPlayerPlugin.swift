@@ -91,6 +91,9 @@ public class LixhPlayerPlugin: NSObject, FlutterPlugin {
       }
       engine.setLatencyTargetMs(Int32(target), maxMs: Int32(maxv))
       result(true)
+    case "setPlayRate":
+      // Listen catch-up rate is Android/FFmpeg-path only for now.
+      result(true)
     case "getStats":
       result(engine.stats())
     case "disposeVideoTexture":

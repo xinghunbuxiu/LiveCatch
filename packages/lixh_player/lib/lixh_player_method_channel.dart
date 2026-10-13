@@ -82,6 +82,11 @@ class MethodChannelLixhPlayer extends LixhPlayerPlatform {
   }
 
   @override
+  Future<void> setPlayRate(double rate) async {
+    await methodChannel.invokeMethod<void>('setPlayRate', {'rate': rate});
+  }
+
+  @override
   Future<PlayerStats> getStats() async {
     final map = await methodChannel.invokeMapMethod<String, dynamic>('getStats');
     if (map == null) {

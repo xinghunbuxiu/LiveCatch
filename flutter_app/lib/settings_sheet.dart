@@ -177,7 +177,43 @@ class _SettingsSheetState extends State<_SettingsSheet> {
             _draft.latency.hint,
             style: TextStyle(fontSize: 12, color: foam.withValues(alpha: 0.45)),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+          Text(
+            '听播追延时倍速',
+            style: TextStyle(color: foam, fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '仅听播生效；追上后自动回 1.0x。开画面固定 1.0x',
+            style: TextStyle(fontSize: 12, color: foam.withValues(alpha: 0.45)),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: Slider(
+                  value: _draft.listenPlayRate.clamp(1.0, 1.5),
+                  min: 1.0,
+                  max: 1.5,
+                  divisions: 10,
+                  activeColor: signal,
+                  label: '${_draft.listenPlayRate.toStringAsFixed(2)}x',
+                  onChanged: (v) => setState(
+                    () => _draft.listenPlayRate =
+                        (v * 100).roundToDouble() / 100,
+                  ),
+                ),
+              ),
+              SizedBox(
+                width: 52,
+                child: Text(
+                  '${_draft.listenPlayRate.toStringAsFixed(2)}x',
+                  textAlign: TextAlign.end,
+                  style: TextStyle(color: signal, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           FilledButton(
             onPressed: _save,
             style: FilledButton.styleFrom(

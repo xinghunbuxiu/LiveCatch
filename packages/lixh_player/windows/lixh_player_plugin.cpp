@@ -207,6 +207,12 @@ void LixhPlayerPlugin::SetLatency(int target_ms, int max_ms) {
   }
 }
 
+void LixhPlayerPlugin::SetPlayRate(float rate) {
+  if (session_) {
+    session_->SetPlayRate(rate);
+  }
+}
+
 void LixhPlayerPlugin::DisposeVideoTexture() {
   if (session_) {
     session_->Detach();
@@ -380,6 +386,25 @@ void LixhPlayerPlugin::HandleMethodCall(
       return;
     }
     SetLatency(static_cast<int>(*target), static_cast<int>(*maxv));
+    result->Success(flutter::EncodableValue(true));
+    return;
+  }
+
+  if (method == "setPlayRate") {
+    const auto* args =
+        std::get_if<flutter::EncodableMap>(method_call.arguments());
+    double rate = 1.3;
+    if (args) {
+      auto it = args->find(flutter::EncodableValue("rate"));
+      if (it != args->end()) {
+        if (const auto* d = std::get_if<double>(&it->second)) {
+          rate = *d;
+        } else if (const auto* i = std::get_if<int32_t>(&it->second)) {
+          rate = static_cast<double>(*i);
+        }
+      }
+    }
+    SetPlayRate(static_cast<float>(rate));
     result->Success(flutter::EncodableValue(true));
     return;
   }

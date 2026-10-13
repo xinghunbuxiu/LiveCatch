@@ -36,6 +36,7 @@ class PlayerSession {
   void Detach();
   void SetVideoEnabled(bool enabled);
   void SetLatency(int target_ms, int max_ms);
+  void SetPlayRate(float rate);
   bool video_enabled() const { return video_enabled_.load(); }
 
   struct Stats {
@@ -91,6 +92,7 @@ class PlayerSession {
   std::atomic<int> decode_hw_{-1};
   // Default off: audio-first; return 1 from on_video to skip GPU/CPU present.
   std::atomic<bool> video_enabled_{false};
+  float listen_play_rate_ = 1.3f;
   int latency_target_ms_ = 40;
   int latency_max_ms_ = 160;
 };
