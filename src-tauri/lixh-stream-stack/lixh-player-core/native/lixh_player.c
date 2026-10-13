@@ -571,10 +571,28 @@ static int ensure_audio_speed(LixhPlayer *p, size_t needed) {
     return 0;
 }
 
-/* Linear time-compress (秒听-style). rate>1 → fewer samples, higher pitch. */
+/* Cap from play_rate_milli; actual rate follows audio clock drift so we
+   stay at 1.0x when already live (avoids constant-1.3x 发飘). */
+static int effective_rate_milli(LixhPlayer *p, int64_t pts) {
+    int max_milli = atomic_load_explicit(&p->play_rate_milli, memory_order_acquire);
+    if (max_milli <= 1010) return 1000;
+    int64_t wall0 = atomic_load_explicit(&p->audio_anchor_wall_ms, memory_order_acquire);
+    int64_t age = now_ms() - wall0;
+    /* Open burst: use full catch-up for ~400ms to clear join backlog. */
+    if (age >= 0 && age < 400) return max_milli;
+    int64_t drift = audio_drift_ms(p, pts);
+    if (drift < 80) return 1000;
+    if (drift < 200) {
+        int span = max_milli - 1000;
+        return 1000 + (int)(span * (drift - 80) / 120);
+    }
+    return max_milli;
+}
+
+/* Linear time-compress. rate>1 → fewer samples, higher pitch. */
 static int apply_play_rate(LixhPlayer *p, const float *in, int n_in, int ch,
-                           const float **out) {
-    int milli = atomic_load_explicit(&p->play_rate_milli, memory_order_acquire);
+                           int64_t pts, const float **out) {
+    int milli = effective_rate_milli(p, pts);
     if (milli <= 1010 || n_in < 2 || ch <= 0) {
         *out = in;
         return n_in;
@@ -606,7 +624,7 @@ static int apply_play_rate(LixhPlayer *p, const float *in, int n_in, int ch,
 static void emit_audio(LixhPlayer *p, int ch, int64_t pts, const float *samples, int n) {
     if (!samples || n <= 0) return;
     const float *out = NULL;
-    int n_out = apply_play_rate(p, samples, n, ch, &out);
+    int n_out = apply_play_rate(p, samples, n, ch, pts, &out);
     p->cb.on_audio(p->cb.opaque, p->sample_rate, ch, AV_SAMPLE_FMT_FLT, pts, out, n_out);
 }
 
@@ -888,7 +906,7 @@ void lixh_player_set_video_sink(void *opaque, int enabled) {
     if (!p) return;
     int on = enabled ? 1 : 0;
     int prev = atomic_exchange_explicit(&p->video_sink, on, memory_order_acq_rel);
-    /* Picture: realtime pitch. Listen: 1.3x catch-up like 秒听. */
+    /* Picture: no speedup. Listen: allow up to 1.3x when lagging. */
     atomic_store_explicit(&p->play_rate_milli, on ? 1000 : 1300, memory_order_release);
     /* Never touch AVCodecContext from the UI thread — play loop opens/flushes. */
     if (on && !prev) {

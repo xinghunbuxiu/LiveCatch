@@ -70,8 +70,8 @@ void lixh_player_set_headers(void *p, const char *headers);
    while playing, decoder is opened on the play thread. Packets are discarded
    while sink is 0. */
 void lixh_player_set_video_sink(void *p, int enabled);
-/* Playback rate for audio PCM (1.0 = realtime). >1 shortens duration (pitch up),
-   used for live catch-up when listen-only. Clamped to ~1.0–1.5. */
+/* Max audio catch-up rate (1.0 = off). Actual rate adapts to clock drift;
+   listen often uses 1.3 as the ceiling. Clamped to ~1.0–1.5. */
 void lixh_player_set_play_rate(void *p, float rate);
 /* Android only: jobject Surface for MediaCodec zero-copy output.
    Pass NULL to clear. Must be set before open (or after stop, before re-open).
