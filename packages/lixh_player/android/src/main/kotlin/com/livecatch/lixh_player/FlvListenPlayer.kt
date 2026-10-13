@@ -18,7 +18,8 @@ import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Listen-only: HTTP-FLV demux + MediaCodec AAC + AudioTrack.
- * No FFmpeg. Picture stays on the native FFmpeg path.
+ * Buffer/flush sized like 秒听 (~160ms AT, flush @350ms), but catch-up is
+ * frame-drop at 1.0x pitch (linear 1.3x resample sounded floaty).
  */
 class FlvListenPlayer {
     @Volatile
@@ -37,13 +38,18 @@ class FlvListenPlayer {
     private var url: String = ""
     @Volatile
     private var headers: String? = null
-    /** Hard catch-up threshold only — below this we never drop (avoids choppy audio). */
+    /** Hard flush (秒听 ~350ms). */
     @Volatile
-    private var hardDropMs: Int = 220
+    private var hardDropMs: Int = QUEUE_FLUSH_MS
+    /** Soft drop target — skip PCM writes above this to catch up without pitch shift. */
+    @Volatile
+    private var softDropMs: Int = SOFT_DROP_MS
 
     fun setLatency(targetMs: Int, maxMs: Int) {
         val t = targetMs.coerceAtLeast(40)
-        hardDropMs = maxMs.coerceAtLeast(t + 100).coerceIn(180, 400)
+        // Don't inherit snap's tiny maxMs as flush point — that crackles.
+        hardDropMs = maxOf(maxMs, QUEUE_FLUSH_MS).coerceIn(300, 450)
+        softDropMs = t.coerceIn(100, 220)
     }
 
     fun prepare(url: String, headers: String?) {
@@ -125,6 +131,10 @@ class FlvListenPlayer {
         var sampleRate = 44100
         var channels = 2
         var pcmWrittenFrames = 0L
+        var lastHead = 0L
+        var warmupUntilMs = 0L
+        var lastFlushMs = 0L
+        var outFrames = 0
         var presentationUs = 0L
         val info = MediaCodec.BufferInfo()
         val hdr = ByteArray(11)
@@ -174,10 +184,10 @@ class FlvListenPlayer {
 
                 val dec = codec ?: continue
 
-                // Feed every AAC frame; retry on EAGAIN so we don't create gaps.
+                // timeout=0 like 秒听; drain while waiting for an input slot.
                 var fed = false
                 for (attempt in 0 until 40) {
-                    val inIx = dec.dequeueInputBuffer(8_000)
+                    val inIx = dec.dequeueInputBuffer(0)
                     if (inIx >= 0) {
                         val buf = dec.getInputBuffer(inIx)
                         if (buf != null) {
@@ -189,14 +199,19 @@ class FlvListenPlayer {
                         }
                         break
                     }
-                    // Drain while waiting for an input slot.
                     val r = drainOnce(
-                        dec, info, track, sampleRate, channels, pcmWrittenFrames, pcmScratch
+                        dec, info, track, sampleRate, channels,
+                        pcmWrittenFrames, lastHead, warmupUntilMs, lastFlushMs, outFrames,
+                        pcmScratch,
                     )
                     track = r.track
                     sampleRate = r.rate
                     channels = r.ch
                     pcmWrittenFrames = r.written
+                    lastHead = r.lastHead
+                    warmupUntilMs = r.warmupUntilMs
+                    lastFlushMs = r.lastFlushMs
+                    outFrames = r.outFrames
                 }
                 if (!fed) {
                     droppedFrames.addAndGet(1)
@@ -204,12 +219,18 @@ class FlvListenPlayer {
                 }
 
                 val r = drainOnce(
-                    dec, info, track, sampleRate, channels, pcmWrittenFrames, pcmScratch
+                    dec, info, track, sampleRate, channels,
+                    pcmWrittenFrames, lastHead, warmupUntilMs, lastFlushMs, outFrames,
+                    pcmScratch,
                 )
                 track = r.track
                 sampleRate = r.rate
                 channels = r.ch
                 pcmWrittenFrames = r.written
+                lastHead = r.lastHead
+                warmupUntilMs = r.warmupUntilMs
+                lastFlushMs = r.lastFlushMs
+                outFrames = r.outFrames
             }
         } finally {
             releaseCodec(codec)
@@ -227,6 +248,10 @@ class FlvListenPlayer {
         val rate: Int,
         val ch: Int,
         val written: Long,
+        val lastHead: Long,
+        val warmupUntilMs: Long,
+        val lastFlushMs: Long,
+        val outFrames: Int,
     )
 
     private fun drainOnce(
@@ -236,12 +261,20 @@ class FlvListenPlayer {
         rateIn: Int,
         chIn: Int,
         writtenIn: Long,
+        lastHeadIn: Long,
+        warmupUntilIn: Long,
+        lastFlushIn: Long,
+        outFramesIn: Int,
         pcmScratch: ByteArray,
     ): DrainResult {
         var track = trackIn
         var sampleRate = rateIn
         var channels = chIn
         var written = writtenIn
+        var lastHead = lastHeadIn
+        var warmupUntilMs = warmupUntilIn
+        var lastFlushMs = lastFlushIn
+        var outFrames = outFramesIn
 
         while (true) {
             val outIx = dec.dequeueOutputBuffer(info, 0)
@@ -254,6 +287,10 @@ class FlvListenPlayer {
                     releaseTrack(track)
                     track = openTrack(sampleRate, channels)
                     written = 0L
+                    lastHead = 0L
+                    warmupUntilMs = 0L
+                    lastFlushMs = 0L
+                    outFrames = 0
                 }
                 outIx >= 0 -> {
                     val out = dec.getOutputBuffer(outIx)
@@ -261,11 +298,25 @@ class FlvListenPlayer {
                         if (track == null) {
                             track = openTrack(sampleRate, channels)
                             written = 0L
+                            lastHead = 0L
                         }
                         val t = track!!
-                        val qms = queuedMs(t, written, sampleRate)
+                        val now = System.currentTimeMillis()
+                        if (outFrames == 0 && warmupUntilMs == 0L) {
+                            warmupUntilMs = now + WARMUP_MS
+                        }
+                        // Sync written against head (wrap-safe) like 秒听.
+                        val head = t.playbackHeadPosition.toLong() and 0xffffffffL
+                        if (head >= lastHead) {
+                            written = (written - (head - lastHead)).coerceAtLeast(0L)
+                        }
+                        lastHead = head
+
+                        val qSec = if (sampleRate > 0) written.toDouble() / sampleRate else 0.0
+                        val qms = (qSec * 1000.0).toInt()
                         audioQueueMs.set(qms)
-                        if (qms > hardDropMs) {
+                        val flushThresh = hardDropMs / 1000.0
+                        if (qSec > flushThresh && now - lastFlushMs > FLUSH_COOLDOWN_MS) {
                             try {
                                 t.pause()
                                 t.flush()
@@ -273,13 +324,31 @@ class FlvListenPlayer {
                             } catch (_: Throwable) {
                             }
                             written = 0L
+                            lastHead = t.playbackHeadPosition.toLong() and 0xffffffffL
+                            lastFlushMs = now
                             droppedFrames.addAndGet(1)
                             audioQueueMs.set(0)
+                        }
+
+                        // Chase by dropping frames (1.0x pitch) — resampling caused 发飘.
+                        // Warmup: drop every other frame; steady: drop when above soft target.
+                        val warming = now < warmupUntilMs
+                        val overSoft = qms > softDropMs
+                        val skip = when {
+                            warming && outFrames % 2 == 1 -> true
+                            !warming && overSoft && outFrames % 2 == 1 -> true
+                            !warming && qms > softDropMs + 80 -> true
+                            else -> false
+                        }
+                        if (skip) {
+                            droppedFrames.addAndGet(1)
+                            outFrames++
                         } else {
                             val n = writePcm(t, out, info.offset, info.size, pcmScratch)
                             if (n > 0) {
                                 written += n / (2L * channels.coerceAtLeast(1))
                                 audioFrames.addAndGet(1)
+                                outFrames++
                             }
                         }
                     }
@@ -288,7 +357,10 @@ class FlvListenPlayer {
                 else -> break
             }
         }
-        return DrainResult(track, sampleRate, channels, written)
+        return DrainResult(
+            track, sampleRate, channels, written, lastHead,
+            warmupUntilMs, lastFlushMs, outFrames,
+        )
     }
 
     private fun writePcm(
@@ -307,7 +379,7 @@ class FlvListenPlayer {
         var wrote = 0
         var emptySpins = 0
         while (off < size && running.get() && emptySpins < 100) {
-            val n = track.write(tmp, off, size - off, AudioTrack.WRITE_BLOCKING)
+            val n = track.write(tmp, off, size - off)
             if (n < 0) break
             if (n == 0) {
                 emptySpins++
@@ -318,13 +390,6 @@ class FlvListenPlayer {
             emptySpins = 0
         }
         return wrote
-    }
-
-    private fun queuedMs(track: AudioTrack, writtenFrames: Long, rate: Int): Int {
-        if (rate <= 0) return 0
-        val head = track.playbackHeadPosition.toLong() and 0xffffffffL
-        val q = (writtenFrames - head).coerceAtLeast(0)
-        return ((q * 1000L) / rate).toInt()
     }
 
     private fun openAacCodec(asc: ByteArray, rate: Int, ch: Int): MediaCodec {
@@ -342,8 +407,9 @@ class FlvListenPlayer {
         val channelMask =
             if (ch >= 2) AudioFormat.CHANNEL_OUT_STEREO else AudioFormat.CHANNEL_OUT_MONO
         val min = AudioTrack.getMinBufferSize(rate, channelMask, AudioFormat.ENCODING_PCM_16BIT)
-        // ~180ms device buffer absorbs jitter; hardDropMs trims live lag.
-        val want = (rate * ch.coerceAtLeast(1) * 2 * 180 / 1000).coerceAtLeast(min * 2)
+        // 秒听: max(minBuffer, rate * ch * 2 * 0.12) ≈ 120ms
+        val want120 = (rate * ch.coerceAtLeast(1) * 2 * AT_BUFFER_SEC).toInt()
+        val want = maxOf(min, want120)
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -433,6 +499,13 @@ class FlvListenPlayer {
 
     companion object {
         private const val TAG = "lixh-flv"
+        /** Drop-half window at start (no pitch shift). */
+        private const val WARMUP_MS = 400L
+        /** Slightly thicker than 秒听 120ms to absorb jitter. */
+        private const val AT_BUFFER_SEC = 0.16
+        private const val QUEUE_FLUSH_MS = 350
+        private const val SOFT_DROP_MS = 160
+        private const val FLUSH_COOLDOWN_MS = 250L
         private val RATES = intArrayOf(
             96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050,
             16000, 12000, 11025, 8000, 7350, 0, 0, 0
