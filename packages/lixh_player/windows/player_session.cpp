@@ -375,9 +375,9 @@ void PlayerSession::SetPlayRate(float rate) {
   }
   if (player) {
     const bool picture = video_enabled_.load();
-    const float rate =
+    const float applied =
         picture ? (std::min)(listen_play_rate_, 1.15f) : listen_play_rate_;
-    lixh_player_set_play_rate(player, rate);
+    lixh_player_set_play_rate(player, applied);
   }
 }
 
