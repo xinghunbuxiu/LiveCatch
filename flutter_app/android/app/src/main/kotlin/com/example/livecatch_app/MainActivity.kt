@@ -8,7 +8,6 @@ import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import java.io.File
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
@@ -39,15 +38,6 @@ class MainActivity : FlutterActivity() {
             "livecatch/native_paths",
         ).setMethodCallHandler { call, result ->
             when (call.method) {
-                "lixhResolvePath" -> {
-                    val dir = applicationInfo.nativeLibraryDir
-                    val so = File(dir, "liblixh_resolve.so")
-                    if (so.isFile) {
-                        result.success(so.absolutePath)
-                    } else {
-                        result.success(null)
-                    }
-                }
                 "resolveRoom" -> {
                     if (!nativeReady) {
                         result.error("no_native", "liblixh_stream_resolver not loaded", null)

@@ -7,7 +7,6 @@ import 'package:lixh_player/lixh_player.dart';
 
 import 'abr_supervisor.dart';
 import 'app_settings.dart';
-import 'douyin_expand.dart';
 import 'live_input.dart';
 import 'playback_keepalive.dart';
 import 'room_resolve.dart';
@@ -176,26 +175,7 @@ class _PlayerPageState extends State<PlayerPage>
       );
       _appendLog('剪切板填入: $filled');
       if (mounted) setState(() {});
-
-      // Best-effort: rewrite v.douyin short links to live.douyin.com/{web_rid}.
-      if (looksLikeDouyinShortUrl(filled)) {
-        try {
-          final expanded = await expandDouyinShortUrl(filled);
-          if (!mounted || _busy) return;
-          // Only update if the field still shows what we just filled.
-          if (_urlCtrl.text.trim() != filled) return;
-          if (expanded == filled) return;
-          _lastAutoFillUrl = expanded;
-          _urlCtrl.value = TextEditingValue(
-            text: expanded,
-            selection: TextSelection.collapsed(offset: expanded.length),
-          );
-          _appendLog('短链 → $expanded');
-          if (mounted) setState(() {});
-        } catch (_) {
-          // Keep short link; _start() will expand again before resolve.
-        }
-      }
+      // Short-link expand happens inside stream-stack resolve (not Dart).
     } catch (_) {
       // Clipboard may be blocked (Android privacy / empty).
     }
@@ -585,18 +565,6 @@ class _PlayerPageState extends State<PlayerPage>
     });
 
     try {
-      if (looksLikeDouyinShortUrl(input)) {
-        setState(() => _status = '展开短链…');
-        _appendLog('展开短链: $input');
-        input = await expandDouyinShortUrl(input);
-        _urlCtrl.value = TextEditingValue(
-          text: input,
-          selection: TextSelection.collapsed(offset: input.length),
-        );
-        _lastAutoFillUrl = input;
-        _appendLog('短链 → $input');
-      }
-
       await PlaybackKeepAlive.stop();
       await _applyLatency(videoOn: false);
       await _player.stop();
@@ -625,6 +593,17 @@ class _PlayerPageState extends State<PlayerPage>
           '解析成功 ${room.platform} live=${room.isLive} '
           'streams=${room.candidates.length}',
         );
+        // Reflect stack-expanded site URL (e.g. v.douyin → live.douyin).
+        if (room.siteUrl.isNotEmpty && room.siteUrl != input) {
+          input = room.siteUrl;
+          _roomInput = input;
+          _urlCtrl.value = TextEditingValue(
+            text: input,
+            selection: TextSelection.collapsed(offset: input.length),
+          );
+          _lastAutoFillUrl = input;
+          _appendLog('短链 → $input');
+        }
         if (!mounted || startGen != _playGen) return;
         // Listen / ABR-off: stick to lowest bitrate (index 0) — skip TTFB so we
         // don't waste ~1s and accidentally start on 原画 for "snappy CDN".

@@ -314,47 +314,40 @@ Future<int?> _probeStreamTtfb(
   }
 }
 
-/// Android in-process JNI (app UID). Falls back to Process if lib missing.
+/// Android in-process JNI → `liblixh_stream_resolver.so` (no Process helper).
 Future<String> _resolveViaAndroidJni(
   String roomUrl, {
   String? cookies,
 }) async {
-  try {
-    final ready =
-        await _nativePaths.invokeMethod<bool>('resolveNativeReady') ?? false;
-    if (ready) {
-      final payload = await _nativePaths.invokeMethod<String>(
-        'resolveRoom',
-        <String, dynamic>{
-          'url': roomUrl.trim(),
-          if (cookies != null && cookies.isNotEmpty) 'cookies': cookies,
-        },
-      );
-      if (payload == null || payload.isEmpty) {
-        throw StateError('JNI resolve returned empty');
-      }
-      if (payload.startsWith('OK:')) {
-        return payload.substring(3);
-      }
-      if (payload.startsWith('ERR:')) {
-        throw StateError(formatResolveError(payload.substring(4)));
-      }
-      return payload;
-    }
-  } on PlatformException catch (e) {
-    // Fall through to Process helper.
-    if (e.code == 'no_native') {
-      // ignore
-    } else {
-      // Still try Process once; if that also fails, surface JNI error.
-      try {
-        return await _resolveViaProcess(roomUrl, cookies: cookies);
-      } catch (_) {
-        throw StateError(formatResolveError(e.message ?? e.toString()));
-      }
-    }
+  final ready =
+      await _nativePaths.invokeMethod<bool>('resolveNativeReady') ?? false;
+  if (!ready) {
+    throw StateError(
+      'liblixh_stream_resolver 未加载。请先构建并打进 jniLibs:\n'
+      '  pwsh flutter_app/android/bundle_lixh_resolve.ps1',
+    );
   }
-  return _resolveViaProcess(roomUrl, cookies: cookies);
+  try {
+    final payload = await _nativePaths.invokeMethod<String>(
+      'resolveRoom',
+      <String, dynamic>{
+        'url': roomUrl.trim(),
+        if (cookies != null && cookies.isNotEmpty) 'cookies': cookies,
+      },
+    );
+    if (payload == null || payload.isEmpty) {
+      throw StateError('JNI resolve returned empty');
+    }
+    if (payload.startsWith('OK:')) {
+      return payload.substring(3);
+    }
+    if (payload.startsWith('ERR:')) {
+      throw StateError(formatResolveError(payload.substring(4)));
+    }
+    return payload;
+  } on PlatformException catch (e) {
+    throw StateError(formatResolveError(e.message ?? e.toString()));
+  }
 }
 
 Future<String> _resolveViaProcess(
@@ -370,8 +363,6 @@ Future<String> _resolveViaProcess(
       '  cargo build -p lixh-stream-resolver --bin lixh_resolve --release \\\n'
       '    --manifest-path src-tauri/lixh-stream-stack/Cargo.toml\n'
       'macOS 安装包需把二进制打进 App（CI 已自动 bundle）。\n'
-      'Android 需先交叉编译并打进 jniLibs:\n'
-      '  bash flutter_app/android/bundle_lixh_resolve.sh\n'
       '也可设置环境变量 LIXH_RESOLVE_EXE 指向该文件。',
     );
   }
@@ -498,21 +489,12 @@ Future<String?> findResolveExe() async {
     return fromEnv;
   }
 
-  // Android: packaged as jniLibs arm64-v8a/liblixh_resolve.so (executable ELF).
-  if (Platform.isAndroid) {
-    try {
-      final path = await _nativePaths.invokeMethod<String>('lixhResolvePath');
-      if (path != null && path.isNotEmpty && await File(path).exists()) {
-        return path;
-      }
-    } on PlatformException {
-      // Fall through to filesystem probes below.
-    }
-  }
+  // Android uses JNI resolveRoom — Process helper is desktop-only.
+  if (Platform.isAndroid) return null;
 
   final names = Platform.isWindows
       ? const ['lixh_resolve.exe']
-      : const ['lixh_resolve', 'liblixh_resolve.so'];
+      : const ['lixh_resolve'];
 
   final exePath = Platform.resolvedExecutable;
   final exeDir = File(exePath).parent.path;
