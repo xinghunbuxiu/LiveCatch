@@ -3,12 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'app_settings.dart';
+import 'license_session.dart';
+import 'license_sheet.dart';
 
 Future<AppSettings?> showSettingsSheet(
   BuildContext context, {
   required AppSettings initial,
   required List<String> logs,
   ValueListenable<int>? logsTick,
+  LicenseSession? licenseSession,
+  ValueChanged<LicenseSession>? onLicenseChanged,
 }) {
   return showModalBottomSheet<AppSettings>(
     context: context,
@@ -19,6 +23,8 @@ Future<AppSettings?> showSettingsSheet(
       initial: initial,
       logs: logs,
       logsTick: logsTick,
+      licenseSession: licenseSession,
+      onLicenseChanged: onLicenseChanged,
     ),
   );
 }
@@ -28,11 +34,15 @@ class _SettingsSheet extends StatefulWidget {
     required this.initial,
     required this.logs,
     this.logsTick,
+    this.licenseSession,
+    this.onLicenseChanged,
   });
 
   final AppSettings initial;
   final List<String> logs;
   final ValueListenable<int>? logsTick;
+  final LicenseSession? licenseSession;
+  final ValueChanged<LicenseSession>? onLicenseChanged;
 
   @override
   State<_SettingsSheet> createState() => _SettingsSheetState();
@@ -109,6 +119,33 @@ class _SettingsSheetState extends State<_SettingsSheet> {
           ),
           const SizedBox(height: 12),
           logsTile,
+          if (widget.licenseSession != null) ...[
+            const SizedBox(height: 4),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.verified_user_outlined, color: signal),
+              title: Text('权益 / 授权', style: TextStyle(color: foam, fontSize: 14)),
+              subtitle: Text(
+                widget.licenseSession!.active
+                    ? '已激活 · 点此管理'
+                    : '未激活 · 输入授权码',
+                style: TextStyle(color: foam.withValues(alpha: 0.45), fontSize: 12),
+              ),
+              trailing: Icon(
+                Icons.chevron_right,
+                color: foam.withValues(alpha: 0.45),
+              ),
+              onTap: () async {
+                final next = await showLicenseSheet(
+                  context,
+                  session: widget.licenseSession!,
+                );
+                if (next != null) {
+                  widget.onLicenseChanged?.call(next);
+                }
+              },
+            ),
+          ],
           const SizedBox(height: 8),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,

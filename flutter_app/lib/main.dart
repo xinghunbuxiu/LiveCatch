@@ -7,6 +7,8 @@ import 'package:lixh_player/lixh_player.dart';
 
 import 'abr_supervisor.dart';
 import 'app_settings.dart';
+import 'license_api.dart';
+import 'license_session.dart';
 import 'live_input.dart';
 import 'playback_keepalive.dart';
 import 'room_resolve.dart';
@@ -98,6 +100,9 @@ class _PlayerPageState extends State<PlayerPage>
   /// Bumped on stop/start so in-flight ABR open/play can bail out.
   int _playGen = 0;
   AppSettings _settings = AppSettings();
+  LicenseSession? _license;
+  final _licenseApi = LicenseApi();
+  Timer? _licenseHeartbeat;
   final List<String> _logs = <String>[];
   final ValueNotifier<int> _logsTick = ValueNotifier<int>(0);
   String? _lastLoggedNativeErr;
@@ -256,6 +261,12 @@ class _PlayerPageState extends State<PlayerPage>
     final next = await showSettingsSheet(
       context,
       initial: _settings,
+      licenseSession: _license,
+      onLicenseChanged: (s) {
+        if (!mounted) return;
+        setState(() => _license = s);
+        _scheduleLicenseHeartbeat();
+      },
       logs: _logs,
       logsTick: _logsTick,
     );
@@ -279,9 +290,46 @@ class _PlayerPageState extends State<PlayerPage>
     }
   }
 
+  void _scheduleLicenseHeartbeat() {
+    _licenseHeartbeat?.cancel();
+    _licenseHeartbeat = null;
+    final lic = _license;
+    if (lic == null || !lic.active || !lic.hasCode) return;
+    // Soft heartbeat while Open API is enabled; failures are logged only.
+    _licenseHeartbeat = Timer.periodic(const Duration(minutes: 10), (_) async {
+      final cur = _license;
+      if (cur == null || !cur.hasCode) return;
+      try {
+        final next = await cur.heartbeat(_licenseApi);
+        if (!mounted) return;
+        setState(() => _license = next);
+      } catch (e) {
+        _appendLog('权益心跳: $e');
+      }
+    });
+  }
+
   Future<void> _boot() async {
     try {
       _settings = await AppSettings.load();
+      try {
+        final lic = await LicenseSession.load();
+        if (mounted) {
+          setState(() => _license = lic);
+          _scheduleLicenseHeartbeat();
+        }
+        if (lic.active && lic.hasCode) {
+          // ignore: unawaited_futures
+          lic.heartbeat(_licenseApi).then((next) {
+            if (!mounted) return;
+            setState(() => _license = next);
+          }).catchError((Object e) {
+            _appendLog('权益心跳: $e');
+          });
+        }
+      } catch (e) {
+        _appendLog('权益会话: $e');
+      }
       // Portrait-first buffer — landscape default made the first picture flash 横屏.
       final info = await _player.createVideoTexture(width: 1080, height: 1920);
       try {
@@ -873,6 +921,7 @@ class _PlayerPageState extends State<PlayerPage>
     WidgetsBinding.instance.removeObserver(this);
     PlaybackKeepAlive.onStopFromNotification = null;
     _statsTimer?.cancel();
+    _licenseHeartbeat?.cancel();
     _logsTick.dispose();
     _pulse.dispose();
     _urlCtrl.dispose();
