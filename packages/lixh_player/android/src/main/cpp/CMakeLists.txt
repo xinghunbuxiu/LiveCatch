@@ -20,28 +20,40 @@ if(LIXH_REPO_ROOT STREQUAL "")
 endif()
 
 set(LIXH_CORE_DIR "${LIXH_REPO_ROOT}/src-tauri/lixh-stream-stack/lixh-player-core")
-set(LIXH_FFMPEG_DIR "${LIXH_REPO_ROOT}/src-tauri/lixh-stream-stack/sdk/android-arm64")
-set(LIXH_RUNTIME_DIR "${LIXH_REPO_ROOT}/src-tauri/lixh-stream-stack/runtime/android-arm64")
+
+# Map Android ABI → LiveCatchFfmpeg platform id + jniLibs folder name.
+if(ANDROID_ABI STREQUAL "armeabi-v7a")
+  set(LIXH_FFMPEG_PLATFORM "android-armv7")
+  set(LIXH_JNI_ABI "armeabi-v7a")
+elseif(ANDROID_ABI STREQUAL "arm64-v8a")
+  set(LIXH_FFMPEG_PLATFORM "android-arm64")
+  set(LIXH_JNI_ABI "arm64-v8a")
+else()
+  message(FATAL_ERROR "Unsupported ANDROID_ABI=${ANDROID_ABI} (need arm64-v8a or armeabi-v7a)")
+endif()
+
+set(LIXH_FFMPEG_DIR "${LIXH_REPO_ROOT}/src-tauri/lixh-stream-stack/sdk/${LIXH_FFMPEG_PLATFORM}")
+set(LIXH_RUNTIME_DIR "${LIXH_REPO_ROOT}/src-tauri/lixh-stream-stack/runtime/${LIXH_FFMPEG_PLATFORM}")
 
 if(NOT EXISTS "${LIXH_FFMPEG_DIR}/include/libavcodec/avcodec.h")
   message(FATAL_ERROR
-    "FFmpeg android-arm64 SDK missing. Run:\n"
-    "  bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh android-arm64 "
-    "src-tauri/lixh-stream-stack/sdk/android-arm64")
+    "FFmpeg ${LIXH_FFMPEG_PLATFORM} SDK missing. Run:\n"
+    "  bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh ${LIXH_FFMPEG_PLATFORM} "
+    "src-tauri/lixh-stream-stack/sdk/${LIXH_FFMPEG_PLATFORM}")
 endif()
 
 function(lixh_find_so name outvar)
-  # Release layout: sdk/lib/*.so and runtime/arm64-v8a/*.so
+  # Release layout: sdk/lib/*.so and runtime/<abi>/*.so
   file(GLOB _cands
     "${LIXH_FFMPEG_DIR}/lib/lib${name}.so"
-    "${LIXH_FFMPEG_DIR}/lib/arm64-v8a/lib${name}.so"
-    "${LIXH_RUNTIME_DIR}/arm64-v8a/lib${name}.so"
+    "${LIXH_FFMPEG_DIR}/lib/${LIXH_JNI_ABI}/lib${name}.so"
+    "${LIXH_RUNTIME_DIR}/${LIXH_JNI_ABI}/lib${name}.so"
     "${LIXH_RUNTIME_DIR}/lib${name}.so"
     "${LIXH_RUNTIME_DIR}/lib/lib${name}.so"
-    "${LIXH_RUNTIME_DIR}/lib/arm64-v8a/lib${name}.so"
+    "${LIXH_RUNTIME_DIR}/lib/${LIXH_JNI_ABI}/lib${name}.so"
   )
   if(NOT _cands)
-    message(FATAL_ERROR "lib${name}.so not found under sdk/runtime android-arm64")
+    message(FATAL_ERROR "lib${name}.so not found under sdk/runtime ${LIXH_FFMPEG_PLATFORM}")
   endif()
   list(GET _cands 0 _path)
   set(${outvar} "${_path}" PARENT_SCOPE)

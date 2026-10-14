@@ -7,8 +7,6 @@ buildscript {
     repositories {
         maven(url = "https://mirrors.cloud.tencent.com/google/")
         maven(url = "https://mirrors.cloud.tencent.com/nexus/repository/maven-public/")
-        google()
-        mavenCentral()
     }
     dependencies {
         classpath("com.android.tools.build:gradle:9.1.0")
@@ -40,9 +38,6 @@ fun findRepoRoot(): File {
 }
 
 val lixhRepoRoot = findRepoRoot()
-val lixhFfmpegLib = File(lixhRepoRoot, "src-tauri/lixh-stream-stack/sdk/android-arm64/lib")
-val lixhRuntimeLib = File(lixhRepoRoot, "src-tauri/lixh-stream-stack/runtime/android-arm64")
-val lixhJniOut = File(project.projectDir, "src/main/jniLibs/arm64-v8a")
 
 // Only ship libs we link (CMake). avfilter is in the SDK but unused → drop ~135KB.
 val lixhFfmpegSoNames = listOf(
@@ -53,28 +48,51 @@ val lixhFfmpegSoNames = listOf(
     "libswscale.so",
 )
 
-val syncFfmpegJni by tasks.registering(Copy::class) {
-    onlyIf {
-        lixhFfmpegLib.exists() || File(lixhFfmpegLib, "arm64-v8a").exists() ||
-            lixhRuntimeLib.exists()
+data class LixhAbi(
+    val jniAbi: String,
+    val platform: String,
+)
+
+val lixhAbis = listOf(
+    LixhAbi("arm64-v8a", "android-arm64"),
+    LixhAbi("armeabi-v7a", "android-armv7"),
+)
+
+fun syncAbiFfmpeg(abi: LixhAbi) {
+    val ffmpegLib = File(lixhRepoRoot, "src-tauri/lixh-stream-stack/sdk/${abi.platform}/lib")
+    val runtimeLib = File(lixhRepoRoot, "src-tauri/lixh-stream-stack/runtime/${abi.platform}")
+    val jniOut = File(project.projectDir, "src/main/jniLibs/${abi.jniAbi}")
+    if (!ffmpegLib.exists() && !File(ffmpegLib, abi.jniAbi).exists() && !runtimeLib.exists()) {
+        logger.lifecycle("Skip FFmpeg jni sync for ${abi.jniAbi}: sdk/runtime ${abi.platform} missing")
+        return
     }
-    // LiveCatchFfmpeg android runtime ships under arm64-v8a/; sdk under lib/.
-    from(lixhFfmpegLib) { include(*lixhFfmpegSoNames.toTypedArray()) }
-    from(File(lixhFfmpegLib, "arm64-v8a")) { include(*lixhFfmpegSoNames.toTypedArray()) }
-    from(File(lixhRuntimeLib, "arm64-v8a")) { include(*lixhFfmpegSoNames.toTypedArray()) }
-    from(lixhRuntimeLib) { include(*lixhFfmpegSoNames.toTypedArray()) }
-    from(File(lixhRuntimeLib, "lib")) { include(*lixhFfmpegSoNames.toTypedArray()) }
-    from(File(lixhRuntimeLib, "lib/arm64-v8a")) { include(*lixhFfmpegSoNames.toTypedArray()) }
-    into(lixhJniOut)
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-    doLast {
-        // Remove stale copies from older syncs (e.g. libavfilter.so).
-        lixhJniOut.listFiles()?.forEach { f ->
-            if (f.isFile && f.name.endsWith(".so") && f.name !in lixhFfmpegSoNames) {
-                f.delete()
-                logger.lifecycle("Removed unused jniLib ${f.name}")
-            }
+    jniOut.mkdirs()
+    val sources = listOf(
+        ffmpegLib,
+        File(ffmpegLib, abi.jniAbi),
+        File(runtimeLib, abi.jniAbi),
+        runtimeLib,
+        File(runtimeLib, "lib"),
+        File(runtimeLib, "lib/${abi.jniAbi}"),
+    )
+    for (name in lixhFfmpegSoNames) {
+        val src = sources.firstOrNull { File(it, name).isFile }?.let { File(it, name) }
+        if (src != null) {
+            src.copyTo(File(jniOut, name), overwrite = true)
         }
+    }
+    jniOut.listFiles()?.forEach { f ->
+        if (f.isFile && f.name.endsWith(".so") && f.name !in lixhFfmpegSoNames) {
+            f.delete()
+            logger.lifecycle("Removed unused jniLib ${abi.jniAbi}/${f.name}")
+        }
+    }
+}
+
+val syncFfmpegJni by tasks.registering {
+    description = "Stage FFmpeg .so into jniLibs for arm64-v8a and armeabi-v7a"
+    doLast {
+        lixhAbis.forEach { syncAbiFfmpeg(it) }
     }
 }
 
@@ -106,7 +124,7 @@ android {
     defaultConfig {
         minSdk = 24
         ndk {
-            abiFilters += listOf("arm64-v8a")
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
         }
         externalNativeBuild {
             cmake {

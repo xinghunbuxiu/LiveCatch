@@ -87,6 +87,20 @@ case "$PLATFORM" in
       exit 1
     fi
     ;;
+  android-armv7)
+    test -f "$SDK_OUT/include/libavcodec/avcodec.h"
+    test -f "$SDK_OUT/lib/libavcodec.so" || test -f "$SDK_OUT/lib/armeabi-v7a/libavcodec.so" || {
+      echo "missing android SDK libavcodec.so under $SDK_OUT/lib" >&2
+      exit 1
+    }
+    if ! ls "$RUNTIME_OUT"/armeabi-v7a/*.so >/dev/null 2>&1 &&
+       ! ls "$RUNTIME_OUT"/*.so >/dev/null 2>&1 &&
+       ! ls "$RUNTIME_OUT"/lib/*.so >/dev/null 2>&1 &&
+       ! ls "$RUNTIME_OUT"/lib/armeabi-v7a/*.so >/dev/null 2>&1; then
+      echo "missing android runtime .so under $RUNTIME_OUT (expected armeabi-v7a/)" >&2
+      exit 1
+    fi
+    ;;
 esac
 
 echo "OK: verified FFmpeg consume for $PLATFORM"

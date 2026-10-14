@@ -2,10 +2,11 @@
 # Usage:
 #   .\fetch-ffmpeg.ps1 windows-x64
 #   .\fetch-ffmpeg.ps1 android-arm64 -SdkOnly
+#   .\fetch-ffmpeg.ps1 android-armv7 -SdkOnly
 #   .\fetch-ffmpeg.ps1 ios-arm64 -RuntimeOnly
 param(
   [Parameter(Mandatory = $true, Position = 0)]
-  [ValidateSet('windows-x64', 'macos-arm64', 'macos-x64', 'android-arm64', 'ios-arm64')]
+  [ValidateSet('windows-x64', 'macos-arm64', 'macos-x64', 'android-arm64', 'android-armv7', 'ios-arm64')]
   [string]$Platform,
   [switch]$SdkOnly,
   [switch]$RuntimeOnly

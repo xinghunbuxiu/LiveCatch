@@ -13,14 +13,14 @@
 # Requires: gh (authenticated), unzip
 set -euo pipefail
 
-PLATFORM="${1:?platform required (android-arm64|ios-arm64)}"
+PLATFORM="${1:?platform required (android-arm64|android-armv7|ios-arm64)}"
 RUN_ID="${2:?Actions run id required}"
 ROOT="$(cd "${3:-$(dirname "$0")/../../..}" && pwd)"
 REPO="${LIXH_FFMPEG_REPO:-xinghunbuxiu/LiveCatchFfmpeg}"
 VERSION="${LIXH_FFMPEG_VERSION:-9.0.2}"
 
 case "$PLATFORM" in
-  android-arm64|ios-arm64) ;;
+  android-arm64|android-armv7|ios-arm64) ;;
   *)
     echo "This helper is for mobile platforms only (got: $PLATFORM)" >&2
     exit 2

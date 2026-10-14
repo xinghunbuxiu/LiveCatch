@@ -31,13 +31,15 @@ jobs:
           cache: true
       - name: Install unzip
         run: sudo apt-get update && sudo apt-get install -y unzip
-      - name: Fetch FFmpeg android-arm64
+      - name: Fetch FFmpeg android-arm64 + android-armv7
         run: |
           set -euo pipefail
           chmod +x src-tauri/lixh-stream-stack/scripts/*.sh
-          bash src-tauri/lixh-stream-stack/scripts/prepare-runtime.sh android-arm64
-          bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh android-arm64 \
-            "src-tauri/lixh-stream-stack/sdk/android-arm64"
+          for plat in android-arm64 android-armv7; do
+            bash src-tauri/lixh-stream-stack/scripts/prepare-runtime.sh "$plat"
+            bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh "$plat" \
+              "src-tauri/lixh-stream-stack/sdk/$plat"
+          done
       - name: Accept Android licenses
         run: yes | flutter doctor --android-licenses || true
       - name: Install Protoc
@@ -47,12 +49,12 @@ jobs:
       - name: Pub get
         working-directory: flutter_app
         run: flutter pub get
-      - name: Build Android APK (arm64)
+      - name: Build Android APKs (arm64 + armv7)
         working-directory: flutter_app
-        run: flutter build apk --release --target-platform android-arm64
-      - name: Upload APK
+        run: flutter build apk --release --split-per-abi --target-platform android-arm64,android-arm
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: livecatch-android-arm64
+          name: livecatch-android-arm
           path: flutter_app/build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error

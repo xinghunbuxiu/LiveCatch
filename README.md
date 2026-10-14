@@ -30,7 +30,7 @@ Desktop/mobile artifacts from Flutter CI:
 |----------|----------|
 | Windows | `…-windows-x64-setup` → Inno Setup `.exe` |
 | macOS | `…-macos-arm64-dmg` → drag-to-Applications `.dmg` |
-| Android | `…-android-arm64` → APK |
+| Android | `…-android-arm` → arm64 + armv7 APKs |
 | iOS | compile-only (no codesign → no IPA) |
 
 
@@ -45,7 +45,7 @@ bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-runtime.sh <platform>
 # Windows (no bash): powershell -File src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg.ps1 windows-x64
 ```
 
-Platforms: `windows-x64`, `macos-arm64`, `macos-x64`, `android-arm64`, `ios-arm64`.  
+Platforms: `windows-x64`, `macos-arm64`, `macos-x64`, `android-arm64`, `android-armv7`, `ios-arm64`.  
 Flutter CI fetches the platform SDK/runtime as part of each build.
 
 ## Run

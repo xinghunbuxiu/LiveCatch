@@ -8,15 +8,17 @@ plugins {
 }
 
 // Room resolve runs on the server — strip any leftover local resolver jniLibs.
-val lixhResolveJniDir = File(project.projectDir, "src/main/jniLibs/arm64-v8a")
 val stripLocalResolveJni by tasks.registering {
     description = "Remove local lixh resolve .so (remote HTTP resolve)"
     doLast {
-        listOf("liblixh_resolve.so", "liblixh_stream_resolver.so").forEach { name ->
-            val f = File(lixhResolveJniDir, name)
-            if (f.isFile) {
-                f.delete()
-                logger.lifecycle("Removed local resolve native ${f.absolutePath}")
+        listOf("arm64-v8a", "armeabi-v7a").forEach { abi ->
+            val dir = File(project.projectDir, "src/main/jniLibs/$abi")
+            listOf("liblixh_resolve.so", "liblixh_stream_resolver.so").forEach { name ->
+                val f = File(dir, name)
+                if (f.isFile) {
+                    f.delete()
+                    logger.lifecycle("Removed local resolve native ${f.absolutePath}")
+                }
             }
         }
     }
@@ -50,9 +52,10 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        ndk {
-            abiFilters += listOf("arm64-v8a")
-        }
+        // Do not set ndk.abiFilters here — conflicts with
+        // `flutter build apk --split-per-abi` (Flutter injects splits.abi).
+        // ABI set is controlled by --target-platform + packaging.excludes below,
+        // and by lixh_player's cmake abiFilters (arm64-v8a + armeabi-v7a).
     }
 
     buildTypes {
@@ -73,11 +76,9 @@ android {
         jniLibs {
             // Extract .so for System.loadLibrary (FFmpeg player natives).
             useLegacyPackaging = true
-            // Keep APK arm64-only even if Flutter/AndroidX merge other ABIs
-            // (bare `flutter build apk` without --target-platform used to inflate ~19→33MB).
+            // Drop unused ABIs; keep arm64-v8a + armeabi-v7a.
             excludes += setOf(
                 "**/armeabi/**",
-                "**/armeabi-v7a/**",
                 "**/x86/**",
                 "**/x86_64/**",
             )

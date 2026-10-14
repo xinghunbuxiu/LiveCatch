@@ -9,7 +9,7 @@ Flutter shell for LiveCatch (primary app path). Uses [`lixh_player`](../packages
 | Windows | yes | native (playable) |
 | macOS | yes | native (audio + FlutterTexture; needs FFmpeg sdk) |
 | iOS | yes | native (audio + texture; needs FFmpeg sdk/ios-arm64) |
-| Android | yes | native listen (AAudio; needs FFmpeg sdk/android-arm64) |
+| Android | yes | native listen (AAudio; needs FFmpeg sdk/android-arm64 + android-armv7) |
 
 ```bash
 # Desktop FFmpeg (once)
@@ -22,6 +22,7 @@ flutter run -d windows
 
 # Mobile (after LiveCatchFfmpeg publishes android/ios zips):
 # bash ../src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh android-arm64 ...
+# bash ../src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh android-armv7 ...
 # bash ../src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh ios-arm64 ...
 # flutter run -d <device>
 ```

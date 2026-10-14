@@ -15,7 +15,7 @@ Audio-first: `setVideoEnabled(false)` skips present so demux stays on audio.
 | **Windows** | Full: DXGI shared texture + `lixh-player-core` + WASAPI + D3D11 VA/VP |
 | **macOS** | Core + AudioQueue + FlutterTexture (software / VT frames). Fetch `sdk/macos-arm64` or `macos-x64` first |
 | **iOS** | Core + AudioQueue + FlutterTexture (device arm64). Fetch `sdk/ios-arm64` first |
-| **Android** | Core + AAudio + MediaCodec→SW transfer + SurfaceTexture (arm64-v8a) |
+| **Android** | Core + AAudio + MediaCodec→SW transfer + SurfaceTexture (arm64-v8a + armeabi-v7a) |
 
 ## FFmpeg layout
 
@@ -26,6 +26,7 @@ SDK/runtime zips live under `src-tauri/lixh-stream-stack/`:
 bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh windows-x64
 bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh macos-arm64
 bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh android-arm64
+bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh android-armv7
 bash src-tauri/lixh-stream-stack/scripts/fetch-ffmpeg-sdk.sh ios-arm64
 ```
 
