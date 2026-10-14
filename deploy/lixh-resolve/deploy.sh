@@ -82,10 +82,21 @@ systemctl restart lixh-resolve.service
 install -d -m 755 /etc/nginx/snippets
 install -m 644 "$NGINX_SNIPPET_SRC" "$NGINX_SNIPPET_DST"
 
-if [[ -f "$SITE" ]] && ! grep -q 'snippets/livecatch-resolve.conf' "$SITE"; then
-  python3 - <<'PY'
+# Prefer editing sites-available (canonical); sites-enabled is often a symlink.
+SITE_AVAIL="/etc/nginx/sites-available/rewardplay"
+SITE_EDIT="$SITE"
+if [[ -L "$SITE" ]]; then
+  SITE_EDIT="$(readlink -f "$SITE" || true)"
+fi
+if [[ -z "${SITE_EDIT:-}" || ! -f "$SITE_EDIT" ]]; then
+  SITE_EDIT="$SITE_AVAIL"
+fi
+
+if [[ -f "$SITE_EDIT" ]] && ! grep -q 'snippets/livecatch-resolve.conf' "$SITE_EDIT"; then
+  cp -a "$SITE_EDIT" "${SITE_EDIT}.bak.$(date +%Y%m%d%H%M%S)"
+  python3 - <<PY
 from pathlib import Path
-path = Path("/etc/nginx/sites-enabled/rewardplay")
+path = Path("$SITE_EDIT")
 text = path.read_text()
 needle = "    location /api/ {"
 insert = "    include snippets/livecatch-resolve.conf;\n\n"
@@ -94,7 +105,6 @@ parts = text.split("server {", 1)
 if len(parts) != 2:
     raise SystemExit("unexpected nginx site layout")
 head, rest = parts
-# Only rewrite the first server block body until its closing — find first location /api/
 idx = rest.find(needle)
 if idx < 0:
     raise SystemExit("location /api/ not found in first server")
@@ -102,7 +112,12 @@ rest = rest[:idx] + insert + rest[idx:]
 path.write_text(head + "server {" + rest)
 print("Patched", path)
 PY
+elif [[ -f "$SITE_EDIT" ]]; then
+  echo "nginx already includes livecatch-resolve snippet ($SITE_EDIT)"
 fi
+
+# Drop accidental bak symlinks that duplicate listen 80/3000.
+find /etc/nginx/sites-enabled -maxdepth 1 -name 'rewardplay.bak.*' -delete 2>/dev/null || true
 
 nginx -t
 systemctl reload nginx
