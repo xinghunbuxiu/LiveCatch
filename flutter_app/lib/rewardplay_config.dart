@@ -22,3 +22,13 @@ const String kRewardPlayProjectCode = String.fromEnvironment(
 const String kRewardPlayIntegrationToken = String.fromEnvironment(
   'REWARDPLAY_INTEGRATION_TOKEN',
 );
+
+String get kRewardPlayCheckoutUrl {
+  final base = kRewardPlayBaseUrl.replaceAll(RegExp(r'/+$'), '');
+  return '$base/?entry=license-checkout&projectCode=$kRewardPlayProjectCode';
+}
+
+String get kRewardPlayRenewalUrl {
+  final base = kRewardPlayBaseUrl.replaceAll(RegExp(r'/+$'), '');
+  return '$base/?entry=license-renewal&projectCode=$kRewardPlayProjectCode';
+}

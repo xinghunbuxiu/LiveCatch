@@ -8,6 +8,7 @@ import 'package:lixh_player/lixh_player.dart';
 import 'abr_supervisor.dart';
 import 'app_settings.dart';
 import 'license_api.dart';
+import 'license_gate.dart';
 import 'license_session.dart';
 import 'live_input.dart';
 import 'playback_keepalive.dart';
@@ -640,6 +641,47 @@ class _PlayerPageState extends State<PlayerPage>
       _lastAutoFillUrl = input;
       _appendLog('已提取链接: $input');
     }
+
+    // Hard license gate before any resolve / open.
+    var lic = _license ?? await LicenseSession.load();
+    if (!mounted) return;
+    setState(() {
+      _license = lic;
+      _status = '校验权益…';
+    });
+    var gate = await ensureLicenseForPlayback(api: _licenseApi, session: lic);
+    if (!mounted) return;
+    setState(() => _license = gate.session);
+    _scheduleLicenseHeartbeat();
+    if (!gate.allowed) {
+      _appendLog('权益拦截: ${gate.message}');
+      final cont = await showLicenseBlockedDialog(
+        context,
+        gate: gate,
+        session: gate.session,
+        onSession: (s) {
+          if (!mounted) return;
+          setState(() => _license = s);
+          _scheduleLicenseHeartbeat();
+        },
+      );
+      if (!mounted) return;
+      if (!cont) {
+        setState(() => _status = '需要权益');
+        return;
+      }
+      // User activated in-sheet — re-check once before resolve.
+      lic = _license ?? gate.session;
+      gate = await ensureLicenseForPlayback(api: _licenseApi, session: lic);
+      if (!mounted) return;
+      setState(() => _license = gate.session);
+      if (!gate.allowed) {
+        _appendLog('权益仍无效: ${gate.message}');
+        setState(() => _status = '需要权益');
+        return;
+      }
+    }
+
     final wantVideo = _settings.startWithVideo;
     final startGen = ++_playGen;
     setState(() {
