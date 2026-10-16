@@ -37,4 +37,18 @@ void main() {
       'https://v.douyin.com/abc/',
     );
   });
+
+  test('extracts xiaohongshu / xhslink from share text', () {
+    const share =
+        '小红书直播中 https://www.xiaohongshu.com/user/profile/abc123 打开看看';
+    expect(
+      extractLiveInput(share),
+      'https://www.xiaohongshu.com/user/profile/abc123',
+    );
+    expect(isPasteableLiveClipboard(share), isTrue);
+    expect(
+      extractLiveInput('https://xhslink.com/m/xyz'),
+      'https://xhslink.com/m/xyz',
+    );
+  });
 }

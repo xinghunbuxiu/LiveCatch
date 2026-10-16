@@ -565,13 +565,13 @@ class _PlayerPageState extends State<PlayerPage>
       if (gen != _playGen) return;
       await _player.stop();
       if (gen != _playGen) return;
-      await _player.setVideoEnabled(false);
+      // Open with the sink we want — listen-first then enable forces deferred
+      // MediaCodec + wait-for-keyframe ("等待首帧…").
+      await _player.setVideoEnabled(keepVideo);
       if (gen != _playGen) return;
       await _player.open(pick.url, headers: _headers);
       if (gen != _playGen) return;
       await _player.play();
-      if (gen != _playGen) return;
-      if (keepVideo) await _player.setVideoEnabled(true);
       if (gen != _playGen) return;
       abr.setCurrent(index);
       _lastProgress = 0;
@@ -816,14 +816,14 @@ class _PlayerPageState extends State<PlayerPage>
         });
         try {
           await _player.stop();
-          await _player.setVideoEnabled(false);
+          // Open with picture sink already on when startWithVideo — otherwise
+          // open_input discards video, deferred MediaCodec open waits for the
+          // next IDR, and the UI flashes "等待首帧…".
+          await _player.setVideoEnabled(wantVideo);
           await _player.open(pick.url, headers: headers ?? _headers);
           await _player.play();
           // Re-bind listen PCM/play-rate after open (same as toggle-off path).
           await _applyLatency(videoOn: wantVideo);
-          if (wantVideo) {
-            await _player.setVideoEnabled(true);
-          }
           if (!mounted) return;
           setState(() {
             _playing = true;
@@ -1396,7 +1396,7 @@ class _Dock extends StatelessWidget {
           cursorColor: signal,
           textInputAction: TextInputAction.go,
           decoration: InputDecoration(
-            hintText: '直播间 / 抖音分享口令 / m3u8·flv',
+            hintText: '直播间 / 抖音·快手·小红书 / m3u8·flv',
             hintStyle: TextStyle(color: foam.withValues(alpha: 0.35)),
             filled: true,
             fillColor: Colors.white.withValues(alpha: 0.04),

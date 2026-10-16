@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 /// Expand Douyin share short links (`v.douyin.com/...`) to
-/// `https://live.douyin.com/{web_rid}` for platforms-parser.
+/// `https://live.douyin.com/{web_rid}` (server resolve prefers room URLs).
 ///
 /// Flow: short URL → 302 reflow Location → room/reflow/info → owner.web_rid.
 
