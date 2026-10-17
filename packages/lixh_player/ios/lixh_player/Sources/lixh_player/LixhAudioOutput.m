@@ -1,6 +1,7 @@
 #import "LixhAudioOutput.h"
 #import <AudioToolbox/AudioToolbox.h>
 #import <CoreFoundation/CoreFoundation.h>
+#import <dispatch/dispatch.h>
 
 enum { kLixhRingCap = 48000 * 2 * 2 };
 
@@ -21,7 +22,7 @@ enum { kLixhRingCap = 48000 * 2 * 2 };
   BOOL _started;
 }
 - (void)fillBuffer:(AudioQueueBufferRef)buf queue:(AudioQueueRef)q;
-- (void)stopUnlocked;
+- (void)disposeQueue:(AudioQueueRef)q;
 - (BOOL)ensureQueueRate:(int)rate channels:(int)ch;
 - (void)maybeShrinkLocked;
 @end
@@ -81,53 +82,63 @@ static void LixhAqCallback(void *user, AudioQueueRef q, AudioQueueBufferRef buf)
 }
 
 - (void)fillBuffer:(AudioQueueBufferRef)buf queue:(AudioQueueRef)q {
+  BOOL shouldEnqueue = NO;
   @synchronized(self) {
+    // Queue already swapped/disposed — never Enqueue under the lock or after stop.
+    if (!_queue || q != _queue) {
+      return;
+    }
     int frames = (int)(buf->mAudioDataBytesCapacity / (sizeof(float) * (unsigned)_ch));
     if (frames < 1 || _ch < 1) {
       memset(buf->mAudioData, 0, buf->mAudioDataBytesCapacity);
       buf->mAudioDataByteSize = buf->mAudioDataBytesCapacity;
-      AudioQueueEnqueueBuffer(q, buf, 0, NULL);
-      return;
-    }
-    float *dst = (float *)buf->mAudioData;
-    int need = frames * _ch;
-    if (!_primed) {
-      int qms = (_rate > 0 && _ch > 0) ? (int)((_count / _ch) * 1000L / _rate) : 0;
-      if (qms >= [self primeNeedMsLocked]) {
-        _primed = YES;
-      } else {
-        memset(dst, 0, (size_t)need * sizeof(float));
-        buf->mAudioDataByteSize = (UInt32)(need * (int)sizeof(float));
-        AudioQueueEnqueueBuffer(q, buf, 0, NULL);
-        return;
-      }
-    }
-    int got = 0;
-    while (got < need && _count > 0) {
-      int n = need - got;
-      if (n > _count) n = _count;
-      int to_end = kLixhRingCap - _r;
-      if (n > to_end) n = to_end;
-      memcpy(dst + got, _ring + _r, (size_t)n * sizeof(float));
-      _r = (_r + n) % kLixhRingCap;
-      _count -= n;
-      got += n;
-    }
-    if (got < need) {
-      memset(dst + got, 0, (size_t)(need - got) * sizeof(float));
-      _lastUnderrun = CFAbsoluteTimeGetCurrent();
-      if (_maxQueueMs < 280) {
-        int next = _maxQueueMs + 40;
-        if (next > 280) next = 280;
-        if (next < _baseQueueMs) next = _baseQueueMs;
-        _maxQueueMs = next;
-      }
+      shouldEnqueue = YES;
     } else {
-      [self maybeShrinkLocked];
+      float *dst = (float *)buf->mAudioData;
+      int need = frames * _ch;
+      if (!_primed) {
+        int qms = (_rate > 0 && _ch > 0) ? (int)((_count / _ch) * 1000L / _rate) : 0;
+        if (qms >= [self primeNeedMsLocked]) {
+          _primed = YES;
+        } else {
+          memset(dst, 0, (size_t)need * sizeof(float));
+          buf->mAudioDataByteSize = (UInt32)(need * (int)sizeof(float));
+          shouldEnqueue = YES;
+        }
+      }
+      if (_primed) {
+        int got = 0;
+        while (got < need && _count > 0) {
+          int n = need - got;
+          if (n > _count) n = _count;
+          int to_end = kLixhRingCap - _r;
+          if (n > to_end) n = to_end;
+          memcpy(dst + got, _ring + _r, (size_t)n * sizeof(float));
+          _r = (_r + n) % kLixhRingCap;
+          _count -= n;
+          got += n;
+        }
+        if (got < need) {
+          memset(dst + got, 0, (size_t)(need - got) * sizeof(float));
+          _lastUnderrun = CFAbsoluteTimeGetCurrent();
+          if (_maxQueueMs < 280) {
+            int next = _maxQueueMs + 40;
+            if (next > 280) next = 280;
+            if (next < _baseQueueMs) next = _baseQueueMs;
+            _maxQueueMs = next;
+          }
+        } else {
+          [self maybeShrinkLocked];
+        }
+        buf->mAudioDataByteSize = (UInt32)(need * (int)sizeof(float));
+        shouldEnqueue = YES;
+      }
     }
-    buf->mAudioDataByteSize = (UInt32)(frames * _ch * (int)sizeof(float));
   }
-  AudioQueueEnqueueBuffer(q, buf, 0, NULL);
+  // Enqueue outside the lock so Stop/Dispose cannot deadlock with the callback.
+  if (shouldEnqueue) {
+    AudioQueueEnqueueBuffer(q, buf, 0, NULL);
+  }
 }
 
 - (BOOL)start {
@@ -136,51 +147,91 @@ static void LixhAqCallback(void *user, AudioQueueRef q, AudioQueueBufferRef buf)
   }
 }
 
-- (BOOL)ensureQueueRate:(int)rate channels:(int)ch {
-  if (_started && _queue && _rate == rate && _ch == ch) return YES;
-  [self stopUnlocked];
-  _rate = rate > 0 ? rate : 48000;
-  _ch = ch > 0 ? ch : 2;
-  AudioStreamBasicDescription asbd = {0};
-  asbd.mSampleRate = _rate;
-  asbd.mFormatID = kAudioFormatLinearPCM;
-  asbd.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked;
-  asbd.mChannelsPerFrame = (UInt32)_ch;
-  asbd.mBitsPerChannel = 32;
-  asbd.mBytesPerFrame = 4 * (UInt32)_ch;
-  asbd.mFramesPerPacket = 1;
-  asbd.mBytesPerPacket = asbd.mBytesPerFrame;
-  OSStatus st = AudioQueueNewOutput(&asbd, LixhAqCallback, (__bridge void *)self,
-                                    NULL, kCFRunLoopCommonModes, 0, &_queue);
-  if (st != noErr || !_queue) return NO;
-  UInt32 bytes = (UInt32)(_rate / 50) * asbd.mBytesPerFrame;  // ~20ms
-  if (bytes < 256) bytes = 256;
-  for (int i = 0; i < 3; i++) {
-    AudioQueueAllocateBuffer(_queue, bytes, &_bufs[i]);
-    memset(_bufs[i]->mAudioData, 0, bytes);
-    _bufs[i]->mAudioDataByteSize = bytes;
-    AudioQueueEnqueueBuffer(_queue, _bufs[i], 0, NULL);
-  }
-  st = AudioQueueStart(_queue, NULL);
-  if (st != noErr) return NO;
-  _started = YES;
-  return YES;
+- (void)disposeQueue:(AudioQueueRef)q {
+  if (!q) return;
+  // immediate=true waits for the callback and deadlocks if that callback
+  // still needs this object. Stop returns immediately; dispose on a side queue.
+  AudioQueueStop(q, false);
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+    AudioQueueDispose(q, true);
+  });
 }
 
-- (void)stopUnlocked {
-  if (_queue) {
-    AudioQueueStop(_queue, true);
-    AudioQueueDispose(_queue, true);
+- (BOOL)ensureQueueRate:(int)rate channels:(int)ch {
+  // Must not be called while holding @synchronized(self): Stop/Dispose can
+  // wait on the AQ callback, which also needs that lock.
+  AudioQueueRef old = NULL;
+  @synchronized(self) {
+    if (_started && _queue && _rate == rate && _ch == ch) return YES;
+    old = _queue;
     _queue = NULL;
+    memset(_bufs, 0, sizeof(_bufs));
+    _started = NO;
+    _primed = NO;
+    _r = _w = _count = 0;
   }
-  memset(_bufs, 0, sizeof(_bufs));
-  _started = NO;
-  _primed = NO;
-  _r = _w = _count = 0;
+  [self disposeQueue:old];
+
+  int useRate = rate > 0 ? rate : 48000;
+  int useCh = ch > 0 ? ch : 2;
+  AudioStreamBasicDescription asbd = {0};
+  asbd.mSampleRate = useRate;
+  asbd.mFormatID = kAudioFormatLinearPCM;
+  asbd.mFormatFlags = kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked;
+  asbd.mChannelsPerFrame = (UInt32)useCh;
+  asbd.mBitsPerChannel = 32;
+  asbd.mBytesPerFrame = 4 * (UInt32)useCh;
+  asbd.mFramesPerPacket = 1;
+  asbd.mBytesPerPacket = asbd.mBytesPerFrame;
+  AudioQueueRef q = NULL;
+  OSStatus st = AudioQueueNewOutput(&asbd, LixhAqCallback, (__bridge void *)self, NULL,
+                                    kCFRunLoopCommonModes, 0, &q);
+  if (st != noErr || !q) return NO;
+  UInt32 bytes = (UInt32)(useRate / 50) * asbd.mBytesPerFrame;  // ~20ms
+  if (bytes < 256) bytes = 256;
+  AudioQueueBufferRef bufs[3] = {0};
+  for (int i = 0; i < 3; i++) {
+    AudioQueueAllocateBuffer(q, bytes, &bufs[i]);
+    memset(bufs[i]->mAudioData, 0, bytes);
+    bufs[i]->mAudioDataByteSize = bytes;
+    AudioQueueEnqueueBuffer(q, bufs[i], 0, NULL);
+  }
+  st = AudioQueueStart(q, NULL);
+  if (st != noErr) {
+    [self disposeQueue:q];
+    return NO;
+  }
+  AudioQueueRef stale = NULL;
+  BOOL ok = NO;
+  @synchronized(self) {
+    if (_queue) {
+      // Another thread won the race — drop ours outside the lock.
+      stale = q;
+      ok = _started && _queue != NULL;
+    } else {
+      _rate = useRate;
+      _ch = useCh;
+      _queue = q;
+      memcpy(_bufs, bufs, sizeof(bufs));
+      _started = YES;
+      ok = YES;
+    }
+  }
+  [self disposeQueue:stale];
+  return ok;
 }
 
 - (void)stop {
-  @synchronized(self) { [self stopUnlocked]; }
+  AudioQueueRef q = NULL;
+  @synchronized(self) {
+    q = _queue;
+    _queue = NULL;
+    memset(_bufs, 0, sizeof(_bufs));
+    _started = NO;
+    _primed = NO;
+    _r = _w = _count = 0;
+  }
+  [self disposeQueue:q];
 }
 
 - (void)flush {
@@ -195,8 +246,9 @@ static void LixhAqCallback(void *user, AudioQueueRef q, AudioQueueBufferRef buf)
            channels:(int)channels
          sampleRate:(int)sampleRate {
   if (!samples || frames <= 0 || channels <= 0) return;
+  if (![self ensureQueueRate:sampleRate channels:channels]) return;
   @synchronized(self) {
-    if (![self ensureQueueRate:sampleRate channels:channels]) return;
+    if (!_queue) return;
     int n = frames * channels;
     if (n > kLixhRingCap / 2) n = kLixhRingCap / 2;
     /* Cap app-side PCM to latency target (same semantics as Android).

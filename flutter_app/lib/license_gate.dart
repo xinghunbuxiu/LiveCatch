@@ -69,7 +69,7 @@ Future<LicenseGateResult> ensureLicenseForPlayback({
     return LicenseGateResult.blocked(
       session: session,
       reason: LicenseGateReason.unavailable,
-      message: '未配置权益凭证，无法校验授权',
+      message: '暂时无法校验权益，请稍后重试或联系客服',
     );
   }
 
@@ -77,7 +77,7 @@ Future<LicenseGateResult> ensureLicenseForPlayback({
     return LicenseGateResult.blocked(
       session: session.copyWith(active: false, lastMessage: '未激活'),
       reason: LicenseGateReason.missing,
-      message: '请先开通或激活权益后再解析直播间',
+      message: '请先购买或输入注册码，再解析直播间',
     );
   }
 
@@ -126,10 +126,10 @@ Future<bool> showLicenseBlockedDialog(
 }) async {
   final foam = Theme.of(context).colorScheme.onSurface;
   final title = gate.isMissing
-      ? '需要开通权益'
-      : (gate.isExpired ? '权益已到期' : '权益校验失败');
+      ? '需要激活权益'
+      : (gate.isExpired ? '权益已到期' : '暂时无法使用');
   final body = gate.message ?? '请开通或续费后再解析直播间';
-  final webLabel = gate.isExpired ? '去续费' : '去开通';
+  final webLabel = gate.isExpired ? '去续费' : '去购买';
 
   final action = await showDialog<String>(
     context: context,
@@ -146,7 +146,7 @@ Future<bool> showLicenseBlockedDialog(
         ),
         TextButton(
           onPressed: () => Navigator.pop(ctx, 'code'),
-          child: const Text('输入授权码'),
+          child: const Text('输入注册码'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(ctx, 'web'),

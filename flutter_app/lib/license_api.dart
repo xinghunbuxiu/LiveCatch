@@ -45,20 +45,44 @@ class LicensePackage {
     required this.packageName,
     required this.durationDays,
     required this.priceFen,
+    this.durationMinutes,
+    this.maxDevices,
   });
 
   final String packageCode;
   final String packageName;
   final int? durationDays;
+  final int? durationMinutes;
+  final int? maxDevices;
   final int priceFen;
 
   factory LicensePackage.fromJson(Map<String, dynamic> j) {
+    int? asInt(Object? v) => v is int ? v : int.tryParse('$v');
     return LicensePackage(
       packageCode: (j['packageCode'] ?? '').toString(),
       packageName: (j['packageName'] ?? '').toString(),
-      durationDays: j['durationDays'] is int ? j['durationDays'] as int : null,
-      priceFen: j['priceFen'] is int ? j['priceFen'] as int : 0,
+      durationDays: asInt(j['durationDays']),
+      durationMinutes: asInt(j['durationMinutes']),
+      maxDevices: asInt(j['maxDevices']),
+      priceFen: asInt(j['priceFen']) ?? 0,
     );
+  }
+
+  /// User-facing length. Prefer minutes from the server when present.
+  String get durationLabel {
+    final minutes = durationMinutes;
+    if (minutes != null && minutes > 0) {
+      if (minutes % (60 * 24) == 0) {
+        final days = minutes ~/ (60 * 24);
+        return days >= 365 && days % 365 == 0 ? '${days ~/ 365} 年' : '$days 天';
+      }
+      if (minutes % 60 == 0) return '${minutes ~/ 60} 小时';
+      return '$minutes 分钟';
+    }
+    final days = durationDays;
+    if (days == null || days <= 0) return '永久';
+    if (days % 365 == 0) return '${days ~/ 365} 年';
+    return '$days 天';
   }
 }
 

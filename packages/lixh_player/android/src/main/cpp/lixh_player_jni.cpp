@@ -116,16 +116,15 @@ namespace {
 /* ~500ms stereo @48k — physical ceiling; live trim keeps far less. */
 constexpr int kRingCap = 48000 * 2 / 2;
 
-/* Video chase target ≠ safe PCM depth. Listen needs enough to prime the
-   sink (too-tight snap never primes → permanent silence until picture
-   fattens the queue once). Picture keeps a fatter cushion. */
+/* Video chase target ≠ safe PCM depth. Listen stays lean (base.apk-like);
+   picture keeps a modest cushion. */
 static int PcmQueueMsFromChase(int chase_target_ms, bool listen_only) {
-  int pcm = listen_only ? (chase_target_ms + chase_target_ms / 2)
-                        : (chase_target_ms * 2);
-  /* Listen 60ms matches Windows snap floor; picture stays ≥100ms. */
-  const int floor = listen_only ? 60 : 100;
+  int pcm = listen_only ? (chase_target_ms + chase_target_ms / 4) /* ×1.25 */
+                        : (chase_target_ms * 3 / 2);             /* ×1.5 */
+  const int floor = listen_only ? 40 : 100;
+  const int cap = listen_only ? 250 : 400;
   if (pcm < floor) pcm = floor;
-  if (pcm > 400) pcm = 400;
+  if (pcm > cap) pcm = cap;
   return pcm;
 }
 
@@ -135,12 +134,14 @@ class AudioOut {
 
   void SetMaxQueueMs(int ms) {
     std::lock_guard<std::mutex> lock(mu_);
-    if (ms < 50) ms = 50;
+    if (ms < 35) ms = 35;
     if (ms > 400) ms = 400;
     base_queue_ms_ = ms;
     max_queue_ms_ = ms;
     last_underrun_ = {};
     last_shrink_ = {};
+    underrun_window_start_ = {};
+    underrun_window_count_ = 0;
   }
 
   /* Prime below the queue cap so we always become audible. Equal prime==cap
@@ -148,38 +149,48 @@ class AudioOut {
   int PrimeNeedMsLocked() const {
     int p = base_queue_ms_ * 2 / 3;
     if (p < 20) p = 20;
-    if (p > 120) p = 120;
+    if (p > 60) p = 60;
     if (p >= base_queue_ms_) p = base_queue_ms_ > 20 ? base_queue_ms_ - 10 : 20;
     return p;
   }
 
   void NoteUnderrunLocked() {
-    last_underrun_ = std::chrono::steady_clock::now();
-    if (max_queue_ms_ < 280) {
-      int next = max_queue_ms_ + 40;
-      if (next > 280) next = 280;
+    const auto now = std::chrono::steady_clock::now();
+    last_underrun_ = now;
+    /* Ignore isolated glitches: need ≥2 underruns in 30s before thickening. */
+    if (underrun_window_start_.time_since_epoch().count() == 0 ||
+        now - underrun_window_start_ > std::chrono::seconds(30)) {
+      underrun_window_start_ = now;
+      underrun_window_count_ = 1;
+      return;
+    }
+    underrun_window_count_++;
+    if (underrun_window_count_ < 2) return;
+    if (max_queue_ms_ < 150) {
+      int next = max_queue_ms_ + 30;
+      if (next > 150) next = 150;
       if (next < base_queue_ms_) next = base_queue_ms_;
       max_queue_ms_ = next;
     }
   }
 
-  /* After ~3s without underrun, ease depth back toward base (20ms/s). */
+  /* After ~1.2s without underrun, ease depth back toward base (~80ms/s). */
   void MaybeShrinkLocked() {
     if (max_queue_ms_ <= base_queue_ms_ || !primed_) return;
     const auto now = std::chrono::steady_clock::now();
     if (last_underrun_.time_since_epoch().count() != 0 &&
-        now - last_underrun_ < std::chrono::seconds(3)) {
+        now - last_underrun_ < std::chrono::milliseconds(1200)) {
       return;
     }
     if (last_shrink_.time_since_epoch().count() != 0 &&
-        now - last_shrink_ < std::chrono::milliseconds(1000)) {
+        now - last_shrink_ < std::chrono::milliseconds(250)) {
       return;
     }
     /* Only shrink when we still have a small cushion — empty ring is risky. */
     int qms = (rate_ > 0 && ch_ > 0) ? (int)((count_ / ch_) * 1000L / rate_) : 0;
-    if (qms < 25) return;
+    if (qms < 20) return;
     last_shrink_ = now;
-    int next = max_queue_ms_ - 20;
+    int next = max_queue_ms_ - 20; /* 20ms / 250ms ≈ 80ms/s */
     if (next < base_queue_ms_) next = base_queue_ms_;
     max_queue_ms_ = next;
   }
@@ -193,11 +204,11 @@ class AudioOut {
     int cap_ms = max_queue_ms_;
     if (!primed_) {
       int p = PrimeNeedMsLocked();
-      if (cap_ms < p + 30) cap_ms = p + 30;
+      if (cap_ms < p + 20) cap_ms = p + 20;
     }
     int max_samples = ch_ * rate_ * cap_ms / 1000;
     /* Soft floor for trim safety — never force above the active cap. */
-    int floor_ms = max_queue_ms_ < 100 ? 50 : (max_queue_ms_ < 140 ? 80 : 100);
+    int floor_ms = max_queue_ms_ < 100 ? 35 : (max_queue_ms_ < 140 ? 60 : 100);
     if (floor_ms > max_queue_ms_) floor_ms = max_queue_ms_;
     if (max_samples < ch_ * rate_ * floor_ms / 1000) {
       max_samples = ch_ * rate_ * floor_ms / 1000;
@@ -206,7 +217,7 @@ class AudioOut {
     const bool snap = max_queue_ms_ <= 80;
     const int trim_at = snap ? max_samples : (max_samples + max_samples / 4);
     const int keep_ms =
-        max_queue_ms_ >= 160 ? 80 : (max_queue_ms_ >= 100 ? 50 : 40);
+        max_queue_ms_ >= 160 ? 80 : (max_queue_ms_ >= 100 ? 50 : 25);
     /* Never trim below prime threshold while still silent. */
     const int prime_keep = ch_ * rate_ * PrimeNeedMsLocked() / 1000;
     const int min_keep =
@@ -456,8 +467,8 @@ class AudioOut {
     int32_t burst =
         a.stream_getFramesPerBurst ? a.stream_getFramesPerBurst(stream) : 0;
     if (burst > 0 && a.stream_setBufferSizeInFrames) {
-      /* 3 bursts: leaner than 4; still above exclusive MMAP crackle zone. */
-      a.stream_setBufferSizeInFrames(stream, burst * 3);
+      /* 2 bursts: leaner sink; reopen path falls back if device crackles. */
+      a.stream_setBufferSizeInFrames(stream, burst * 2);
     }
     if (a.stream_requestStart(stream) != kAAudioOk) {
       a.stream_close(stream);
@@ -496,6 +507,8 @@ class AudioOut {
   bool primed_ = false;
   std::chrono::steady_clock::time_point last_underrun_{};
   std::chrono::steady_clock::time_point last_shrink_{};
+  std::chrono::steady_clock::time_point underrun_window_start_{};
+  int underrun_window_count_ = 0;
   Backend backend_ = Backend::None;
   AAudioStream* aaudio_stream_ = nullptr;
 
@@ -563,12 +576,16 @@ class Session {
     cb.on_audio = [](void* o, int rate, int ch, int, int64_t, const float* s,
                      int n) {
       auto* self = static_cast<Session*>(o);
+      void* p = nullptr;
       {
         std::lock_guard<std::mutex> lock(self->mu_);
         if (!self->player_) return;
+        p = self->player_;
       }
       self->audio_frames_.fetch_add(1);
       self->audio_.Push(s, n, ch, rate);
+      /* Drive catch-up rate from real PCM depth (not clock-drift alone). */
+      lixh_player_report_audio_queue_ms(p, self->audio_.QueuedMs());
     };
     cb.on_event = [](void* o, int type, int code, const char* msg) {
       if (type == LIXH_EVT_INFO && msg) {

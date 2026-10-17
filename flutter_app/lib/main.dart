@@ -886,7 +886,8 @@ class _PlayerPageState extends State<PlayerPage>
     }
     try {
       await PlaybackKeepAlive.stop();
-      await _player.setVideoEnabled(false);
+      // Prefer stop() alone — setVideoEnabled during teardown races the
+      // native join and could hang the UI on desktop.
       await _player.stop();
     } catch (e) {
       _appendLog('停止: ${formatResolveError(e)}');
@@ -1204,14 +1205,16 @@ class _Stage extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // Cover the stage (crop overflow) — avoid left/right letterbox bars.
+          // Fit center: scale uniformly into the stage. Portrait fills the
+          // phone column; landscape letterboxes instead of cropping the sides.
           final maxW = constraints.maxWidth;
           final maxH = constraints.maxHeight;
+          final safeAspect = aspect <= 0 ? 9 / 16 : aspect;
           var viewW = maxW;
-          var viewH = viewW / aspect;
-          if (viewH < maxH) {
+          var viewH = viewW / safeAspect;
+          if (viewH > maxH) {
             viewH = maxH;
-            viewW = viewH * aspect;
+            viewW = viewH * safeAspect;
           }
 
           return Stack(

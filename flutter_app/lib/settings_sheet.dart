@@ -124,11 +124,11 @@ class _SettingsSheetState extends State<_SettingsSheet> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: Icon(Icons.verified_user_outlined, color: signal),
-              title: Text('权益 / 授权', style: TextStyle(color: foam, fontSize: 14)),
+              title: Text('权益激活', style: TextStyle(color: foam, fontSize: 14)),
               subtitle: Text(
                 widget.licenseSession!.active
-                    ? '已激活 · 点此管理'
-                    : '未激活 · 输入授权码',
+                    ? '已开通 · 点此查看或续费'
+                    : '未开通 · 输入注册码或购买',
                 style: TextStyle(color: foam.withValues(alpha: 0.45), fontSize: 12),
               ),
               trailing: Icon(

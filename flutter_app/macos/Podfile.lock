@@ -1,0 +1,40 @@
+PODS:
+  - Flutter (1.0.0)
+  - FlutterMacOS (1.0.0)
+  - lixh_player (0.0.1):
+    - FlutterMacOS
+  - shared_preferences_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
+  - url_launcher_macos (0.0.1):
+    - FlutterMacOS
+
+DEPENDENCIES:
+  - Flutter (from `/Users/lixiaohong/AndroidStudioProjects/LiveCatch/flutter_app/macos/Flutter`)
+  - FlutterMacOS (from `Flutter/ephemeral`)
+  - lixh_player (from `Flutter/ephemeral/.symlinks/plugins/lixh_player/macos`)
+  - shared_preferences_foundation (from `Flutter/ephemeral/.symlinks/plugins/shared_preferences_foundation/darwin`)
+  - url_launcher_macos (from `Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos`)
+
+EXTERNAL SOURCES:
+  Flutter:
+    :path: "/Users/lixiaohong/AndroidStudioProjects/LiveCatch/flutter_app/macos/Flutter"
+  FlutterMacOS:
+    :path: Flutter/ephemeral
+  lixh_player:
+    :path: Flutter/ephemeral/.symlinks/plugins/lixh_player/macos
+  shared_preferences_foundation:
+    :path: Flutter/ephemeral/.symlinks/plugins/shared_preferences_foundation/darwin
+  url_launcher_macos:
+    :path: Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos
+
+SPEC CHECKSUMS:
+  Flutter: 9e5f652874bbf94d28db3a948430d45fa8f41553
+  FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
+  lixh_player: 5aea10477ccd3161dfeaeb68106eb49e0e24f806
+  shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
+  url_launcher_macos: f87a979182d112f911de6820aefddaf56ee9fbfd
+
+PODFILE CHECKSUM: b4e0c9d1a4c48d38b1e5ec8be70a77514c8b87f4
+
+COCOAPODS: 1.16.2

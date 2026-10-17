@@ -43,8 +43,8 @@ typedef struct LixhStats {
     uint64_t reconnects;
     int64_t last_video_pts_ms;
     int64_t last_audio_pts_ms;
-    /* Clock-drift / chase backlog (wall−PTS), NOT absolute live delay.
-       Absolute end-to-end latency needs a reliable wall-clock live epoch. */
+    /* Video demux tip − last presented PTS (ms). Absolute live delay needs a
+       wall-clock live epoch; this is catch-up backlog only. */
     int64_t input_buffer_ms;
     int decode_hw;
     uint64_t bytes_read;
@@ -52,7 +52,7 @@ typedef struct LixhStats {
     int video_height;
     /* Last successful present path: LIXH_PRESENT_*. */
     int present_mode;
-    /* 0=none, 1=soft (skip present), 2=hard (skip to keyframe). */
+    /* 0=none, 1=soft (continuous skip present), 2=hard (flush + skip). */
     int chase_mode;
 } LixhStats;
 
@@ -70,9 +70,12 @@ void lixh_player_set_headers(void *p, const char *headers);
    while playing, decoder is opened on the play thread. Packets are discarded
    while sink is 0. */
 void lixh_player_set_video_sink(void *p, int enabled);
-/* Max audio catch-up rate (1.0 = off). Actual rate adapts to clock drift;
-   listen often uses 1.3 as the ceiling. Clamped to ~1.0–1.5. */
+/* Max audio catch-up rate (1.0 = off). Actual rate adapts to PCM queue depth
+   when reported; else clock drift. Listen often uses 1.3 as the ceiling.
+   Clamped to ~1.0–1.5. */
 void lixh_player_set_play_rate(void *p, float rate);
+/* Platform audio sink reports queued PCM depth so catch-up can track backlog. */
+void lixh_player_report_audio_queue_ms(void *p, int queue_ms);
 /* Android only: jobject Surface for MediaCodec zero-copy output.
    Pass NULL to clear. Must be set before open (or after stop, before re-open).
    Ownership of the JNI GlobalRef stays with the caller. */

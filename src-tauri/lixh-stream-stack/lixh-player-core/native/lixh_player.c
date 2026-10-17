@@ -81,11 +81,14 @@ typedef struct LixhPlayer {
     atomic_int video_height;
     int64_t target_latency_ms;
     int64_t max_latency_ms;
-    /* 0=none, 1=soft (decode but skip present), 2=hard (next frame re-anchors). */
+    /* 0=none, 1=soft (continuous skip present), 2=hard (flush + skip to tip). */
     int chase_mode;
-    int chase_drop_streak;
-    /* After listen→picture: present every frame for a while (no chase drops). */
+    /* Play-thread flush request after entering CHASE_HARD. */
+    int chase_need_flush;
+    /* After listen→picture: present every frame briefly (no chase drops). */
     int64_t video_join_grace_until_ms;
+    /* Platform PCM queue depth (ms). -1 = not reported → drift fallback. */
+    atomic_int audio_out_queue_ms;
     /* Consecutive on_video <0 before committing to demux-thread SW download. */
     int d3d11_fail_streak;
     int sample_rate;
@@ -333,9 +336,8 @@ static void video_anchor_set(LixhPlayer *p, int64_t pts) {
     atomic_store_explicit(&p->video_anchor_wall_ms, now_ms(), memory_order_release);
 }
 
-/* wall−PTS drift since video anchor. Measures catch-up backlog / clock skew,
-   not absolute delay to the live site. */
-static int64_t video_chase_lag_ms(LixhPlayer *p, int64_t pts) {
+/* wall−PTS drift since video anchor — used for present pacing (sleep2-like). */
+static int64_t video_pace_lag_ms(LixhPlayer *p, int64_t pts) {
     int64_t anchor = atomic_load_explicit(&p->video_anchor_pts_ms, memory_order_acquire);
     if (anchor == AV_NOPTS_VALUE || pts == AV_NOPTS_VALUE) return 0;
     int64_t wall_elapsed = now_ms() - atomic_load_explicit(&p->video_anchor_wall_ms, memory_order_acquire);
@@ -351,62 +353,72 @@ static int64_t audio_drift_ms(LixhPlayer *p, int64_t pts) {
     return wall_elapsed - media_elapsed;
 }
 
-/* Soft: skip a few presents then re-anchor. Hard: skip one present, next shows.
-   Never require decoded KEY flags (MediaCodec often omits them). */
+/* Demux tip − frame PTS: real catch-up backlog (stable when presentation freezes). */
+static int64_t video_backlog_ms(LixhPlayer *p, int64_t pts) {
+    int64_t tip = atomic_load_explicit(&p->latest_video_pkt_pts_ms, memory_order_acquire);
+    if (tip == AV_NOPTS_VALUE || pts == AV_NOPTS_VALUE) return 0;
+    int64_t b = tip - pts;
+    return b > 0 ? b : 0;
+}
+
+/* Soft: keep skipping presents until backlog ≤ target.
+   Hard: flush decoder then skip until frame is within target of tip.
+   Never require decoded KEY flags (Douyin FLV / MediaCodec often omit them). */
 static int live_chase_should_drop(LixhPlayer *p, int64_t pts, int is_key) {
     (void)is_key;
     int64_t now = now_ms();
-    /* Listen→picture join: show every frame so Surface gets a first image and
-       lag math is not poisoned by decoder warm-up wall time. */
+    /* Listen→picture join: show every frame so Surface gets a first image. */
     if (p->video_join_grace_until_ms > 0 && now < p->video_join_grace_until_ms) {
         video_anchor_set(p, pts);
         p->chase_mode = CHASE_NONE;
-        p->chase_drop_streak = 0;
         return 0;
     }
 
     if (atomic_load_explicit(&p->video_anchor_pts_ms, memory_order_acquire) == AV_NOPTS_VALUE) {
         video_anchor_set(p, pts);
         p->chase_mode = CHASE_NONE;
-        p->chase_drop_streak = 0;
         return 0;
     }
+
+    int64_t backlog = video_backlog_ms(p, pts);
+    int64_t hard_th = p->max_latency_ms * 4;
+    if (hard_th < 800) hard_th = 800;
 
     if (p->chase_mode == CHASE_HARD) {
-        video_anchor_set(p, pts);
-        p->chase_mode = CHASE_NONE;
-        p->chase_drop_streak = 0;
-        return 0;
-    }
-
-    int64_t live_lag = video_chase_lag_ms(p, pts);
-    if (live_lag > p->max_latency_ms) {
-        /* Drop this present; next frame re-anchors (present-only hard). */
-        p->chase_mode = CHASE_HARD;
-        p->chase_drop_streak = 1;
+        int64_t tip = atomic_load_explicit(&p->latest_video_pkt_pts_ms, memory_order_acquire);
+        int64_t want = (tip != AV_NOPTS_VALUE) ? (tip - p->target_latency_ms) : pts;
+        if (pts >= want) {
+            video_anchor_set(p, pts);
+            p->chase_mode = CHASE_NONE;
+            return 0;
+        }
         atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
         return 1;
     }
-    if (p->target_latency_ms > 0 && live_lag > p->target_latency_ms) {
-        p->chase_mode = CHASE_SOFT;
-        int over = (int)(live_lag - p->target_latency_ms);
-        int span = (int)(p->max_latency_ms - p->target_latency_ms);
-        if (span < 1) span = 1;
-        int need_streak = 6 - (over * 3) / span;
-        if (need_streak < 2) need_streak = 2;
-        if (need_streak > 6) need_streak = 6;
-        if (p->chase_drop_streak < need_streak) {
-            p->chase_drop_streak++;
-            atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
-            return 1;
-        }
-        video_anchor_set(p, pts);
-        p->chase_mode = CHASE_NONE;
-        p->chase_drop_streak = 0;
-        return 0;
+
+    if (backlog > hard_th) {
+        p->chase_mode = CHASE_HARD;
+        p->chase_need_flush = 1;
+        atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
+        return 1;
     }
-    p->chase_mode = CHASE_NONE;
-    p->chase_drop_streak = 0;
+
+    if (p->chase_mode == CHASE_SOFT) {
+        if (backlog <= p->target_latency_ms) {
+            video_anchor_set(p, pts);
+            p->chase_mode = CHASE_NONE;
+            return 0;
+        }
+        atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
+        return 1;
+    }
+
+    /* Hysteresis: enter soft only above max, exit below target. */
+    if (p->max_latency_ms > 0 && backlog > p->max_latency_ms) {
+        p->chase_mode = CHASE_SOFT;
+        atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
+        return 1;
+    }
     return 0;
 }
 
@@ -437,6 +449,15 @@ static void deliver_video(LixhPlayer *p, AVFrame *f, AVRational tb) {
         release_mc_buffer(f, 0);
 #endif
         return;
+    }
+    /* Present pacing (base sleep2): sleep only when ahead; never when behind. */
+    if (p->chase_mode == CHASE_NONE) {
+        int64_t pace = video_pace_lag_ms(p, pts); /* wall−media; <0 ⇒ ahead */
+        if (pace < -2) {
+            int64_t ahead = -pace;
+            if (ahead > 40) ahead = 40;
+            av_usleep((unsigned)(ahead * 1000));
+        }
     }
     atomic_store_explicit(&p->last_video_pts_ms, pts, memory_order_release);
     atomic_fetch_add_explicit(&p->video_frames, 1, memory_order_relaxed);
@@ -585,20 +606,23 @@ static int ensure_audio_speed(LixhPlayer *p, size_t needed) {
     return 0;
 }
 
-/* Settings value is a ceiling. Stay at 1.0x when already live; ramp when
-   audio clock drift shows backlog. Open burst uses full ceiling ~400ms. */
+/* Settings value is a ceiling. Prefer PCM queue depth (Android reports it);
+   fall back to audio clock drift when queue is unknown (Windows/macOS). */
 static int effective_rate_milli(LixhPlayer *p, int64_t pts) {
     int max_milli = atomic_load_explicit(&p->play_rate_milli, memory_order_acquire);
     if (max_milli <= 1010) return 1000;
-    int64_t wall0 = atomic_load_explicit(&p->audio_anchor_wall_ms, memory_order_acquire);
-    int64_t age = now_ms() - wall0;
-    if (age >= 0 && age < 400) return max_milli;
+    int span = max_milli - 1000;
+    int q = atomic_load_explicit(&p->audio_out_queue_ms, memory_order_acquire);
+    if (q >= 0) {
+        /* Empty/lean queue stays 1.0x — speeding up an underrun makes it worse.
+           Ramp once depth is ~30ms above a 40ms listen base. */
+        if (q <= 70) return 1000;
+        if (q < 110) return 1000 + (int)(span * (q - 70) / 40);
+        return max_milli;
+    }
     int64_t drift = audio_drift_ms(p, pts);
     if (drift < 80) return 1000;
-    if (drift < 200) {
-        int span = max_milli - 1000;
-        return 1000 + (int)(span * (drift - 80) / 120);
-    }
+    if (drift < 200) return 1000 + (int)(span * (drift - 80) / 120);
     return max_milli;
 }
 
@@ -736,10 +760,11 @@ void *lixh_player_create(const LixhCallbacks *cb) {
     atomic_init(&p->latest_video_pkt_pts_ms, AV_NOPTS_VALUE);
     /* Listen-first default: mild catch-up (秒听 uses ~1.3x). */
     atomic_init(&p->play_rate_milli, 1300);
+    atomic_init(&p->audio_out_queue_ms, -1);
     p->target_latency_ms = 100;
     p->max_latency_ms = 320;
     p->chase_mode = CHASE_NONE;
-    p->chase_drop_streak = 0;
+    p->chase_need_flush = 0;
     p->video_join_grace_until_ms = 0;
     return p;
 }
@@ -774,7 +799,7 @@ int lixh_player_open(void *opaque, const char *url) {
     atomic_store_explicit(&p->last_audio_pts_ms, AV_NOPTS_VALUE, memory_order_release);
     atomic_store_explicit(&p->latest_video_pkt_pts_ms, AV_NOPTS_VALUE, memory_order_release);
     p->chase_mode = CHASE_NONE;
-    p->chase_drop_streak = 0;
+    p->chase_need_flush = 0;
     int rc = open_input(p);
     if (rc < 0) { atomic_store_explicit(&p->state, LIXH_STATE_ERROR, memory_order_release); emit(p, LIXH_EVT_ERROR, rc, av_err2str(rc)); free_player_media(p); return rc; }
     return 0;
@@ -811,7 +836,7 @@ int lixh_player_play(void *opaque) {
                 atomic_store_explicit(&p->last_audio_pts_ms, AV_NOPTS_VALUE, memory_order_release);
                 atomic_store_explicit(&p->latest_video_pkt_pts_ms, AV_NOPTS_VALUE, memory_order_release);
                 p->chase_mode = CHASE_NONE;
-                p->chase_drop_streak = 0;
+                p->chase_need_flush = 0;
                 p->d3d11_fail_streak = 0;
                 rc = 0; continue;
             }
@@ -826,7 +851,7 @@ int lixh_player_play(void *opaque) {
                 } else {
                     emit(p, LIXH_EVT_INFO, p->hw_kind, "video decoder opened");
                     /* Extra grace once the decoder is actually up. */
-                    p->video_join_grace_until_ms = now_ms() + 2500;
+                    p->video_join_grace_until_ms = now_ms() + 300;
                 }
             }
             atomic_store_explicit(&p->direct_d3d11, 0, memory_order_release);
@@ -863,6 +888,11 @@ int lixh_player_play(void *opaque) {
                flags are unreliable on Douyin FLV and starved MediaCodec. */
         }
         if (pkt->stream_index == p->vstream || pkt->stream_index == p->astream) decode_packet(p, pkt);
+        /* Hard chase: drop decoder backlog on the play thread (not the UI). */
+        if (p->chase_need_flush && p->vdec) {
+            avcodec_flush_buffers(p->vdec);
+            p->chase_need_flush = 0;
+        }
         av_packet_unref(pkt);
     }
     av_packet_free(&pkt);
@@ -911,6 +941,14 @@ void lixh_player_set_play_rate(void *opaque, float rate) {
     atomic_store_explicit(&p->play_rate_milli, milli, memory_order_release);
 }
 
+void lixh_player_report_audio_queue_ms(void *opaque, int queue_ms) {
+    LixhPlayer *p = (LixhPlayer *)opaque;
+    if (!p) return;
+    if (queue_ms < 0) queue_ms = 0;
+    if (queue_ms > 5000) queue_ms = 5000;
+    atomic_store_explicit(&p->audio_out_queue_ms, queue_ms, memory_order_release);
+}
+
 void lixh_player_set_video_sink(void *opaque, int enabled) {
     LixhPlayer *p = (LixhPlayer *)opaque;
     if (!p) return;
@@ -936,8 +974,8 @@ void lixh_player_set_video_sink(void *opaque, int enabled) {
         atomic_store_explicit(&p->last_video_pts_ms, AV_NOPTS_VALUE, memory_order_release);
         atomic_store_explicit(&p->latest_video_pkt_pts_ms, AV_NOPTS_VALUE, memory_order_release);
         p->chase_mode = CHASE_NONE;
-        p->chase_drop_streak = 0;
-        p->video_join_grace_until_ms = now_ms() + 3000;
+        p->chase_need_flush = 0;
+        p->video_join_grace_until_ms = now_ms() + 500;
         atomic_store_explicit(&p->direct_d3d11, 0, memory_order_release);
         p->d3d11_fail_streak = 0;
     }
@@ -968,27 +1006,20 @@ int lixh_player_get_stats(void *opaque, LixhStats *out) {
     out->video_width = atomic_load_explicit(&p->video_width, memory_order_relaxed);
     out->video_height = atomic_load_explicit(&p->video_height, memory_order_relaxed);
     out->chase_mode = p->chase_mode;
-    /* Prefer video chase lag when picture is on; else audio clock drift.
-       Neither is absolute live-site latency. */
+    /* Picture: demux tip − last present. Listen: PCM queue, else audio drift. */
     int64_t lag = 0;
     int sink = atomic_load_explicit(&p->video_sink, memory_order_acquire);
     int64_t now = now_ms();
     int in_grace = (p->video_join_grace_until_ms > 0 && now < p->video_join_grace_until_ms);
     if (sink && out->last_video_pts_ms != AV_NOPTS_VALUE) {
-        /* During chase, frozen present PTS inflates wall-drift — use demux tip. */
-        int64_t tip = atomic_load_explicit(&p->latest_video_pkt_pts_ms, memory_order_acquire);
-        if (p->chase_mode != CHASE_NONE && tip != AV_NOPTS_VALUE) {
-            int64_t behind = tip - out->last_video_pts_ms;
-            if (behind < 0) behind = 0;
-            lag = behind;
-        } else {
-            lag = video_chase_lag_ms(p, out->last_video_pts_ms);
-        }
+        lag = video_backlog_ms(p, out->last_video_pts_ms);
     } else if (sink) {
-        /* Picture on but no presented frame yet — do not show audio drift as 追. */
         lag = 0;
-    } else if (out->last_audio_pts_ms != AV_NOPTS_VALUE) {
-        lag = audio_drift_ms(p, out->last_audio_pts_ms);
+    } else {
+        int q = atomic_load_explicit(&p->audio_out_queue_ms, memory_order_acquire);
+        if (q >= 0) lag = q;
+        else if (out->last_audio_pts_ms != AV_NOPTS_VALUE)
+            lag = audio_drift_ms(p, out->last_audio_pts_ms);
     }
     if (lag < 0) lag = 0;
     if (in_grace && lag > 500) lag = 500;

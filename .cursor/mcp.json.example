@@ -3,7 +3,8 @@
     "rewardplay": {
       "url": "http://101.35.40.114/mcp",
       "headers": {
-        "Authorization": "Bearer ${env:REWARDPLAY_MCP_TOKEN}"
+        "Authorization": "Bearer ${env:REWARDPLAY_MCP_TOKEN}",
+        "X-RewardPlay-Integration-Token": "${env:REWARDPLAY_INTEGRATION_TOKEN}"
       }
     }
   }
