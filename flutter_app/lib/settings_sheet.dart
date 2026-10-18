@@ -126,9 +126,14 @@ class _SettingsSheetState extends State<_SettingsSheet> {
               leading: Icon(Icons.verified_user_outlined, color: signal),
               title: Text('权益激活', style: TextStyle(color: foam, fontSize: 14)),
               subtitle: Text(
-                widget.licenseSession!.active
-                    ? '已开通 · 点此查看或续费'
-                    : '未开通 · 输入注册码或购买',
+                () {
+                  final s = widget.licenseSession!;
+                  if (!s.active && !s.hasCode) return '未开通 · 输入注册码或购买';
+                  if (s.isExpired) return '已到期 · ${s.expiryDisplay}';
+                  final pkg = s.packageName?.trim();
+                  final head = (pkg != null && pkg.isNotEmpty) ? pkg : '已开通';
+                  return '$head · 到期 ${s.expiryDisplay}';
+                }(),
                 style: TextStyle(color: foam.withValues(alpha: 0.45), fontSize: 12),
               ),
               trailing: Icon(

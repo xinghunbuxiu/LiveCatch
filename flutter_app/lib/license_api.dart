@@ -123,17 +123,86 @@ class LicenseCheckoutContext {
   }
 }
 
+/// Parsed activate / heartbeat / detail payload from Open License.
 class LicenseBindResult {
   const LicenseBindResult({
     required this.raw,
     this.message,
+    this.success = true,
+    this.result,
+    this.packageCode,
+    this.packageName,
+    this.expiresAt,
+    this.boundDeviceId,
+    this.boundDeviceCount,
+    this.maxDevices,
+    this.statusLabel,
   });
 
   final Map<String, dynamic> raw;
   final String? message;
+  final bool success;
+  final String? result;
+  final String? packageCode;
+  final String? packageName;
+  final DateTime? expiresAt;
+  final String? boundDeviceId;
+  final int? boundDeviceCount;
+  final int? maxDevices;
+  final String? statusLabel;
+
+  factory LicenseBindResult.fromData(Map<String, dynamic> data, {String? fallbackMessage}) {
+    final success = data['success'] != false;
+    final result = (data['activateResult'] ?? data['heartbeatResult'] ?? data['unbindResult'])
+        ?.toString();
+    return LicenseBindResult(
+      raw: data,
+      message: fallbackMessage ?? data['message']?.toString() ?? result,
+      success: success,
+      result: result,
+      packageCode: _nonEmpty(data['packageCode']),
+      packageName: _nonEmpty(data['packageName']),
+      expiresAt: parseExpiresAt(data['expiresAt']),
+      boundDeviceId: _nonEmpty(data['boundDeviceId']),
+      boundDeviceCount: _asInt(data['boundDeviceCount']),
+      maxDevices: _asInt(data['maxDevices']),
+      statusLabel: _nonEmpty(data['status']),
+    );
+  }
+
+  static String? _nonEmpty(Object? v) {
+    final s = v?.toString().trim();
+    if (s == null || s.isEmpty) return null;
+    return s;
+  }
+
+  static int? _asInt(Object? v) => v is int ? v : int.tryParse('$v');
+
+  /// Open API returns `yyyy-MM-dd HH:mm:ss` (or ISO). Already includes admin extensions.
+  static DateTime? parseExpiresAt(Object? raw) {
+    if (raw == null) return null;
+    final s = raw.toString().trim();
+    if (s.isEmpty) return null;
+    final iso = DateTime.tryParse(s.replaceFirst(' ', 'T'));
+    if (iso != null) return iso;
+    final m = RegExp(r'^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$')
+        .firstMatch(s);
+    if (m == null) return null;
+    return DateTime(
+      int.parse(m.group(1)!),
+      int.parse(m.group(2)!),
+      int.parse(m.group(3)!),
+      int.parse(m.group(4)!),
+      int.parse(m.group(5)!),
+      int.parse(m.group(6) ?? '0'),
+    );
+  }
 }
 
 /// Open License client (Bearer Integration Token).
+///
+/// Activate / heartbeat / unbind **require** a stable [deviceId] (4–128 chars,
+/// no placeholders) per RewardPlay Open API.
 class LicenseApi {
   LicenseApi({
     http.Client? client,
@@ -182,7 +251,7 @@ class LicenseApi {
     final ok = code == 200 || code == '200';
     if (!ok) {
       throw LicenseApiException(
-        (body['message'] ?? '请求失败').toString(),
+        _friendlyServerMessage(body['message']?.toString() ?? '请求失败'),
         code: code is int ? code : res.statusCode,
       );
     }
@@ -190,6 +259,27 @@ class LicenseApi {
     if (data is Map<String, dynamic>) return data;
     if (data is Map) return Map<String, dynamic>.from(data);
     return body;
+  }
+
+  static String _friendlyServerMessage(String raw) {
+    switch (raw) {
+      case 'bound':
+      case 'already_bound_current_device':
+        return '激活成功';
+      case 'ok':
+        return '权益有效';
+      case 'device_mismatch':
+        return '注册码已绑定其他设备，请先解绑或联系客服';
+      case 'device_limit_reached':
+        return '绑定设备数已达上限';
+      case 'not_bound':
+        return '本机尚未绑定该注册码';
+      case 'unbound':
+      case 'already_unbound':
+        return '已解绑';
+      default:
+        return raw;
+    }
   }
 
   Future<LicenseIntegrationStatus> integrationStatus() async {
@@ -215,6 +305,7 @@ class LicenseApi {
     String? deviceName,
   }) async {
     _ensureToken();
+    final id = requireDeviceId(deviceId);
     final uri = Uri.parse('$_baseUrl/api/open/license/activate');
     final res = await _client.post(
       uri,
@@ -222,12 +313,24 @@ class LicenseApi {
       body: jsonEncode({
         'projectCode': _projectCode,
         'code': code.trim(),
-        'deviceId': deviceId,
+        'deviceId': id,
         if (deviceName != null && deviceName.isNotEmpty) 'deviceName': deviceName,
       }),
     );
     final data = await _decode(res);
-    return LicenseBindResult(raw: data, message: data['message']?.toString());
+    final result = LicenseBindResult.fromData(
+      data,
+      fallbackMessage: _friendlyServerMessage(
+        (data['activateResult'] ?? data['message'] ?? '激活成功').toString(),
+      ),
+    );
+    if (!result.success) {
+      throw LicenseApiException(
+        result.message ?? '激活失败',
+        code: res.statusCode,
+      );
+    }
+    return result;
   }
 
   Future<LicenseBindResult> heartbeat({
@@ -236,6 +339,7 @@ class LicenseApi {
     String? deviceName,
   }) async {
     _ensureToken();
+    final id = requireDeviceId(deviceId);
     final uri = Uri.parse('$_baseUrl/api/open/license/heartbeat');
     final res = await _client.post(
       uri,
@@ -243,12 +347,24 @@ class LicenseApi {
       body: jsonEncode({
         'projectCode': _projectCode,
         'code': code.trim(),
-        'deviceId': deviceId,
+        'deviceId': id,
         if (deviceName != null && deviceName.isNotEmpty) 'deviceName': deviceName,
       }),
     );
     final data = await _decode(res);
-    return LicenseBindResult(raw: data, message: data['message']?.toString());
+    final result = LicenseBindResult.fromData(
+      data,
+      fallbackMessage: _friendlyServerMessage(
+        (data['heartbeatResult'] ?? data['message'] ?? '权益有效').toString(),
+      ),
+    );
+    if (!result.success) {
+      throw LicenseApiException(
+        result.message ?? '校验失败',
+        code: res.statusCode,
+      );
+    }
+    return result;
   }
 
   Future<void> unbind({
@@ -256,6 +372,7 @@ class LicenseApi {
     required String deviceId,
   }) async {
     _ensureToken();
+    final id = requireDeviceId(deviceId);
     final uri = Uri.parse('$_baseUrl/api/open/license/unbind');
     final res = await _client.post(
       uri,
@@ -263,13 +380,13 @@ class LicenseApi {
       body: jsonEncode({
         'projectCode': _projectCode,
         'code': code.trim(),
-        'deviceId': deviceId,
+        'deviceId': id,
       }),
     );
     await _decode(res);
   }
 
-  Future<Map<String, dynamic>> codeDetail({required String code}) async {
+  Future<LicenseBindResult> codeDetail({required String code}) async {
     _ensureToken();
     final uri = Uri.parse('$_baseUrl/api/open/license/code/detail').replace(
       queryParameters: {
@@ -278,13 +395,38 @@ class LicenseApi {
       },
     );
     final res = await _client.get(uri, headers: _headers);
-    return _decode(res);
+    final data = await _decode(res);
+    return LicenseBindResult.fromData(data);
+  }
+
+  /// Align with RewardPlay `LicenseDeviceRules.require`.
+  static String requireDeviceId(String? raw) {
+    final deviceId = (raw ?? '').trim();
+    if (deviceId.length < 4 || deviceId.length > 128) {
+      throw LicenseApiException('本机编号无效，请重启应用后重试');
+    }
+    const placeholders = {
+      'unknown',
+      'null',
+      'undefined',
+      'n/a',
+      'na',
+      'none',
+      'test',
+      'device',
+      '0',
+      '-',
+    };
+    if (placeholders.contains(deviceId.toLowerCase())) {
+      throw LicenseApiException('本机编号无效，请重启应用后重试');
+    }
+    return deviceId;
   }
 
   void _ensureToken() {
     if (_token.isEmpty) {
       throw LicenseApiException(
-        '未配置 REWARDPLAY_INTEGRATION_TOKEN（--dart-define）',
+        '暂时无法联网校验，请稍后重试或联系客服',
       );
     }
   }

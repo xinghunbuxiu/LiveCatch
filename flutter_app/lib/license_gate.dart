@@ -83,6 +83,13 @@ Future<LicenseGateResult> ensureLicenseForPlayback({
 
   try {
     final next = await session.heartbeat(api);
+    if (next.isExpired) {
+      return LicenseGateResult.blocked(
+        session: next.copyWith(active: false),
+        reason: LicenseGateReason.expired,
+        message: '权益已于 ${next.expiryDisplay} 到期，请续费后再用',
+      );
+    }
     return LicenseGateResult.ok(next);
   } on LicenseApiException catch (e) {
     final msg = e.message;

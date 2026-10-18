@@ -51,6 +51,19 @@ class _LicenseSheetState extends State<_LicenseSheet> {
     _session = widget.initial;
     _codeCtrl = TextEditingController(text: _session.code ?? '');
     _loadPackages();
+    _refreshEntitlement();
+  }
+
+  /// Soft heartbeat so package / expiresAt (incl. admin extensions) stay current.
+  Future<void> _refreshEntitlement() async {
+    if (!_session.hasCode || !widget.api.hasToken) return;
+    try {
+      final next = await _session.heartbeat(widget.api);
+      if (!mounted) return;
+      setState(() => _session = next);
+    } catch (_) {
+      // Keep cached package/expiry; gate will hard-fail on play if needed.
+    }
   }
 
   @override
@@ -201,30 +214,12 @@ class _LicenseSheetState extends State<_LicenseSheet> {
             Text(
               _session.active
                   ? '已开通 · 可解析并收听直播'
-                  : '输入注册码即可开通，或先选套餐购买',
+                  : '输入注册码即可开通（激活会绑定本机设备码）',
               style: TextStyle(fontSize: 13, color: foam.withValues(alpha: 0.55)),
             ),
             const SizedBox(height: 16),
-            if (_session.active) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: signal.withValues(alpha: 0.35)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.verified, color: signal, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '权益有效'
-                        '${_session.lastMessage != null && _session.lastMessage!.isNotEmpty ? ' · ${_session.lastMessage}' : ''}',
-                        style: TextStyle(fontSize: 13, color: signal),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+            if (_session.hasCode) ...[
+              _EntitlementCard(session: _session, foam: foam, signal: signal),
               const SizedBox(height: 14),
             ],
             Text(
@@ -360,28 +355,45 @@ class _LicenseSheetState extends State<_LicenseSheet> {
               ),
             ],
             const SizedBox(height: 8),
+            Text(
+              '本机设备码',
+              style: TextStyle(
+                color: foam,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '激活与校验都会带上此设备码，一机一码绑定',
+              style: TextStyle(fontSize: 12, color: foam.withValues(alpha: 0.4)),
+            ),
+            const SizedBox(height: 6),
             InkWell(
               onTap: _copyDeviceId,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                decoration: BoxDecoration(
+                  border: Border.all(color: foam.withValues(alpha: 0.15)),
+                ),
                 child: Row(
                   children: [
-                    Icon(Icons.smartphone, size: 14, color: foam.withValues(alpha: 0.35)),
-                    const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        '本机编号（客服用）· 点按复制',
+                        _session.deviceId,
                         style: TextStyle(
-                          fontSize: 11,
-                          color: foam.withValues(alpha: 0.35),
+                          fontSize: 12,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                          color: foam.withValues(alpha: 0.7),
                         ),
                       ),
                     ),
-                    Icon(Icons.copy, size: 14, color: foam.withValues(alpha: 0.35)),
+                    Icon(Icons.copy, size: 16, color: foam.withValues(alpha: 0.45)),
                   ],
                 ),
               ),
             ),
+            const SizedBox(height: 6),
             Text(
               projectName,
               style: TextStyle(fontSize: 10, color: foam.withValues(alpha: 0.25)),
@@ -410,6 +422,77 @@ class _LicenseSheetState extends State<_LicenseSheet> {
       return raw.replaceFirst('Exception:', '').trim();
     }
     return raw;
+  }
+}
+
+class _EntitlementCard extends StatelessWidget {
+  const _EntitlementCard({
+    required this.session,
+    required this.foam,
+    required this.signal,
+  });
+
+  final LicenseSession session;
+  final Color foam;
+  final Color signal;
+
+  @override
+  Widget build(BuildContext context) {
+    final expired = session.isExpired;
+    final accent = expired ? Colors.orange.shade200 : signal;
+    final package = session.packageName?.trim();
+    final remain = session.remainingLabel;
+    final devices = session.maxDevices;
+    final bound = session.boundDeviceCount;
+    final lines = <String>[
+      if (package != null && package.isNotEmpty) package,
+      '到期 ${session.expiryDisplay}',
+      if (remain != null) remain,
+      if (devices != null && devices > 0)
+        '设备 ${bound ?? 0}/$devices',
+    ];
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        border: Border.all(color: accent.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            expired ? Icons.schedule : Icons.verified,
+            color: accent,
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  expired
+                      ? '权益已到期'
+                      : (session.active ? '权益有效' : '未激活'),
+                  style: TextStyle(fontSize: 13, color: accent, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  lines.join(' · '),
+                  style: TextStyle(fontSize: 12, color: foam.withValues(alpha: 0.65)),
+                ),
+                if (!expired) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '后台延期后到期时间会自动更新',
+                    style: TextStyle(fontSize: 11, color: foam.withValues(alpha: 0.4)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
