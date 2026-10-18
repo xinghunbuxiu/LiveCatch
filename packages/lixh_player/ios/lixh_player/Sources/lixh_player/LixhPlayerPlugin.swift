@@ -74,8 +74,10 @@ public class LixhPlayerPlugin: NSObject, FlutterPlugin {
             code: "play_failed", message: error.localizedDescription, details: nil))
       }
     case "stop":
-      engine.stop()
-      result(true)
+      DispatchQueue.global(qos: .userInitiated).async {
+        engine.stop()
+        DispatchQueue.main.async { result(true) }
+      }
     case "setVideoEnabled":
       let args = call.arguments as? [String: Any]
       let enabled = (args?["enabled"] as? Bool) ?? false

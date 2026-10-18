@@ -60,3 +60,6 @@ src-tauri/lixh-stream-stack/runtime/**
 !src-tauri/lixh-stream-stack/sdk/**/manifest/**
 !src-tauri/lixh-stream-stack/runtime/**/manifest/
 !src-tauri/lixh-stream-stack/runtime/**/manifest/**
+
+# Local MCP secrets (use mcp.json.example)
+.cursor/mcp.json

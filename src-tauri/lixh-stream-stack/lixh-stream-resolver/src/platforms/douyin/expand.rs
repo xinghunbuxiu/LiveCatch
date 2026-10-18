@@ -1,12 +1,12 @@
 //! Expand Douyin share short links to `https://live.douyin.com/{web_rid}`.
 //!
-//! `platforms-parser` only accepts `live.douyin.com/{web_rid}`. Share cards use
-//! `v.douyin.com/...` which 302 to `webcast.amemv.com/.../reflow/{room_id}`.
+//! Share cards use `v.douyin.com/...` which 302 to
+//! `webcast.amemv.com/.../reflow/{room_id}` — expand before web enter.
 
 use anyhow::{anyhow, Context, Result};
 use reqwest::header::{ACCEPT, LOCATION, REFERER, USER_AGENT};
-use reqwest::redirect::Policy;
 use reqwest::Client;
+use crate::http_client;
 use serde_json::Value;
 use url::Url;
 
@@ -178,42 +178,7 @@ pub fn web_rid_from_reflow_json(value: &Value) -> Option<String> {
 
 /// HTTP client that does **not** follow redirects (needed to read short-link Location).
 pub fn no_redirect_client() -> Result<Client> {
-    #[cfg(target_os = "android")]
-    {
-        use rustls::ClientConfig;
-        use rustls::crypto::aws_lc_rs;
-        use std::sync::{Arc, OnceLock};
-
-        static PROVIDER: OnceLock<()> = OnceLock::new();
-        PROVIDER.get_or_init(|| {
-            let _ = aws_lc_rs::default_provider().install_default();
-        });
-
-        let mut roots = rustls::RootCertStore::empty();
-        roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
-        let provider = Arc::new(aws_lc_rs::default_provider());
-        let tls = ClientConfig::builder_with_provider(provider)
-            .with_safe_default_protocol_versions()
-            .context("TLS protocol versions")?
-            .with_root_certificates(roots)
-            .with_no_client_auth();
-
-        Client::builder()
-            .use_preconfigured_tls(tls)
-            .redirect(Policy::none())
-            .timeout(std::time::Duration::from_secs(30))
-            .no_proxy()
-            .build()
-            .context("reqwest no-redirect client")
-    }
-    #[cfg(not(target_os = "android"))]
-    {
-        use platforms_parser::extractor::create_client_builder;
-        create_client_builder(None)
-            .redirect(Policy::none())
-            .build()
-            .context("reqwest no-redirect client")
-    }
+    http_client::build_no_redirect_client()
 }
 
 #[cfg(test)]

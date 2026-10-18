@@ -1,4 +1,5 @@
 # CocoaPods preferred over SPM for monorepo FFmpeg (same approach as iOS).
+# Trunk CDN: use Tsinghua mirror via `pod repo add-cdn trunk …` (jsdelivr SSL often fails in CN).
 platform :osx, '12.0'
 
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
@@ -32,6 +33,10 @@ flutter_macos_podfile_setup
 target 'Runner' do
   use_frameworks!
   use_modular_headers!
+
+  # darwin plugins declare `s.ios.dependency 'Flutter'`; resolve locally so
+  # CocoaPods never queries Specs CDN (jsdelivr SSL often fails in CN).
+  pod 'Flutter', :path => File.join(__dir__, 'Flutter')
 
   flutter_install_all_macos_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do

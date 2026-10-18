@@ -11,16 +11,18 @@
 
 static CVPixelBufferRef LixhUploadSoftwareFrame(const AVFrame *f) {
   if (!f || f->width <= 0 || f->height <= 0 || !f->data[0]) return NULL;
-  OSType cvfmt = 0;
-  if (f->format == AV_PIX_FMT_YUV420P || f->format == AV_PIX_FMT_YUVJ420P)
-    cvfmt = kCVPixelFormatType_420YpCbCr8Planar;
-  else if (f->format == AV_PIX_FMT_NV12)
-    cvfmt = kCVPixelFormatType_420YpCbCr8BiPlanarFullRange;
-  else
-    return NULL;
+  // Flutter's macOS texture only accepts bi-planar 420 (NV12) or BGRA.
+  // Planar I420 ('y420') is logged as "Unsupported pixel format" and never drawn.
+  const int i420 = f->format == AV_PIX_FMT_YUV420P || f->format == AV_PIX_FMT_YUVJ420P;
+  const int nv12 = f->format == AV_PIX_FMT_NV12;
+  if (!i420 && !nv12) return NULL;
   CVPixelBufferRef pix = NULL;
-  NSDictionary *attrs = @{(id)kCVPixelBufferIOSurfacePropertiesKey : @{}};
-  if (CVPixelBufferCreate(kCFAllocatorDefault, f->width, f->height, cvfmt,
+  NSDictionary *attrs = @{
+    (id)kCVPixelBufferIOSurfacePropertiesKey : @{},
+    (id)kCVPixelBufferMetalCompatibilityKey : @YES,
+  };
+  if (CVPixelBufferCreate(kCFAllocatorDefault, f->width, f->height,
+                          kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
                           (__bridge CFDictionaryRef)attrs, &pix) != kCVReturnSuccess)
     return NULL;
   CVPixelBufferLockBaseAddress(pix, 0);
@@ -35,16 +37,17 @@ static CVPixelBufferRef LixhUploadSoftwareFrame(const AVFrame *f) {
              (size_t)f->width);
     uint8_t *d1 = CVPixelBufferGetBaseAddressOfPlane(pix, 1);
     size_t rb1 = CVPixelBufferGetBytesPerRowOfPlane(pix, 1);
-    if (!d1) break;
-    if (f->format == AV_PIX_FMT_YUV420P || f->format == AV_PIX_FMT_YUVJ420P) {
-      uint8_t *d2 = CVPixelBufferGetBaseAddressOfPlane(pix, 2);
-      size_t rb2 = CVPixelBufferGetBytesPerRowOfPlane(pix, 2);
-      if (!d2) break;
+    if (!d1 || !f->data[1]) break;
+    if (i420) {
+      if (!f->data[2]) break;
       for (int y = 0; y < ch; y++) {
-        memcpy(d1 + (size_t)y * rb1, f->data[1] + (size_t)y * f->linesize[1],
-               (size_t)cw);
-        memcpy(d2 + (size_t)y * rb2, f->data[2] + (size_t)y * f->linesize[2],
-               (size_t)cw);
+        const uint8_t *u = f->data[1] + (size_t)y * f->linesize[1];
+        const uint8_t *v = f->data[2] + (size_t)y * f->linesize[2];
+        uint8_t *dst = d1 + (size_t)y * rb1;
+        for (int x = 0; x < cw; x++) {
+          dst[x * 2] = u[x];
+          dst[x * 2 + 1] = v[x];
+        }
       }
     } else {
       for (int y = 0; y < ch; y++)
@@ -302,6 +305,9 @@ static void OnEvent(void *opaque, int type, int code, const char *message) {
 }
 
 - (void)stop {
+  // Silence AQ before joining the play thread so Stop never deadlocks the
+  // Flutter platform/UI thread waiting on an AudioQueue callback.
+  [self.audio stop];
   void *player = NULL;
   NSThread *th = nil;
   @synchronized(self) {
@@ -317,7 +323,6 @@ static void OnEvent(void *opaque, int type, int code, const char *message) {
     }
   }
   if (player) lixh_player_destroy(player);
-  [self.audio stop];
 }
 
 - (void)setVideoEnabled:(BOOL)enabled {

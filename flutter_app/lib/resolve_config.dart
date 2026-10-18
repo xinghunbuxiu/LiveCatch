@@ -1,4 +1,4 @@
-/// Remote room-resolve endpoint (keeps platforms-parser off device).
+/// Remote room-resolve endpoint (native platforms on server; no client extractors).
 ///
 /// Override at build time:
 ///   flutter run --dart-define=LIXH_RESOLVE_BASE_URL=http://127.0.0.1:9101 \

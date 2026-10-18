@@ -45,6 +45,11 @@ int scoreLiveUrl(String url) {
     return 80;
   }
   if (l.contains('douyin.com')) return 70;
+  if (l.contains('xiaohongshu.com') ||
+      l.contains('xhslink.com') ||
+      l.contains('xhs.cn')) {
+    return 75;
+  }
   if (l.contains('live.bilibili.com') ||
       l.contains('huya.com') ||
       l.contains('douyu.com') ||
@@ -84,14 +89,21 @@ String? extractLiveInput(String raw) {
   // Share card / mixed text: require a live-ish host.
   if (score >= 60) return best;
 
-  // Douyin share copy often wraps v.douyin even when score heuristics miss.
+  // Share cards often wrap short links even when score heuristics miss.
   final shareHints = text.contains('正在直播') ||
       text.contains('打开【抖音】') ||
       text.contains('抖音') ||
+      text.contains('小红书') ||
       text.contains('直播');
   if (shareHints) {
     for (final u in urls) {
-      if (u.toLowerCase().contains('douyin.com')) return u;
+      final l = u.toLowerCase();
+      if (l.contains('douyin.com') ||
+          l.contains('xiaohongshu.com') ||
+          l.contains('xhslink.com') ||
+          l.contains('xhs.cn')) {
+        return u;
+      }
     }
   }
 

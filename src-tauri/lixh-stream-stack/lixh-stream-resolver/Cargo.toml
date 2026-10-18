@@ -20,12 +20,13 @@ path = "src/bin/lixh_resolve_server.rs"
 
 [dependencies]
 anyhow = "1"
+async-trait = "0.1"
 axum = { version = "0.8", default-features = false, features = [
   "http1",
   "json",
   "tokio",
 ] }
-platforms-parser = { git = "https://github.com/hua0512/rust-srec", package = "platforms-parser" }
+regex = { version = "1", default-features = false, features = ["std", "unicode-case", "unicode-perl"] }
 reqwest = { version = "0.12", default-features = false, features = [
   "json",
   "rustls-tls-webpki-roots",

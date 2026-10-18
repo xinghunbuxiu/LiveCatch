@@ -1,4 +1,4 @@
-//! HTTP room resolve service — keep `platforms-parser` off client devices.
+//! HTTP room resolve service — native platforms only (see `platforms/README.md`).
 //!
 //! Endpoints:
 //!   GET  /health

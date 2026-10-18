@@ -7,6 +7,9 @@ import 'package:lixh_player/lixh_player.dart';
 
 import 'abr_supervisor.dart';
 import 'app_settings.dart';
+import 'license_api.dart';
+import 'license_gate.dart';
+import 'license_session.dart';
 import 'live_input.dart';
 import 'playback_keepalive.dart';
 import 'room_resolve.dart';
@@ -98,6 +101,9 @@ class _PlayerPageState extends State<PlayerPage>
   /// Bumped on stop/start so in-flight ABR open/play can bail out.
   int _playGen = 0;
   AppSettings _settings = AppSettings();
+  LicenseSession? _license;
+  final _licenseApi = LicenseApi();
+  Timer? _licenseHeartbeat;
   final List<String> _logs = <String>[];
   final ValueNotifier<int> _logsTick = ValueNotifier<int>(0);
   String? _lastLoggedNativeErr;
@@ -256,6 +262,12 @@ class _PlayerPageState extends State<PlayerPage>
     final next = await showSettingsSheet(
       context,
       initial: _settings,
+      licenseSession: _license,
+      onLicenseChanged: (s) {
+        if (!mounted) return;
+        setState(() => _license = s);
+        _scheduleLicenseHeartbeat();
+      },
       logs: _logs,
       logsTick: _logsTick,
     );
@@ -279,9 +291,46 @@ class _PlayerPageState extends State<PlayerPage>
     }
   }
 
+  void _scheduleLicenseHeartbeat() {
+    _licenseHeartbeat?.cancel();
+    _licenseHeartbeat = null;
+    final lic = _license;
+    if (lic == null || !lic.active || !lic.hasCode) return;
+    // Soft heartbeat while Open API is enabled; failures are logged only.
+    _licenseHeartbeat = Timer.periodic(const Duration(minutes: 10), (_) async {
+      final cur = _license;
+      if (cur == null || !cur.hasCode) return;
+      try {
+        final next = await cur.heartbeat(_licenseApi);
+        if (!mounted) return;
+        setState(() => _license = next);
+      } catch (e) {
+        _appendLog('权益心跳: $e');
+      }
+    });
+  }
+
   Future<void> _boot() async {
     try {
       _settings = await AppSettings.load();
+      try {
+        final lic = await LicenseSession.load();
+        if (mounted) {
+          setState(() => _license = lic);
+          _scheduleLicenseHeartbeat();
+        }
+        if (lic.active && lic.hasCode) {
+          // ignore: unawaited_futures
+          lic.heartbeat(_licenseApi).then((next) {
+            if (!mounted) return;
+            setState(() => _license = next);
+          }).catchError((Object e) {
+            _appendLog('权益心跳: $e');
+          });
+        }
+      } catch (e) {
+        _appendLog('权益会话: $e');
+      }
       // Portrait-first buffer — landscape default made the first picture flash 横屏.
       final info = await _player.createVideoTexture(width: 1080, height: 1920);
       try {
@@ -516,13 +565,13 @@ class _PlayerPageState extends State<PlayerPage>
       if (gen != _playGen) return;
       await _player.stop();
       if (gen != _playGen) return;
-      await _player.setVideoEnabled(false);
+      // Open with the sink we want — listen-first then enable forces deferred
+      // MediaCodec + wait-for-keyframe ("等待首帧…").
+      await _player.setVideoEnabled(keepVideo);
       if (gen != _playGen) return;
       await _player.open(pick.url, headers: _headers);
       if (gen != _playGen) return;
       await _player.play();
-      if (gen != _playGen) return;
-      if (keepVideo) await _player.setVideoEnabled(true);
       if (gen != _playGen) return;
       abr.setCurrent(index);
       _lastProgress = 0;
@@ -592,6 +641,47 @@ class _PlayerPageState extends State<PlayerPage>
       _lastAutoFillUrl = input;
       _appendLog('已提取链接: $input');
     }
+
+    // Hard license gate before any resolve / open.
+    var lic = _license ?? await LicenseSession.load();
+    if (!mounted) return;
+    setState(() {
+      _license = lic;
+      _status = '校验权益…';
+    });
+    var gate = await ensureLicenseForPlayback(api: _licenseApi, session: lic);
+    if (!mounted) return;
+    setState(() => _license = gate.session);
+    _scheduleLicenseHeartbeat();
+    if (!gate.allowed) {
+      _appendLog('权益拦截: ${gate.message}');
+      final cont = await showLicenseBlockedDialog(
+        context,
+        gate: gate,
+        session: gate.session,
+        onSession: (s) {
+          if (!mounted) return;
+          setState(() => _license = s);
+          _scheduleLicenseHeartbeat();
+        },
+      );
+      if (!mounted) return;
+      if (!cont) {
+        setState(() => _status = '需要权益');
+        return;
+      }
+      // User activated in-sheet — re-check once before resolve.
+      lic = _license ?? gate.session;
+      gate = await ensureLicenseForPlayback(api: _licenseApi, session: lic);
+      if (!mounted) return;
+      setState(() => _license = gate.session);
+      if (!gate.allowed) {
+        _appendLog('权益仍无效: ${gate.message}');
+        setState(() => _status = '需要权益');
+        return;
+      }
+    }
+
     final wantVideo = _settings.startWithVideo;
     final startGen = ++_playGen;
     setState(() {
@@ -726,14 +816,14 @@ class _PlayerPageState extends State<PlayerPage>
         });
         try {
           await _player.stop();
-          await _player.setVideoEnabled(false);
+          // Open with picture sink already on when startWithVideo — otherwise
+          // open_input discards video, deferred MediaCodec open waits for the
+          // next IDR, and the UI flashes "等待首帧…".
+          await _player.setVideoEnabled(wantVideo);
           await _player.open(pick.url, headers: headers ?? _headers);
           await _player.play();
           // Re-bind listen PCM/play-rate after open (same as toggle-off path).
           await _applyLatency(videoOn: wantVideo);
-          if (wantVideo) {
-            await _player.setVideoEnabled(true);
-          }
           if (!mounted) return;
           setState(() {
             _playing = true;
@@ -796,7 +886,8 @@ class _PlayerPageState extends State<PlayerPage>
     }
     try {
       await PlaybackKeepAlive.stop();
-      await _player.setVideoEnabled(false);
+      // Prefer stop() alone — setVideoEnabled during teardown races the
+      // native join and could hang the UI on desktop.
       await _player.stop();
     } catch (e) {
       _appendLog('停止: ${formatResolveError(e)}');
@@ -873,6 +964,7 @@ class _PlayerPageState extends State<PlayerPage>
     WidgetsBinding.instance.removeObserver(this);
     PlaybackKeepAlive.onStopFromNotification = null;
     _statsTimer?.cancel();
+    _licenseHeartbeat?.cancel();
     _logsTick.dispose();
     _pulse.dispose();
     _urlCtrl.dispose();
@@ -1113,14 +1205,16 @@ class _Stage extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // Cover the stage (crop overflow) — avoid left/right letterbox bars.
+          // Fit center: scale uniformly into the stage. Portrait fills the
+          // phone column; landscape letterboxes instead of cropping the sides.
           final maxW = constraints.maxWidth;
           final maxH = constraints.maxHeight;
+          final safeAspect = aspect <= 0 ? 9 / 16 : aspect;
           var viewW = maxW;
-          var viewH = viewW / aspect;
-          if (viewH < maxH) {
+          var viewH = viewW / safeAspect;
+          if (viewH > maxH) {
             viewH = maxH;
-            viewW = viewH * aspect;
+            viewW = viewH * safeAspect;
           }
 
           return Stack(
@@ -1305,7 +1399,7 @@ class _Dock extends StatelessWidget {
           cursorColor: signal,
           textInputAction: TextInputAction.go,
           decoration: InputDecoration(
-            hintText: '直播间 / 抖音分享口令 / m3u8·flv',
+            hintText: '直播间 / 抖音·快手·小红书 / m3u8·flv',
             hintStyle: TextStyle(color: foam.withValues(alpha: 0.35)),
             filled: true,
             fillColor: Colors.white.withValues(alpha: 0.04),

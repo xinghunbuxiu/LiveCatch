@@ -130,6 +130,10 @@ String formatResolveError(Object error) {
   if (s.contains('短链') && (s.contains('展开') || s.contains('跳转') || s.contains('web_rid'))) {
     return s;
   }
+  // PlatformException(open_failed, …) from lixh_player.
+  if (s.contains('open_failed') || s.contains('open failed')) {
+    return '打开流失败（线路不可用或协议不支持，请换清晰度/网络后重试）';
+  }
   return s.isEmpty ? '房间解析失败' : s;
 }
 
