@@ -37,7 +37,7 @@ class LixhPlayerPlugin :
     private var videoWanted = false
     private var latencyTarget = 40
     private var latencyMax = 160
-    private var listenPlayRate = 1.3f
+    private var listenPlayRate = 1.15f
     private var appContext: Context? = null
     private var audioManager: AudioManager? = null
     private var focusRequest: AudioFocusRequest? = null

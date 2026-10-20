@@ -122,8 +122,8 @@ constexpr int kRingCap = 48000 * 2 / 2;
 static int PcmQueueMsFromChase(int chase_target_ms, bool listen_only) {
   int pcm = listen_only ? (chase_target_ms + chase_target_ms / 2)
                         : (chase_target_ms * 2);
-  /* Listen 60ms matches Windows snap floor; picture stays ≥100ms. */
-  const int floor = listen_only ? 60 : 100;
+  /* Listen keeps a thin tip cushion; picture stays ≥100ms. */
+  const int floor = listen_only ? 45 : 100;
   if (pcm < floor) pcm = floor;
   if (pcm > 400) pcm = 400;
   return pcm;
@@ -135,7 +135,7 @@ class AudioOut {
 
   void SetMaxQueueMs(int ms) {
     std::lock_guard<std::mutex> lock(mu_);
-    if (ms < 50) ms = 50;
+    if (ms < 40) ms = 40;
     if (ms > 400) ms = 400;
     base_queue_ms_ = ms;
     max_queue_ms_ = ms;
@@ -155,9 +155,11 @@ class AudioOut {
 
   void NoteUnderrunLocked() {
     last_underrun_ = std::chrono::steady_clock::now();
-    if (max_queue_ms_ < 280) {
-      int next = max_queue_ms_ + 40;
-      if (next > 280) next = 280;
+    /* Listen lean: don't fatten toward 280ms — that undoes tip chase. */
+    const int fat_cap = base_queue_ms_ <= 80 ? 140 : 280;
+    if (max_queue_ms_ < fat_cap) {
+      int next = max_queue_ms_ + 30;
+      if (next > fat_cap) next = fat_cap;
       if (next < base_queue_ms_) next = base_queue_ms_;
       max_queue_ms_ = next;
     }
@@ -197,22 +199,23 @@ class AudioOut {
     }
     int max_samples = ch_ * rate_ * cap_ms / 1000;
     /* Soft floor for trim safety — never force above the active cap. */
-    int floor_ms = max_queue_ms_ < 100 ? 50 : (max_queue_ms_ < 140 ? 80 : 100);
+    int floor_ms = max_queue_ms_ <= 60 ? 30 : (max_queue_ms_ < 100 ? 40 : (max_queue_ms_ < 140 ? 70 : 100));
     if (floor_ms > max_queue_ms_) floor_ms = max_queue_ms_;
     if (max_samples < ch_ * rate_ * floor_ms / 1000) {
       max_samples = ch_ * rate_ * floor_ms / 1000;
     }
     if (max_samples > kRingCap - n) max_samples = kRingCap - n;
+    /* Tip-style: keep newest samples only; trim aggressively when over cap. */
     const bool snap = max_queue_ms_ <= 80;
-    const int trim_at = snap ? max_samples : (max_samples + max_samples / 4);
+    const int trim_at = max_samples;
     const int keep_ms =
-        max_queue_ms_ >= 160 ? 80 : (max_queue_ms_ >= 100 ? 50 : 40);
+        max_queue_ms_ >= 160 ? 70 : (max_queue_ms_ >= 100 ? 40 : 25);
     /* Never trim below prime threshold while still silent. */
     const int prime_keep = ch_ * rate_ * PrimeNeedMsLocked() / 1000;
     const int min_keep =
         primed_ ? (ch_ * rate_ * keep_ms / 1000) : prime_keep;
     while (count_ + n > trim_at && count_ > min_keep) {
-      int drop = ch_ * (snap ? (rate_ / 25) : (rate_ / 50));  // ~40ms / ~20ms
+      int drop = ch_ * (snap ? (rate_ / 20) : (rate_ / 40));  // ~50ms / ~25ms
       if (drop < 1) drop = n;
       if (drop > count_ - min_keep) drop = count_ - min_keep;
       if (drop < 1) break;

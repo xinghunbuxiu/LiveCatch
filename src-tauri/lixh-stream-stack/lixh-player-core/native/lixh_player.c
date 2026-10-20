@@ -72,6 +72,9 @@ typedef struct LixhPlayer {
     atomic_int_fast64_t last_video_pts_ms;
     atomic_int_fast64_t last_audio_pts_ms;
     atomic_int_fast64_t latest_video_pkt_pts_ms;
+    atomic_int_fast64_t latest_audio_pkt_pts_ms;
+    /* >0: interrupt av_read_frame so listen tip-batch gather can stop. */
+    int64_t gather_deadline_ms;
     atomic_uint_fast64_t video_frames;
     atomic_uint_fast64_t audio_frames;
     atomic_uint_fast64_t dropped_frames;
@@ -104,7 +107,11 @@ static int64_t now_ms(void) { return av_gettime_relative() / 1000; }
 
 static int interrupt_cb(void *opaque) {
     LixhPlayer *p = (LixhPlayer *)opaque;
-    return p && atomic_load_explicit(&p->stop, memory_order_acquire) ? 1 : 0;
+    if (!p) return 0;
+    if (atomic_load_explicit(&p->stop, memory_order_acquire)) return 1;
+    /* Tip-batch gather: abort blocked read once the short window ends. */
+    if (p->gather_deadline_ms > 0 && now_ms() >= p->gather_deadline_ms) return 1;
+    return 0;
 }
 
 #if defined(LIXH_ANDROID)
@@ -351,6 +358,17 @@ static int64_t audio_drift_ms(LixhPlayer *p, int64_t pts) {
     return wall_elapsed - media_elapsed;
 }
 
+/* Prefer demux tip behind (chase newest); fall back to wall−PTS drift. */
+static int64_t video_live_lag_ms(LixhPlayer *p, int64_t pts) {
+    int64_t tip = atomic_load_explicit(&p->latest_video_pkt_pts_ms, memory_order_acquire);
+    int64_t tip_behind = 0;
+    if (tip != AV_NOPTS_VALUE && pts != AV_NOPTS_VALUE && tip >= pts) {
+        tip_behind = tip - pts;
+    }
+    int64_t wall = video_chase_lag_ms(p, pts);
+    return tip_behind > wall ? tip_behind : wall;
+}
+
 /* Soft: skip a few presents then re-anchor. Hard: skip one present, next shows.
    Never require decoded KEY flags (MediaCodec often omits them). */
 static int live_chase_should_drop(LixhPlayer *p, int64_t pts, int is_key) {
@@ -379,7 +397,7 @@ static int live_chase_should_drop(LixhPlayer *p, int64_t pts, int is_key) {
         return 0;
     }
 
-    int64_t live_lag = video_chase_lag_ms(p, pts);
+    int64_t live_lag = video_live_lag_ms(p, pts);
     if (live_lag > p->max_latency_ms) {
         /* Drop this present; next frame re-anchors (present-only hard). */
         p->chase_mode = CHASE_HARD;
@@ -585,19 +603,24 @@ static int ensure_audio_speed(LixhPlayer *p, size_t needed) {
     return 0;
 }
 
-/* Settings value is a ceiling. Stay at 1.0x when already live; ramp when
-   audio clock drift shows backlog. Open burst uses full ceiling ~400ms. */
+/* Mild rate only — heavy backlog is tip-skipped in the demux batch so voice
+   stays near 1.0x (no long pitch-up). Ceiling still applies as a soft assist. */
 static int effective_rate_milli(LixhPlayer *p, int64_t pts) {
     int max_milli = atomic_load_explicit(&p->play_rate_milli, memory_order_acquire);
     if (max_milli <= 1010) return 1000;
-    int64_t wall0 = atomic_load_explicit(&p->audio_anchor_wall_ms, memory_order_acquire);
-    int64_t age = now_ms() - wall0;
-    if (age >= 0 && age < 400) return max_milli;
+    /* Cap assist at 1.15x for clarity; tip-batch does the hard catch-up. */
+    if (max_milli > 1150) max_milli = 1150;
+    int64_t tip = atomic_load_explicit(&p->latest_audio_pkt_pts_ms, memory_order_acquire);
+    int64_t tip_behind = 0;
+    if (tip != AV_NOPTS_VALUE && pts != AV_NOPTS_VALUE && tip >= pts) {
+        tip_behind = tip - pts;
+    }
     int64_t drift = audio_drift_ms(p, pts);
-    if (drift < 80) return 1000;
-    if (drift < 200) {
+    int64_t lag = tip_behind > drift ? tip_behind : drift;
+    if (lag < 100) return 1000;
+    if (lag < 220) {
         int span = max_milli - 1000;
-        return 1000 + (int)(span * (drift - 80) / 120);
+        return 1000 + (int)(span * (lag - 100) / 120);
     }
     return max_milli;
 }
@@ -644,8 +667,8 @@ static void emit_audio(LixhPlayer *p, int ch, int64_t pts, const float *samples,
 static void deliver_audio(LixhPlayer *p, AVFrame *f, AVRational tb) {
     int64_t pts = frame_pts_ms(f, tb);
     if (pts == AV_NOPTS_VALUE || !p->cb.on_audio) return;
-    /* Never soft-chase audio; never touch video chase anchors. Live edge is
-       trimmed in the platform PCM queue (+ optional play_rate). */
+    /* Tip chase is demux-batch (listen) + PCM trim; mild play_rate assist only.
+       Never touch video chase anchors from audio. */
     if (atomic_load_explicit(&p->audio_anchor_pts_ms, memory_order_acquire) == AV_NOPTS_VALUE) {
         atomic_store_explicit(&p->audio_anchor_pts_ms, pts, memory_order_release);
         atomic_store_explicit(&p->audio_anchor_wall_ms, now_ms(), memory_order_release);
@@ -706,6 +729,44 @@ static int decode_packet(LixhPlayer *p, AVPacket *pkt) {
     return 0;
 }
 
+enum { LIXH_TIP_BATCH = 48 };
+
+static int64_t packet_pts_ms(const AVPacket *pkt, AVRational tb) {
+    if (!pkt || pkt->pts == AV_NOPTS_VALUE) return AV_NOPTS_VALUE;
+    return av_rescale_q(pkt->pts, tb, (AVRational){1, 1000});
+}
+
+/* Decode only packets near demux tip — drop older backlog in one jump.
+   Keeps voice at ~1.0x after the skip instead of long pitch-up catch-up. */
+static void decode_audio_tip_batch(LixhPlayer *p, AVPacket **batch, int n,
+                                  int64_t tip_ms) {
+    if (n <= 0) return;
+    /* Keep only packets within target of tip (hard jump to live edge). */
+    int64_t keep = p->target_latency_ms > 0 ? p->target_latency_ms : 80;
+    if (keep < 40) keep = 40;
+    int skipped = 0;
+    for (int i = 0; i < n; ++i) {
+        AVPacket *pkt = batch[i];
+        if (!pkt) continue;
+        AVRational tb = p->fmt->streams[p->astream]->time_base;
+        int64_t pts = packet_pts_ms(pkt, tb);
+        if (tip_ms != AV_NOPTS_VALUE && pts != AV_NOPTS_VALUE &&
+            tip_ms - pts > keep) {
+            if (!skipped && p->adec) avcodec_flush_buffers(p->adec);
+            skipped = 1;
+            atomic_fetch_add_explicit(&p->dropped_frames, 1, memory_order_relaxed);
+            av_packet_free(&batch[i]);
+            continue;
+        }
+        decode_packet(p, pkt);
+        av_packet_free(&batch[i]);
+    }
+    if (skipped) {
+        atomic_store_explicit(&p->audio_anchor_pts_ms, AV_NOPTS_VALUE,
+                              memory_order_release);
+    }
+}
+
 void *lixh_player_create(const LixhCallbacks *cb) {
     LixhPlayer *p = (LixhPlayer *)calloc(1, sizeof(*p));
     if (!p) return NULL;
@@ -734,8 +795,10 @@ void *lixh_player_create(const LixhCallbacks *cb) {
     atomic_init(&p->last_video_pts_ms, AV_NOPTS_VALUE);
     atomic_init(&p->last_audio_pts_ms, AV_NOPTS_VALUE);
     atomic_init(&p->latest_video_pkt_pts_ms, AV_NOPTS_VALUE);
-    /* Listen-first default: mild catch-up (秒听 uses ~1.3x). */
-    atomic_init(&p->play_rate_milli, 1300);
+    atomic_init(&p->latest_audio_pkt_pts_ms, AV_NOPTS_VALUE);
+    p->gather_deadline_ms = 0;
+    /* Mild assist only; tip-batch does hard catch-up for clear speech. */
+    atomic_init(&p->play_rate_milli, 1150);
     p->target_latency_ms = 100;
     p->max_latency_ms = 320;
     p->chase_mode = CHASE_NONE;
@@ -810,6 +873,8 @@ int lixh_player_play(void *opaque) {
                 atomic_store_explicit(&p->last_video_pts_ms, AV_NOPTS_VALUE, memory_order_release);
                 atomic_store_explicit(&p->last_audio_pts_ms, AV_NOPTS_VALUE, memory_order_release);
                 atomic_store_explicit(&p->latest_video_pkt_pts_ms, AV_NOPTS_VALUE, memory_order_release);
+                atomic_store_explicit(&p->latest_audio_pkt_pts_ms, AV_NOPTS_VALUE, memory_order_release);
+                p->gather_deadline_ms = 0;
                 p->chase_mode = CHASE_NONE;
                 p->chase_drop_streak = 0;
                 p->d3d11_fail_streak = 0;
@@ -853,16 +918,87 @@ int lixh_player_play(void *opaque) {
             av_packet_unref(pkt);
             continue;
         }
+        /* Listen-only: gather a short demux burst, decode only near tip. */
+        if (pkt->stream_index == p->astream &&
+            !atomic_load_explicit(&p->video_sink, memory_order_acquire) &&
+            p->astream >= 0) {
+            AVPacket *batch[LIXH_TIP_BATCH];
+            memset(batch, 0, sizeof(batch));
+            int bn = 0;
+            int64_t tip = AV_NOPTS_VALUE;
+            AVRational atb = p->fmt->streams[p->astream]->time_base;
+            batch[bn] = av_packet_clone(pkt);
+            if (!batch[bn]) {
+                decode_packet(p, pkt);
+                av_packet_unref(pkt);
+                continue;
+            }
+            tip = packet_pts_ms(batch[bn], atb);
+            if (tip != AV_NOPTS_VALUE) {
+                atomic_store_explicit(&p->latest_audio_pkt_pts_ms, tip,
+                                      memory_order_release);
+            }
+            bn++;
+            av_packet_unref(pkt);
+            p->gather_deadline_ms = now_ms() + 8;
+            while (bn < LIXH_TIP_BATCH &&
+                   !atomic_load_explicit(&p->stop, memory_order_acquire)) {
+                AVPacket *more = av_packet_alloc();
+                if (!more) break;
+                int grc = av_read_frame(p->fmt, more);
+                if (grc < 0) {
+                    av_packet_free(&more);
+                    break;
+                }
+                if (more->size > 0) {
+                    atomic_fetch_add_explicit(&p->bytes_read, (uint64_t)more->size,
+                                             memory_order_relaxed);
+                }
+                if (more->stream_index == p->vstream) {
+                    av_packet_free(&more);
+                    continue;
+                }
+                if (more->stream_index != p->astream) {
+                    av_packet_free(&more);
+                    continue;
+                }
+                int64_t pts = packet_pts_ms(more, atb);
+                if (pts != AV_NOPTS_VALUE) {
+                    tip = pts;
+                    atomic_store_explicit(&p->latest_audio_pkt_pts_ms, tip,
+                                          memory_order_release);
+                }
+                batch[bn++] = more;
+                /* Enough backlog already — stop gathering and jump to tip. */
+                if (tip != AV_NOPTS_VALUE && bn > 1) {
+                    int64_t first = packet_pts_ms(batch[0], atb);
+                    int64_t hard = p->max_latency_ms > 0 ? p->max_latency_ms : 160;
+                    if (first != AV_NOPTS_VALUE && tip - first > hard * 2) break;
+                }
+            }
+            p->gather_deadline_ms = 0;
+            decode_audio_tip_batch(p, batch, bn, tip);
+            rc = 0;
+            continue;
+        }
         if (pkt->stream_index == p->vstream) {
             AVRational vtb = p->fmt->streams[p->vstream]->time_base;
             if (pkt->pts != AV_NOPTS_VALUE) {
                 int64_t pkt_pts = av_rescale_q(pkt->pts, vtb, (AVRational){1, 1000});
                 atomic_store_explicit(&p->latest_video_pkt_pts_ms, pkt_pts, memory_order_release);
             }
-            /* Present-only chase: never drop compressed packets here. Demux KEY
-               flags are unreliable on Douyin FLV and starved MediaCodec. */
         }
-        if (pkt->stream_index == p->vstream || pkt->stream_index == p->astream) decode_packet(p, pkt);
+        if (pkt->stream_index == p->astream) {
+            AVRational atb = p->fmt->streams[p->astream]->time_base;
+            int64_t pts = packet_pts_ms(pkt, atb);
+            if (pts != AV_NOPTS_VALUE) {
+                atomic_store_explicit(&p->latest_audio_pkt_pts_ms, pts,
+                                      memory_order_release);
+            }
+        }
+        if (pkt->stream_index == p->vstream || pkt->stream_index == p->astream) {
+            decode_packet(p, pkt);
+        }
         av_packet_unref(pkt);
     }
     av_packet_free(&pkt);
@@ -988,7 +1124,13 @@ int lixh_player_get_stats(void *opaque, LixhStats *out) {
         /* Picture on but no presented frame yet — do not show audio drift as 追. */
         lag = 0;
     } else if (out->last_audio_pts_ms != AV_NOPTS_VALUE) {
-        lag = audio_drift_ms(p, out->last_audio_pts_ms);
+        int64_t tip = atomic_load_explicit(&p->latest_audio_pkt_pts_ms, memory_order_acquire);
+        int64_t tip_behind = 0;
+        if (tip != AV_NOPTS_VALUE && tip >= out->last_audio_pts_ms) {
+            tip_behind = tip - out->last_audio_pts_ms;
+        }
+        int64_t drift = audio_drift_ms(p, out->last_audio_pts_ms);
+        lag = tip_behind > drift ? tip_behind : drift;
     }
     if (lag < 0) lag = 0;
     if (in_grace && lag > 500) lag = 500;

@@ -53,10 +53,16 @@ data class LixhAbi(
     val platform: String,
 )
 
-val lixhAbis = listOf(
+val lixhAbisAll = listOf(
     LixhAbi("arm64-v8a", "android-arm64"),
     LixhAbi("armeabi-v7a", "android-armv7"),
 )
+
+/** Only ABIs with a fetched FFmpeg SDK (headers under sdk/<platform>/include). */
+val lixhAbis = lixhAbisAll.filter { abi ->
+    File(lixhRepoRoot, "src-tauri/lixh-stream-stack/sdk/${abi.platform}/include/libavcodec/avcodec.h")
+        .isFile
+}
 
 fun syncAbiFfmpeg(abi: LixhAbi) {
     val ffmpegLib = File(lixhRepoRoot, "src-tauri/lixh-stream-stack/sdk/${abi.platform}/lib")
@@ -124,7 +130,13 @@ android {
     defaultConfig {
         minSdk = 24
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            if (lixhAbis.isEmpty()) {
+                throw GradleException(
+                    "No FFmpeg Android SDK found under src-tauri/lixh-stream-stack/sdk/. " +
+                        "Fetch android-arm64 (and optionally android-armv7).",
+                )
+            }
+            abiFilters += lixhAbis.map { it.jniAbi }
         }
         externalNativeBuild {
             cmake {
