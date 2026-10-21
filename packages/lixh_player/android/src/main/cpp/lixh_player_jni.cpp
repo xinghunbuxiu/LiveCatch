@@ -240,6 +240,12 @@ class AudioOut {
     StopLocked();
   }
 
+  /* Tip jump: drop queued PCM but keep stream + primed so new tip plays ASAP. */
+  void FlushTip() {
+    std::lock_guard<std::mutex> lock(mu_);
+    r_ = w_ = count_ = 0;
+  }
+
   int QueuedMs() const {
     std::lock_guard<std::mutex> lock(mu_);
     if (rate_ <= 0 || ch_ <= 0) return 0;
@@ -574,12 +580,18 @@ class Session {
       self->audio_.Push(s, n, ch, rate);
     };
     cb.on_event = [](void* o, int type, int code, const char* msg) {
+      auto* self = static_cast<Session*>(o);
+      if (type == LIXH_EVT_AUDIO_TIP_FLUSH) {
+        self->audio_.FlushTip();
+        LOGI("audio tip flush (dropped backlog)");
+        return;
+      }
       if (type == LIXH_EVT_INFO && msg) {
         LOGI("evt info code=%d %s", code, msg);
         return;
       }
       if (type != LIXH_EVT_ERROR || !msg) return;
-      static_cast<Session*>(o)->SetError(msg);
+      self->SetError(msg);
     };
     void* p = lixh_player_create(&cb);
     if (!p) {

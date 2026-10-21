@@ -174,8 +174,8 @@
     "semantic_hash": "7569387d58711ab975940f4df3b4bcda"
   },
   "packages/lixh_player/android/build.gradle.kts": {
-    "mtime": 1792509271.4867907,
-    "seen": 1792509397.9488366,
+    "mtime": 1792509416.8435552,
+    "seen": 1792581227.6608582,
     "ast_hash": "fbd393bd9ac2bc173314421c7b6d63ed",
     "semantic_hash": ""
   },
@@ -186,14 +186,14 @@
     "semantic_hash": "cf9a008eebc97f1c57132f5e2bf57b8b"
   },
   "packages/lixh_player/android/src/main/cpp/lixh_player_jni.cpp": {
-    "mtime": 1792509074.441547,
-    "seen": 1792509397.9488366,
-    "ast_hash": "0e9787cd1c70028ab9420817d242839d",
+    "mtime": 1792581102.0981035,
+    "seen": 1792581227.6608582,
+    "ast_hash": "f64e42276e83b200d255f1dc28ac1e08",
     "semantic_hash": ""
   },
   "packages/lixh_player/android/src/main/kotlin/com/livecatch/lixh_player/LixhPlayerPlugin.kt": {
-    "mtime": 1792509392.769333,
-    "seen": 1792509397.9488366,
+    "mtime": 1792509416.8435552,
+    "seen": 1792581227.6608582,
     "ast_hash": "11f32aadb1bb6a3ce3e2b51d2814fdea",
     "semantic_hash": ""
   },
@@ -372,9 +372,9 @@
     "semantic_hash": "c18344704111a889f3b8661aececba06"
   },
   "packages/lixh_player/ios/lixh_player/Sources/lixh_player/LixhAudioOutput.m": {
-    "mtime": 1792507732.0578187,
-    "seen": 1792508892.5873356,
-    "ast_hash": "be9acebaee5828717c440b7b1a0ca593",
+    "mtime": 1792581116.2486827,
+    "seen": 1792581227.6608582,
+    "ast_hash": "52b103dea7c6bddf4920f3b3d25da436",
     "semantic_hash": ""
   },
   "packages/lixh_player/ios/lixh_player/Sources/lixh_player/LixhPixelTexture.m": {
@@ -384,9 +384,9 @@
     "semantic_hash": "ba64e007e3c186214194b4f3415473ae"
   },
   "packages/lixh_player/ios/lixh_player/Sources/lixh_player/LixhPlayerEngine.m": {
-    "mtime": 1792507732.0161011,
-    "seen": 1792508892.5873356,
-    "ast_hash": "4e428e1978c6e5a83f3a610bb4662517",
+    "mtime": 1792581119.1364372,
+    "seen": 1792581227.6608582,
+    "ast_hash": "92f4b8147ad9cf3b5e225c717e69f7b5",
     "semantic_hash": ""
   },
   "packages/lixh_player/ios/lixh_player/Sources/lixh_player/LixhPlayerPlugin.swift": {
@@ -396,10 +396,10 @@
     "semantic_hash": ""
   },
   "packages/lixh_player/ios/lixh_player/Sources/lixh_player/include/LixhAudioOutput.h": {
-    "mtime": 1792507732.0446923,
-    "seen": 1792508892.5873356,
-    "ast_hash": "cd09ecc3e3646951d7e5a6e1b281d8b5",
-    "semantic_hash": "cd09ecc3e3646951d7e5a6e1b281d8b5"
+    "mtime": 1792581114.411054,
+    "seen": 1792581227.6608582,
+    "ast_hash": "b8b258707909dd8937b96a649cd4d7d3",
+    "semantic_hash": ""
   },
   "packages/lixh_player/ios/lixh_player/Sources/lixh_player/include/LixhPixelTexture.h": {
     "mtime": 1792507732.0446923,
@@ -450,9 +450,9 @@
     "semantic_hash": "8081949dd8ba96df518259adb2c0ca5c"
   },
   "packages/lixh_player/macos/lixh_player/Sources/lixh_player/LixhAudioOutput.m": {
-    "mtime": 1792507732.0657568,
-    "seen": 1792508892.5873356,
-    "ast_hash": "be9acebaee5828717c440b7b1a0ca593",
+    "mtime": 1792581126.808137,
+    "seen": 1792581227.6608582,
+    "ast_hash": "52b103dea7c6bddf4920f3b3d25da436",
     "semantic_hash": ""
   },
   "packages/lixh_player/macos/lixh_player/Sources/lixh_player/LixhPixelTexture.m": {
@@ -462,9 +462,9 @@
     "semantic_hash": "ba64e007e3c186214194b4f3415473ae"
   },
   "packages/lixh_player/macos/lixh_player/Sources/lixh_player/LixhPlayerEngine.m": {
-    "mtime": 1792507732.0626264,
-    "seen": 1792508892.5873356,
-    "ast_hash": "3786515437c70802f15fd7286e8251f2",
+    "mtime": 1792581130.8185756,
+    "seen": 1792581227.6608582,
+    "ast_hash": "65818b08c67820092994e7dbdd38c5ad",
     "semantic_hash": ""
   },
   "packages/lixh_player/macos/lixh_player/Sources/lixh_player/LixhPlayerPlugin.swift": {
@@ -474,10 +474,10 @@
     "semantic_hash": ""
   },
   "packages/lixh_player/macos/lixh_player/Sources/lixh_player/include/LixhAudioOutput.h": {
-    "mtime": 1792507732.0457735,
-    "seen": 1792508892.5873356,
-    "ast_hash": "cd09ecc3e3646951d7e5a6e1b281d8b5",
-    "semantic_hash": "cd09ecc3e3646951d7e5a6e1b281d8b5"
+    "mtime": 1792581125.096803,
+    "seen": 1792581227.6608582,
+    "ast_hash": "b8b258707909dd8937b96a649cd4d7d3",
+    "semantic_hash": ""
   },
   "packages/lixh_player/macos/lixh_player/Sources/lixh_player/include/LixhPixelTexture.h": {
     "mtime": 1792507732.0446923,
@@ -516,15 +516,15 @@
     "semantic_hash": ""
   },
   "packages/lixh_player/windows/audio_output.cpp": {
-    "mtime": 1792507732.0520263,
-    "seen": 1792508892.5873356,
-    "ast_hash": "eb529919db89229ebad8c274bbf4223a",
+    "mtime": 1792581110.2105768,
+    "seen": 1792581227.6608582,
+    "ast_hash": "6110293237d8675bd6c2682ee58807ee",
     "semantic_hash": ""
   },
   "packages/lixh_player/windows/audio_output.h": {
-    "mtime": 1792507732.0048025,
-    "seen": 1792508892.5873356,
-    "ast_hash": "02e452f79103e87687a2dbcfe8f98dbe",
+    "mtime": 1792581108.141851,
+    "seen": 1792581227.6608582,
+    "ast_hash": "1396dfe46bba984394d1b15277b6b5df",
     "semantic_hash": ""
   },
   "packages/lixh_player/windows/include/lixh_player/lixh_player_plugin_c_api.h": {
@@ -552,9 +552,9 @@
     "semantic_hash": "15b1a5fd5f1ee1c5b857e6093d11d401"
   },
   "packages/lixh_player/windows/player_session.cpp": {
-    "mtime": 1792507732.0694914,
-    "seen": 1792508892.5873356,
-    "ast_hash": "c981db0c37f5ff713b74d6373ca64a15",
+    "mtime": 1792581113.3051636,
+    "seen": 1792581227.6608582,
+    "ast_hash": "2a56f511d4ec5d57684169a03790ea90",
     "semantic_hash": ""
   },
   "packages/lixh_player/windows/player_session.h": {
@@ -624,9 +624,9 @@
     "semantic_hash": "ef756fd57a24f89827f4c8c2cebefefd"
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/include/lixh_player.h": {
-    "mtime": 1792507732.0605006,
-    "seen": 1792508892.5883384,
-    "ast_hash": "0895d767b46fb5b534546f83a395f3e1",
+    "mtime": 1792581090.538419,
+    "seen": 1792581227.6608582,
+    "ast_hash": "4243d9f2c57b34c191733adac55829e3",
     "semantic_hash": ""
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/include/lixh_surface.h": {
@@ -636,9 +636,9 @@
     "semantic_hash": "14da36467694105e4cad3e087307c8da"
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/native/lixh_player.c": {
-    "mtime": 1792509079.4252918,
-    "seen": 1792509397.9488366,
-    "ast_hash": "a8a73ace2d5367646b040940fe0c1403",
+    "mtime": 1792581091.8713064,
+    "seen": 1792581227.6608582,
+    "ast_hash": "36aa49c655f868f0ab5323267c5a9474",
     "semantic_hash": ""
   },
   "src-tauri/lixh-stream-stack/lixh-player-core/native/lixh_surface_macos.m": {

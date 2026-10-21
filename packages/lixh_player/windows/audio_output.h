@@ -31,6 +31,8 @@ class AudioOutput {
   void Push(const float* samples, int frames, int channels, int sample_rate);
 
   void Flush();
+  /* Tip jump: drop queued PCM, keep primed for immediate new audio. */
+  void FlushTip();
 
   // Buffered PCM waiting for WASAPI, milliseconds.
   int queued_ms() const;

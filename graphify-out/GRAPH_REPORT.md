@@ -1,23 +1,23 @@
-# Graph Report - liveCatch  (2026-10-20)
+# Graph Report - liveCatch  (2026-10-21)
 
 ## Corpus Check
-- 155 files · ~73,651 words
+- 155 files · ~73,841 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 117 file(s) not represented in the graph (top: (none) 22, .xcconfig 16, .xml 15)
 
 ## Summary
-- 1917 nodes · 2900 edges · 131 communities (73 shown, 58 thin omitted)
+- 1923 nodes · 2909 edges · 127 communities (71 shown, 56 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 128 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `e8a29889`
+- Built from commit: `8f0bcdd7`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - flutter_app/lib/main.dart
-- lixh_player.dart
+- lixh_player_method_channel.dart
 - room_resolve.dart
 - NativeSurface
 - AudioOutput
@@ -34,13 +34,13 @@
 - lixh_player_platform_interface.dart
 - douyin_expand.dart
 - surface.rs
-- Session
+- JNIEnv
 - lixh-stream-resolver/src/lib.rs
 - LixhAudioOutput
-- audio_output.cpp
+- Session
 - lixh_player_play
 - PlayerSession
-- playback_keepalive.dart
+- lixh_player_jni.cpp
 - lixh_resolve_server.rs
 - lixh-stream-supervisor/src/lib.rs
 - .Open
@@ -83,7 +83,7 @@
 - PlaybackBackend
 - .MessageHandler
 - Remote room resolve (`lixh_resolve_server`)
-- lixh_player_method_channel.dart
+- Backend
 - lixh-stream-supervisor
 - lixh_player_example/MainActivity.kt
 - flutter_app/windows/runner/utils.cpp
@@ -100,7 +100,6 @@
 - Win32Window
 - .create
 - flutter_app/windows/runner/win32_window.cpp
-- package:flutter/services.dart
 - Win32Window
 - abr_supervisor_test.dart
 - LiveCatch
@@ -108,11 +107,9 @@
 - lixh_player/android/build.gradle.kts
 - livecatch_app
 - deploy.sh
-- package:flutter/material.dart
 - Point
 - Size
 - Point
-- package:lixh_player/lixh_player.dart
 - Size
 - AtomicI32
 - lixh_player_example
@@ -120,16 +117,15 @@
 - CHANGELOG.md
 - example/ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md
 - LAST_ERROR_MSG
-- wWinMain
 - choose_hw_format
 - lixh_player_plugin_test.cpp
 - resolve_config.dart
 
 ## God Nodes (most connected - your core abstractions)
 1. `SharedTextureBridge` - 83 edges
-2. `AudioOut` - 50 edges
+2. `AudioOut` - 51 edges
 3. `PlayerSession` - 50 edges
-4. `AudioOutput` - 48 edges
+4. `AudioOutput` - 49 edges
 5. `Session` - 44 edges
 6. `LixhPlayerPlugin` - 33 edges
 7. `LixhPlayerPlugin` - 29 edges
@@ -152,15 +148,15 @@
 ## Import Cycles
 - None detected.
 
-## Communities (131 total, 58 thin omitted)
+## Communities (127 total, 56 thin omitted)
 
 ### Community 0 - "flutter_app/lib/main.dart"
 Cohesion: 0.02
 Nodes (71): _abr, _abrBusy, _abrLabel, _appendLog, _appInBackground, _applyLatency, aspect, _audioFrames (+63 more)
 
-### Community 1 - "lixh_player.dart"
-Cohesion: 0.14
-Nodes (12): createVideoTexture, disposeVideoTexture, getPlatformVersion, getStats, LixhPlayer, open, play, presentTestFrame (+4 more)
+### Community 1 - "lixh_player_method_channel.dart"
+Cohesion: 0.04
+Nodes (35): _active, bind, _channel, isSupported, PlaybackKeepAlive, start, stop, update (+27 more)
 
 ### Community 2 - "room_resolve.dart"
 Cohesion: 0.04
@@ -171,8 +167,8 @@ Cohesion: 0.17
 Nodes (3): AvFrameLite, d3d_device(), NativeSurface
 
 ### Community 4 - "AudioOutput"
-Cohesion: 0.06
-Nodes (28): AudioOutput, base_queue_ms_, buffer_frames_, client_, count_, event_, last_shrink_, last_underrun_ (+20 more)
+Cohesion: 0.05
+Nodes (31): AudioOutput, base_queue_ms_, buffer_frames_, client_, count_, event_, last_shrink_, last_underrun_ (+23 more)
 
 ### Community 5 - "FlutterWindow"
 Cohesion: 0.12
@@ -195,7 +191,7 @@ Cohesion: 0.20
 Nodes (3): RegisterPlugins(), RegisterPlugins(), LixhPlayerPluginCApiRegisterWithRegistrar()
 
 ### Community 10 - "LixhPlayerPlugin"
-Cohesion: 0.08
+Cohesion: 0.09
 Nodes (10): LixhPlayerPlugin, bridge_, last_notify_ms_, session_, texture_id_, texture_variant_, textures_, ReadDouble() (+2 more)
 
 ### Community 11 - "FfmpegRuntime"
@@ -222,40 +218,40 @@ Nodes (31): body, client, contains, data, decoded, expandDouyinShortUrl, _fetchR
 Cohesion: 0.05
 Nodes (33): callback_stub(), lixh_player_create(), lixh_player_destroy(), lixh_player_get_stats(), lixh_player_open(), lixh_player_play(), lixh_player_stop(), LixhCallbacks (+25 more)
 
-### Community 18 - "Session"
-Cohesion: 0.05
-Nodes (35): AAudioStreamBuilderStruct, AAudioStreamStruct, Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeAttachSurface(), Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeCreate(), Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeDestroy(), Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeDetachSurface(), Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeFillStats(), Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeLastError() (+27 more)
+### Community 18 - "JNIEnv"
+Cohesion: 0.16
+Nodes (13): Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeAttachSurface(), Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeCreate(), Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeDestroy(), Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeDetachSurface(), Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeFillStats(), Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeLastError(), Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeOpen(), Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativePlay() (+5 more)
 
 ### Community 19 - "lixh-stream-resolver/src/lib.rs"
 Cohesion: 0.17
 Nodes (13): android_http_client(), bump_retry_extras(), is_douyin_platform(), is_retryable_extract(), looks_like_douyin(), map_media(), map_resolve_error(), resolve() (+5 more)
 
 ### Community 20 - "LixhAudioOutput"
-Cohesion: 0.09
-Nodes (28): LixhAudioOutput, -dealloc, -ensureQueueRatechannels, -fillBufferqueue, -flush, -init, -maybeShrinkLocked, -primeNeedMsLocked (+20 more)
+Cohesion: 0.08
+Nodes (30): LixhAudioOutput, -dealloc, -ensureQueueRatechannels, -fillBufferqueue, -flush, -flushTip, -init, -maybeShrinkLocked (+22 more)
 
-### Community 21 - "audio_output.cpp"
-Cohesion: 0.15
-Nodes (3): IsFloatFormat(), IsPcm16Format(), SafeRelease()
+### Community 21 - "Session"
+Cohesion: 0.07
+Nodes (20): Session, audio_, audio_frames_, last_present_, latency_max_ms_, latency_target_ms_, listen_play_rate_, mu_ (+12 more)
 
 ### Community 22 - "lixh_player_play"
-Cohesion: 0.36
+Cohesion: 0.33
 Nodes (8): decode_audio_tip_batch(), decode_packet(), emit(), lixh_player_play(), open_decoder(), open_input(), packet_pts_ms(), setup_hw()
 
 ### Community 23 - "PlayerSession"
-Cohesion: 0.06
+Cohesion: 0.07
 Nodes (17): Clamp8(), PlayerSession, audio_, bridge_, latency_max_ms_, latency_target_ms_, listen_play_rate_, mu_ (+9 more)
 
-### Community 24 - "playback_keepalive.dart"
-Cohesion: 0.14
-Nodes (8): _active, bind, _channel, isSupported, PlaybackKeepAlive, start, stop, update
+### Community 24 - "lixh_player_jni.cpp"
+Cohesion: 0.13
+Nodes (4): AAudioApi, lib, AAudioStreamBuilderStruct, AAudioStreamStruct
 
 ### Community 25 - "lixh_resolve_server.rs"
 Cohesion: 0.06
 Nodes (22): main(), run(), AppState, authorize(), ErrorBody, format_resolve_err(), health(), resolve_handler() (+14 more)
 
 ### Community 26 - "lixh-stream-supervisor/src/lib.rs"
-Cohesion: 0.15
+Cohesion: 0.16
 Nodes (9): failed_candidate_is_current_candidate(), PlaybackTelemetry, stall_timer_uses_time_since_last_video_progress(), StreamSupervisor, SupervisorAction, Keep, ReResolve, Switch (+1 more)
 
 ### Community 27 - ".Open"
@@ -264,7 +260,7 @@ Nodes (10): PcmQueueMsFromChase(), free_player_media(), lixh_player_create(), li
 
 ### Community 28 - "AudioOut"
 Cohesion: 0.06
-Nodes (28): AAudioApi, lib, AudioOut, aaudio_stream_, backend_, base_queue_ms_, ch_, count_ (+20 more)
+Nodes (22): AudioOut, aaudio_stream_, backend_, base_queue_ms_, ch_, count_, last_shrink_, last_underrun_ (+14 more)
 
 ### Community 29 - "lixh_player_test.dart"
 Cohesion: 0.10
@@ -287,8 +283,8 @@ Cohesion: 0.07
 Nodes (23): build, _buildBody, _copy, createState, _draft, foam, initial, initState (+15 more)
 
 ### Community 34 - "example/lib/main.dart"
-Cohesion: 0.20
-Nodes (9): build, createState, initPlatformState, initState, _lixhPlayerPlugin, main, MyApp, _MyAppState (+1 more)
+Cohesion: 0.11
+Nodes (11): main, build, createState, initPlatformState, initState, _lixhPlayerPlugin, main, MyApp (+3 more)
 
 ### Community 35 - "package:flutter_test/flutter_test.dart"
 Cohesion: 0.18
@@ -355,12 +351,12 @@ Cohesion: 0.20
 Nodes (6): RetiredPair, frames_left, handles, handles_are_nt, rtvs, textures
 
 ### Community 57 - "LixhAudioOutput"
-Cohesion: 0.22
-Nodes (7): LixhAudioOutput, -flush, -pushSamplesframeschannelssampleRate, -queuedMs, -setMaxQueueMs, -start, -stop
+Cohesion: 0.20
+Nodes (8): LixhAudioOutput, -flush, -flushTip, -pushSamplesframeschannelssampleRate, -queuedMs, -setMaxQueueMs, -start, -stop
 
 ### Community 58 - "LixhAudioOutput"
-Cohesion: 0.22
-Nodes (7): LixhAudioOutput, -flush, -pushSamplesframeschannelssampleRate, -queuedMs, -setMaxQueueMs, -start, -stop
+Cohesion: 0.20
+Nodes (8): LixhAudioOutput, -flush, -flushTip, -pushSamplesframeschannelssampleRate, -queuedMs, -setMaxQueueMs, -start, -stop
 
 ### Community 61 - "example/macos/RunnerTests/RunnerTests.swift"
 Cohesion: 0.25
@@ -378,17 +374,17 @@ Nodes (8): _Dock, _Header, _ListenPane, LiveCatchApp, _Stage, _LogViewerPage, _P
 Cohesion: 0.40
 Nodes (4): Client, Deploy (on the server), Endpoints (public), Remote room resolve (`lixh_resolve_server`)
 
-### Community 70 - "lixh_player_method_channel.dart"
-Cohesion: 0.15
-Nodes (12): createVideoTexture, disposeVideoTexture, getPlatformVersion, getStats, methodChannel, open, play, presentTestFrame (+4 more)
+### Community 70 - "Backend"
+Cohesion: 0.50
+Nodes (4): Backend, AAudio, None, OpenSL
 
 ### Community 71 - "lixh-stream-supervisor"
 Cohesion: 0.50
 Nodes (5): lixh-playback-engine, lixh-player-core, lixh-player-host, lixh-stream-resolver, lixh-stream-supervisor
 
 ### Community 73 - "flutter_app/windows/runner/utils.cpp"
-Cohesion: 0.18
-Nodes (4): wWinMain(), CreateAndAttachConsole(), GetCommandLineArguments(), Utf8FromUtf16()
+Cohesion: 0.12
+Nodes (8): wWinMain(), CreateAndAttachConsole(), GetCommandLineArguments(), Utf8FromUtf16(), wWinMain(), CreateAndAttachConsole(), GetCommandLineArguments(), Utf8FromUtf16()
 
 ### Community 90 - "Win32Window"
 Cohesion: 0.22
@@ -401,10 +397,6 @@ Nodes (5): ensure_clip_siblings(), ensure_host_class(), host_proc(), raise_surfa
 ### Community 92 - "flutter_app/windows/runner/win32_window.cpp"
 Cohesion: 0.16
 Nodes (5): Scale(), Win32Window::Win32Window(), WindowClassRegistrar, class_registered_, instance_
-
-### Community 93 - "package:flutter/services.dart"
-Cohesion: 0.33
-Nodes (3): channel, main, platform
 
 ### Community 97 - "Win32Window"
 Cohesion: 0.22
@@ -442,29 +434,25 @@ Nodes (3): Point, x, y
 Cohesion: 0.50
 Nodes (3): Size, height, width
 
-### Community 124 - "wWinMain"
-Cohesion: 0.25
-Nodes (4): wWinMain(), CreateAndAttachConsole(), GetCommandLineArguments(), Utf8FromUtf16()
-
 ## Knowledge Gaps
-- **571 isolated node(s):** `RUSTUP_DIST_SERVER`, `RUSTUP_UPDATE_ROOT`, `AbrActionKind`, `AbrAction`, `kind` (+566 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1025 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **58 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **575 isolated node(s):** `RUSTUP_DIST_SERVER`, `RUSTUP_UPDATE_ROOT`, `AbrActionKind`, `AbrAction`, `kind` (+570 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 1029 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **56 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `SharedTextureBridge` connect `SharedTextureBridge` to `.HandleVideo`, `shared_texture.cpp`, `LixhPlayerPlugin`, `.Descriptor`, `PlayerSession`, `RetiredPair`, `.PresentNv12ViaVideoProcessor`, `string`?**
-  _High betweenness centrality (0.073) - this node is a cross-community bridge._
+  _High betweenness centrality (0.086) - this node is a cross-community bridge._
 - **What connects `RUSTUP_DIST_SERVER`, `RUSTUP_UPDATE_ROOT`, `AbrActionKind` to the rest of the system?**
-  _571 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _575 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `flutter_app/lib/main.dart` be split into smaller, more focused modules?**
   _Cohesion score 0.024390243902439025 - nodes in this community are weakly interconnected._
 - **Why does `LixhNativeFrame` connect `surface.rs` to `NativeSurface`, `surface_windows.rs`?**
-  _High betweenness centrality (0.057) - this node is a cross-community bridge._
-- **Should `lixh_player.dart` be split into smaller, more focused modules?**
-  _Cohesion score 0.14285714285714285 - nodes in this community are weakly interconnected._
-- **Why does `PlayerSession` connect `PlayerSession` to `.HandleVideo`, `AudioOutput`, `SharedTextureBridge`, `LixhPlayerPlugin`, `Stats`, `.Open`, `string`?**
-  _High betweenness centrality (0.040) - this node is a cross-community bridge._
+  _High betweenness centrality (0.052) - this node is a cross-community bridge._
+- **Should `lixh_player_method_channel.dart` be split into smaller, more focused modules?**
+  _Cohesion score 0.043478260869565216 - nodes in this community are weakly interconnected._
+- **Why does `PlayerSession` connect `PlayerSession` to `.HandleVideo`, `AudioOutput`, `SharedTextureBridge`, `LixhPlayerPlugin`, `Stats`, `lixh_player_play`, `.Open`, `string`?**
+  _High betweenness centrality (0.051) - this node is a cross-community bridge._
 - **Should `room_resolve.dart` be split into smaller, more focused modules?**
   _Cohesion score 0.037037037037037035 - nodes in this community are weakly interconnected._

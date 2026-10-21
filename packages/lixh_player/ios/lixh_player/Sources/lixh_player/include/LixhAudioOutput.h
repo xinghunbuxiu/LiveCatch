@@ -4,6 +4,8 @@
 - (BOOL)start;
 - (void)stop;
 - (void)flush;
+/** Tip jump: clear ring, keep primed. */
+- (void)flushTip;
 - (void)setMaxQueueMs:(int)ms;
 - (void)pushSamples:(const float *)samples
              frames:(int)frames

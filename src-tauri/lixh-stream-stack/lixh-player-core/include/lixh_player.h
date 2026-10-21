@@ -10,7 +10,13 @@ enum {
     LIXH_VIDEO_VIDEOTOOLBOX = 2,
     LIXH_VIDEO_MEDIACODEC = 3
 };
-enum { LIXH_EVT_STATE = 1, LIXH_EVT_ERROR = 2, LIXH_EVT_INFO = 3 };
+enum {
+    LIXH_EVT_STATE = 1,
+    LIXH_EVT_ERROR = 2,
+    LIXH_EVT_INFO = 3,
+    /* Listen tip-batch skipped backlog — hosts should flush PCM rings. */
+    LIXH_EVT_AUDIO_TIP_FLUSH = 4
+};
 enum { LIXH_STATE_IDLE = 0, LIXH_STATE_OPEN = 1, LIXH_STATE_PLAYING = 2, LIXH_STATE_STOPPED = 3, LIXH_STATE_ERROR = 4 };
 
 typedef struct LixhNativeFrame {

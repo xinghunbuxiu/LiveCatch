@@ -764,6 +764,8 @@ static void decode_audio_tip_batch(LixhPlayer *p, AVPacket **batch, int n,
     if (skipped) {
         atomic_store_explicit(&p->audio_anchor_pts_ms, AV_NOPTS_VALUE,
                               memory_order_release);
+        /* Drop already-queued PCM so tip jump is heard immediately. */
+        emit(p, LIXH_EVT_AUDIO_TIP_FLUSH, (int)n, "audio_tip_flush");
     }
 }
 

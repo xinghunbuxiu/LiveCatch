@@ -71,6 +71,11 @@ void AudioOutput::ClearQueue() {
 
 void AudioOutput::Flush() { ClearQueue(); }
 
+void AudioOutput::FlushTip() {
+  std::lock_guard<std::mutex> lock(mu_);
+  r_ = w_ = count_ = 0;
+}
+
 void AudioOutput::SetMaxQueueMs(int ms) {
   // Snap/listen may request ~60ms; grows on underrun, shrinks when healthy.
   if (ms < 60) ms = 60;

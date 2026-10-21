@@ -146,8 +146,13 @@ static void OnAudio(void *opaque, int sample_rate, int channels, int format,
 
 static void OnEvent(void *opaque, int type, int code, const char *message) {
   (void)code;
+  LixhPlayerEngine *self = (__bridge LixhPlayerEngine *)opaque;
+  if (type == LIXH_EVT_AUDIO_TIP_FLUSH) {
+    [self.audio flushTip];
+    return;
+  }
   if (type != LIXH_EVT_ERROR || !message) return;
-  [(__bridge LixhPlayerEngine *)opaque setErr:[NSString stringWithUTF8String:message]];
+  [self setErr:[NSString stringWithUTF8String:message]];
 }
 
 - (int)handleVideoKind:(int)kind

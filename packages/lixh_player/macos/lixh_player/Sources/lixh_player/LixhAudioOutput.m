@@ -190,6 +190,12 @@ static void LixhAqCallback(void *user, AudioQueueRef q, AudioQueueBufferRef buf)
   }
 }
 
+- (void)flushTip {
+  @synchronized(self) {
+    _r = _w = _count = 0;
+  }
+}
+
 - (void)pushSamples:(const float *)samples
              frames:(int)frames
            channels:(int)channels

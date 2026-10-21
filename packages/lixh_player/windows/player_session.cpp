@@ -282,7 +282,14 @@ void PlayerSession::SetError(const std::string& msg) {
 // static
 void PlayerSession::OnEvent(void* opaque, int type, int /*code*/,
                             const char* message) {
-  if (!opaque || !message) {
+  if (!opaque) {
+    return;
+  }
+  if (type == LIXH_EVT_AUDIO_TIP_FLUSH) {
+    static_cast<PlayerSession*>(opaque)->audio_.FlushTip();
+    return;
+  }
+  if (!message) {
     return;
   }
   // INFO/STATE must not overwrite lastError — UI was showing "reconnecting" as failure.
