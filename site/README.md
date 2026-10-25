@@ -38,18 +38,33 @@ location / {
 
 ## 设计说明
 
-配色取自参考站（syncrozero.com）的设计语言：
+浅色纸质编辑风：米白纸底 + 单一朱红强调，衬线标题配无衬线正文，
+等宽字体只用于小标签。刻意与常见"黑底 + 霓虹绿"的科技站区分开。
 
 | Token | 值 | 用途 |
 |---|---|---|
-| `--bg` | `#05070a` | 页面底色（近黑） |
-| `--panel` | `#10110e` | 卡片/面板 |
-| `--ink` | `#f2f2e9` | 主文字（暖白） |
-| `--ink-dim` | `#a5a699` | 次要文字 |
-| `--accent` | `#00c878` | 强调色（青绿） |
+| `--paper` | `#f7f4ee` | 页面底色（暖米白，叠两层点阵模拟纸纹） |
+| `--paper-2` | `#efeae0` | 次级面板 |
+| `--rule` | `#ddd5c7` | 分隔线 |
+| `--ink` | `#1b1917` | 主文字 |
+| `--ink-2` | `#57524b` | 正文/次要 |
+| `--ink-3` | `#8d8579` | 标签/注释 |
+| `--accent` | `#c8402f` | 强调色（朱红） |
 
-排版用等宽字体做小标签（`01 / PRODUCT`、`A / 01`），正文用系统中文字体栈。
-所有动效都尊重 `prefers-reduced-motion`。
+字体栈：
+
+- 标题/引文：`Songti SC → Source Han Serif SC → Noto Serif CJK SC → SimSun → Georgia`
+- 正文：`PingFang SC → Hiragino Sans GB → Microsoft YaHei → system-ui`
+- 小标签：等宽（`SF Mono / Menlo / Consolas`）
+
+版式要点：
+
+- 章节头用 `120px | 1fr` 两栏网格，编号在左、标题在右
+- 功能列表用带编号的横线行（`A / 01`），不用卡片阴影
+- 播放方式三栏用竖线分隔，首栏标"默认"
+- 所有圆角为 0，靠 1px 细线建立层次
+
+动效仅做滚动淡入，且 `prefers-reduced-motion: reduce` 时完全跳过。
 
 ## 内容边界
 
