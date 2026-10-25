@@ -226,7 +226,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
           ),
           const SizedBox(height: 6),
           Text(
-            '听播倍速上限；贴边约 1.0x，积压时再加速。开画面最多 1.15x',
+            '建议 1.0x：追赶只丢旧 PCM，>1x 线性变速易出吱吱变调',
             style: TextStyle(fontSize: 12, color: foam.withValues(alpha: 0.45)),
           ),
           const SizedBox(height: 12),

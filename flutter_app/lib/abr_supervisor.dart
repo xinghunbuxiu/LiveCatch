@@ -171,8 +171,17 @@ class AbrSupervisor {
     final cur = _current;
     if (cur != null) _failed.add(cur);
 
+    // only_audio open/play fail → jump to lean A/V (not another audio-only).
+    int? next;
+    if (cur != null && _candidates[cur].audioOnly) {
+      for (var i = 0; i < _candidates.length; i++) {
+        if (_failed.contains(i) || _candidates[i].audioOnly) continue;
+        next = i;
+        break;
+      }
+    }
     // Prefer closest lower bitrate, then any unused candidate.
-    int? next = cur != null ? _nextLowerBitrate(cur) : null;
+    next ??= cur != null ? _nextLowerBitrate(cur) : null;
     next ??= () {
       for (var i = 0; i < _candidates.length; i++) {
         if (i != cur && !_failed.contains(i)) return i;

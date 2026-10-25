@@ -60,11 +60,20 @@ bool _looksExpired(String msg) {
   return keys.any(m.contains);
 }
 
+/// Build-time QA escape hatch (never on in store builds):
+/// `--dart-define=LIXH_SKIP_LICENSE=true`
+const bool kSkipLicenseGate = bool.fromEnvironment('LIXH_SKIP_LICENSE');
+
 /// Hard check before room resolve: must have a live binding via heartbeat.
 Future<LicenseGateResult> ensureLicenseForPlayback({
   required LicenseApi api,
   required LicenseSession session,
 }) async {
+  if (kSkipLicenseGate) {
+    return LicenseGateResult.ok(
+      session.copyWith(active: true, lastMessage: 'QA skip license'),
+    );
+  }
   if (!api.hasToken) {
     return LicenseGateResult.blocked(
       session: session,
