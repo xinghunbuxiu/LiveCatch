@@ -528,7 +528,17 @@
 <script>
   // Download targets stay empty until real artifacts exist; an unset entry
   // disables itself rather than linking somewhere broken.
-  const DOWNLOADS = { android: '', windows: '', macos: '' };
+  // Real artifacts, published as GitHub Release assets. Android is filled in
+  // once its build finishes; macOS has no artifact yet, so it stays empty and
+  // the button disables itself rather than linking nowhere.
+  const RELEASE = 'https://github.com/xinghunbuxiu/LiveCatch/releases';
+  const DOWNLOADS = {
+    // arm64 is what modern phones need; the armv7 build is published too but
+    // 32-bit devices are rare enough that it stays off the page.
+    android: RELEASE + '/download/v0.48.0-win/LiveCatch-0.48.0-android-arm64.apk',
+    windows: RELEASE + '/download/v0.48.0-win/LiveCatch-0.48.0-windows-x64-setup.exe',
+    macos: '',
+  };
   document.querySelectorAll('[data-plat]').forEach(function (el) {
     el.addEventListener('click', function (ev) {
       const url = DOWNLOADS[el.dataset.plat];

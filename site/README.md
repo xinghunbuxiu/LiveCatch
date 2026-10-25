@@ -31,7 +31,7 @@ location / {
 | 位置 | 现在 | 要改成 |
 |---|---|---|
 | 页脚备案号 | `ICP 备案号待填` / `公安备案号待填` | 真实备案编号（未备案不要上线） |
-| `<script>` 里的 `DOWNLOADS` | 全空 | Android / Windows / macOS 的下载地址 |
+| `<script>` 里的 `DOWNLOADS` | Android + Windows 已接 Release；macOS 空 | 补 macOS 地址 |
 | `<meta property="og:*">` | 无图 | 加 `og:image` 指向 1200×630 分享图 |
 
 `DOWNLOADS` 留空时按钮会显示"即将开放"，不会产生死链。
