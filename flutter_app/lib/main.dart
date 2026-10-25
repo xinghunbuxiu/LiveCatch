@@ -375,35 +375,14 @@ class _PlayerPageState extends State<PlayerPage>
           } else if (_lastProgress > 0) {
             _stallTicks++;
             if (_stallTicks >= 10 && !_abrBusy) {
-              final abr = _abr;
-              // Even with ABR off: fail over to another candidate before full re-resolve.
-              if (abr != null) {
-                final action = abr.reportFailure('stall ticks');
-                _stallTicks = 0;
-                if (action.kind == AbrActionKind.switchTo &&
-                    action.index != null) {
-                  // ignore: unawaited_futures
-                  _switchAbr(action.index!, action.reason);
-                  return;
-                }
-                if (action.kind == AbrActionKind.reResolve &&
-                    _roomInput != null &&
-                    _reconnects < 3) {
-                  _reconnects++;
-                  setState(() => _status = '卡顿，重解析 #$_reconnects…');
-                  // ignore: unawaited_futures
-                  _start();
-                  return;
-                }
-              } else if (_roomInput != null &&
-                  !looksLikeDirectStream(_roomInput!) &&
-                  _reconnects < 3) {
-                _stallTicks = 0;
-                _reconnects++;
-                setState(() => _status = '卡顿，重连 #$_reconnects…');
-                // ignore: unawaited_futures
-                _start();
-                return;
+              /* Stalls no longer trigger a line switch. Switching means
+               * stop() + reopen(), which is the worst thing to do while the
+               * link is already struggling — it turned a short stall into a
+               * long one. Tell the user and let them pick a line themselves;
+               * only a full open failure still fails over automatically. */
+              _stallTicks = 0;
+              if (mounted) {
+                setState(() => _status = '卡顿 · 可换线路');
               }
             }
           } else if (!_videoOn &&
@@ -539,6 +518,30 @@ class _PlayerPageState extends State<PlayerPage>
       _appendLog('监听失败: $msg');
       setState(() => _status = '监听失败');
     }
+  }
+
+  /// Manual line picker. The user chooses, we never switch on our own: an
+  /// automatic switch tears the session down and reopens, which is exactly the
+  /// wrong move while the network is already struggling.
+  Future<void> _pickLine() async {
+    final abr = _abr;
+    if (abr == null || abr.candidates.isEmpty || _abrBusy) return;
+    final signal = Theme.of(context).colorScheme.primary;
+    final foam = Theme.of(context).colorScheme.onSurface;
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: const Color(0xFF0D1117),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      builder: (ctx) => _LineSheet(
+        candidates: abr.candidates,
+        currentIndex: abr.currentIndex,
+        signal: signal,
+        foam: foam,
+      ),
+    );
+    if (picked == null || !mounted) return;
+    if (picked == abr.currentIndex) return;
+    await _switchAbr(picked, '手动切换');
   }
 
   Future<void> _switchAbr(int index, String reason) async {
@@ -1064,6 +1067,8 @@ class _PlayerPageState extends State<PlayerPage>
                     onStart: _start,
                     onStop: _stop,
                     onToggleVideo: _toggleVideo,
+                    lineLabel: _abrLabel,
+                    onPickLine: _abr == null ? null : _pickLine,
                   ),
                 ],
               ),
@@ -1401,6 +1406,8 @@ class _Dock extends StatelessWidget {
     required this.onStart,
     required this.onStop,
     required this.onToggleVideo,
+    required this.lineLabel,
+    required this.onPickLine,
   });
 
   final TextEditingController controller;
@@ -1410,6 +1417,10 @@ class _Dock extends StatelessWidget {
   final bool startWithVideo;
   final Color signal;
   final Color foam;
+  /// Currently playing stream label, e.g. "HD1 · FLV". Empty when unknown.
+  final String lineLabel;
+  /// Opens the manual line picker; null when there is nothing to switch.
+  final VoidCallback? onPickLine;
   final VoidCallback onStart;
   final VoidCallback onStop;
   final VoidCallback onToggleVideo;
@@ -1497,9 +1508,134 @@ class _Dock extends StatelessWidget {
                 child: Text(videoOn ? '关画面' : '开画面'),
               ),
             ),
+            const SizedBox(width: 8),
+            // Manual line picker. Automatic failover stays available for
+            // open failures, but nothing switches on a stall any more, so the
+            // user is the one who decides when to change lines.
+            SizedBox(
+              height: 44,
+              child: OutlinedButton(
+                onPressed: playing ? onPickLine : null,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: foam,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.zero,
+                  ),
+                  side: BorderSide(color: foam.withValues(alpha: 0.28)),
+                ),
+                child: Text(
+                  lineLabel.isEmpty ? '线路' : lineLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
           ],
         ),
       ],
+    );
+  }
+}
+
+/// Bottom sheet listing every resolved stream so the user can pick one.
+///
+/// Shows quality, protocol and bitrate; marks the active line. The caller
+/// performs the actual switch, so this widget stays stateless.
+class _LineSheet extends StatelessWidget {
+  const _LineSheet({
+    required this.candidates,
+    required this.currentIndex,
+    required this.signal,
+    required this.foam,
+  });
+
+  final List<StreamPick> candidates;
+  final int? currentIndex;
+  final Color signal;
+  final Color foam;
+
+  String _label(StreamPick p) {
+    final q = p.quality.isNotEmpty ? p.quality : '未标注';
+    final br = p.bitrate > 0 ? '${p.bitrate} kbps' : '码率未知';
+    final audio = p.audioOnly ? ' · 纯音频' : '';
+    return '$q · ${p.protocol} · $br$audio';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+            child: Row(
+              children: [
+                Text(
+                  '选择线路',
+                  style: TextStyle(
+                    color: foam,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '切换会重新连接',
+                  style: TextStyle(
+                    color: foam.withValues(alpha: 0.4),
+                    fontSize: 11.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          for (var i = 0; i < candidates.length; i++)
+            InkWell(
+              onTap: () => Navigator.of(context).pop(i),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: foam.withValues(alpha: 0.10)),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      i == currentIndex
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      size: 17,
+                      color: i == currentIndex
+                          ? signal
+                          : foam.withValues(alpha: 0.35),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _label(candidates[i]),
+                        style: TextStyle(
+                          color: i == currentIndex
+                              ? signal
+                              : foam.withValues(alpha: 0.82),
+                          fontSize: 13.5,
+                        ),
+                      ),
+                    ),
+                    if (i == currentIndex)
+                      Text(
+                        '当前',
+                        style: TextStyle(color: signal, fontSize: 11.5),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 8),
+        ],
+      ),
     );
   }
 }
