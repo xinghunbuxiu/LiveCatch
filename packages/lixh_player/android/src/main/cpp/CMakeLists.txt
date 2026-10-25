@@ -85,7 +85,9 @@ target_compile_definitions(lixh_player PRIVATE LIXH_ANDROID)
 target_compile_options(lixh_player PRIVATE
   $<$<COMPILE_LANGUAGE:C>:-std=c11>
   $<$<COMPILE_LANGUAGE:CXX>:-std=c++17>
+  -pthread
 )
+target_link_options(lixh_player PRIVATE -pthread)
 target_include_directories(lixh_player PRIVATE
   "${LIXH_CORE_DIR}/include"
   "${LIXH_FFMPEG_DIR}/include"

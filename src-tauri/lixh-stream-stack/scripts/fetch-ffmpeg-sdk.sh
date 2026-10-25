@@ -6,7 +6,7 @@ VERSION="${LIXH_FFMPEG_VERSION:-9.0.2}"
 PLATFORM="${1:?platform required}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 OUT="${2:-$ROOT/src-tauri/lixh-stream-stack/sdk/$PLATFORM}"
-TAG="${LIXH_FFMPEG_TAG:-ffmpeg-${VERSION}-lc1}"
+TAG="${LIXH_FFMPEG_TAG:-ffmpeg-${VERSION}-lc2}"
 ASSET="LiveCatch-ffmpeg-sdk-${VERSION}-${PLATFORM}.zip"
 
 mkdir -p "$OUT"

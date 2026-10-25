@@ -15,7 +15,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $Version = if ($env:LIXH_FFMPEG_VERSION) { $env:LIXH_FFMPEG_VERSION } else { '9.0.2' }
 $Repo = if ($env:LIXH_FFMPEG_REPO) { $env:LIXH_FFMPEG_REPO } else { 'xinghunbuxiu/LiveCatchFfmpeg' }
-$Tag = if ($env:LIXH_FFMPEG_TAG) { $env:LIXH_FFMPEG_TAG } else { "ffmpeg-$Version-lc1" }
+$Tag = if ($env:LIXH_FFMPEG_TAG) { $env:LIXH_FFMPEG_TAG } else { "ffmpeg-$Version-lc2" }
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $Stack = Join-Path $Root 'src-tauri\lixh-stream-stack'
 $Base = "https://github.com/$Repo/releases/download/$Tag"

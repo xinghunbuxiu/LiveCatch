@@ -147,6 +147,23 @@ android {
         jniLibs {
             // Allow AGP to strip unneeded local symbols from our JNI .so.
             // Prebuilt FFmpeg libs are already stripped upstream.
+            //
+            // The FFmpeg .so files reach the APK twice: staged into jniLibs by
+            // stageFfmpegLibs, and linked as CMake IMPORTED targets. AGP then
+            // aborts with "2 files found with path lib/<abi>/libavcodec.so".
+            // Both copies are byte-identical, so keep the first.
+            pickFirsts += listOf(
+                "lib/arm64-v8a/libavcodec.so",
+                "lib/arm64-v8a/libavformat.so",
+                "lib/arm64-v8a/libavutil.so",
+                "lib/arm64-v8a/libswresample.so",
+                "lib/arm64-v8a/libswscale.so",
+                "lib/armeabi-v7a/libavcodec.so",
+                "lib/armeabi-v7a/libavformat.so",
+                "lib/armeabi-v7a/libavutil.so",
+                "lib/armeabi-v7a/libswresample.so",
+                "lib/armeabi-v7a/libswscale.so",
+            )
         }
     }
 

@@ -108,21 +108,47 @@ extern "C" {
 #include <libswscale/swscale.h>
 }
 
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "lixh", __VA_ARGS__)
+/* WARN, not INFO: several OEM ROMs (Huawei included) drop third-party INFO
+   lines from the main log buffer, which hid every surface/codec diagnostic. */
+#define LOGI(...) __android_log_print(ANDROID_LOG_WARN, "lixh", __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "lixh", __VA_ARGS__)
+
+/* Declared by hand: libavcodec/jni.h has no extern "C" guard for C++. */
+extern "C" int av_jni_set_java_vm(void* vm, void* log_ctx);
+
+/* FFmpeg's mediacodec hwcontext builds a MediaCodec through JNI and needs the
+   running JavaVM. Registering from JNI_OnLoad proved unreliable here (FFmpeg
+   DSOs are not guaranteed resolved yet), so register lazily on first native
+   entry point that has a JNIEnv. Without it av_hwdevice_ctx_create() returns
+   -ENOMEM and the session silently decodes on the CPU. */
+static void EnsureJavaVm(JNIEnv* env) {
+  static std::atomic<bool> done{false};
+  if (!env || done.load(std::memory_order_acquire)) return;
+  JavaVM* vm = nullptr;
+  if (env->GetJavaVM(&vm) != JNI_OK || !vm) {
+    LOGE("GetJavaVM failed; mediacodec will be unavailable");
+    return;
+  }
+  int rc = av_jni_set_java_vm(vm, nullptr);
+  LOGI("av_jni_set_java_vm=%d vm=%p", rc, (void*)vm);
+  if (rc == 0) done.store(true, std::memory_order_release);
+}
 
 namespace {
 
 /* ~500ms stereo @48k — physical ceiling; live trim keeps far less. */
 constexpr int kRingCap = 48000 * 2 / 2;
 
-/* Video chase target ≠ safe PCM depth. Listen stays lean (base.apk-like);
-   picture keeps a modest cushion. */
+/* Listen tracks chase target 1:1 (base.apk-like minimal cushion). Picture
+   keeps a modest pad. Silence bug was prime==cap+trim, not a 60ms floor. */
 static int PcmQueueMsFromChase(int chase_target_ms, bool listen_only) {
-  int pcm = listen_only ? (chase_target_ms + chase_target_ms / 4) /* ×1.25 */
-                        : (chase_target_ms * 3 / 2);             /* ×1.5 */
-  const int floor = listen_only ? 40 : 100;
-  const int cap = listen_only ? 250 : 400;
+  /* Listen sweet spot ~90ms: continuous speech, still <<1s.
+     Picture: 1.5x pad, not 2x. Audio is the master clock, so a 2x pad made
+     video wait on a 240ms (balanced: 240ms) audio cushion — the biggest
+     avoidable A/V offset versus base.apk's near-zero output buffer. */
+  int pcm = listen_only ? (chase_target_ms + 20) : (chase_target_ms * 3 / 2);
+  const int floor = listen_only ? 80 : 120;
+  const int cap = listen_only ? 180 : 400;
   if (pcm < floor) pcm = floor;
   if (pcm > cap) pcm = cap;
   return pcm;
@@ -134,7 +160,7 @@ class AudioOut {
 
   void SetMaxQueueMs(int ms) {
     std::lock_guard<std::mutex> lock(mu_);
-    if (ms < 35) ms = 35;
+    if (ms < 60) ms = 60;
     if (ms > 400) ms = 400;
     base_queue_ms_ = ms;
     max_queue_ms_ = ms;
@@ -144,53 +170,62 @@ class AudioOut {
     underrun_window_count_ = 0;
   }
 
-  /* Prime below the queue cap so we always become audible. Equal prime==cap
-     + trim-while-unprimed caused permanent silence on listen-first. */
+  /* Prime < cap always. Equal prime==cap + trim-while-unprimed = silence. */
   int PrimeNeedMsLocked() const {
-    int p = base_queue_ms_ * 2 / 3;
-    if (p < 20) p = 20;
-    if (p > 60) p = 60;
-    if (p >= base_queue_ms_) p = base_queue_ms_ > 20 ? base_queue_ms_ - 10 : 20;
+    int p = base_queue_ms_ / 2;
+    if (p < 40) p = 40; /* ≥2 AAudio bursts @20ms */
+    if (p > 70) p = 70;
+    if (p >= base_queue_ms_) p = base_queue_ms_ > 40 ? base_queue_ms_ - 12 : 40;
     return p;
   }
 
   void NoteUnderrunLocked() {
     const auto now = std::chrono::steady_clock::now();
     last_underrun_ = now;
-    /* Ignore isolated glitches: need ≥2 underruns in 30s before thickening. */
+    /* First underrun: thicken quickly so speech stays continuous. */
+    const int soft_cap = base_queue_ms_ + 60;
+    if (max_queue_ms_ < soft_cap) {
+      int next = max_queue_ms_ + 30;
+      if (next > soft_cap) next = soft_cap;
+      if (next < base_queue_ms_) next = base_queue_ms_;
+      max_queue_ms_ = next;
+      underrun_window_start_ = now;
+      underrun_window_count_ = 1;
+      return;
+    }
     if (underrun_window_start_.time_since_epoch().count() == 0 ||
-        now - underrun_window_start_ > std::chrono::seconds(30)) {
+        now - underrun_window_start_ > std::chrono::seconds(8)) {
       underrun_window_start_ = now;
       underrun_window_count_ = 1;
       return;
     }
     underrun_window_count_++;
     if (underrun_window_count_ < 2) return;
-    if (max_queue_ms_ < 150) {
+    /* Hard cap 200ms — still low-latency, enough for weak CDN. */
+    if (max_queue_ms_ < 200) {
       int next = max_queue_ms_ + 30;
-      if (next > 150) next = 150;
+      if (next > 200) next = 200;
       if (next < base_queue_ms_) next = base_queue_ms_;
       max_queue_ms_ = next;
     }
   }
 
-  /* After ~1.2s without underrun, ease depth back toward base (~80ms/s). */
+  /* Slow shed after healthy stretch — avoid underrun↔grow oscillation. */
   void MaybeShrinkLocked() {
     if (max_queue_ms_ <= base_queue_ms_ || !primed_) return;
     const auto now = std::chrono::steady_clock::now();
     if (last_underrun_.time_since_epoch().count() != 0 &&
-        now - last_underrun_ < std::chrono::milliseconds(1200)) {
+        now - last_underrun_ < std::chrono::milliseconds(2000)) {
       return;
     }
     if (last_shrink_.time_since_epoch().count() != 0 &&
-        now - last_shrink_ < std::chrono::milliseconds(250)) {
+        now - last_shrink_ < std::chrono::milliseconds(400)) {
       return;
     }
-    /* Only shrink when we still have a small cushion — empty ring is risky. */
     int qms = (rate_ > 0 && ch_ > 0) ? (int)((count_ / ch_) * 1000L / rate_) : 0;
-    if (qms < 20) return;
+    if (qms < base_queue_ms_ * 2 / 3) return;
     last_shrink_ = now;
-    int next = max_queue_ms_ - 20; /* 20ms / 250ms ≈ 80ms/s */
+    int next = max_queue_ms_ - 10;
     if (next < base_queue_ms_) next = base_queue_ms_;
     max_queue_ms_ = next;
   }
@@ -204,31 +239,32 @@ class AudioOut {
     int cap_ms = max_queue_ms_;
     if (!primed_) {
       int p = PrimeNeedMsLocked();
-      if (cap_ms < p + 20) cap_ms = p + 20;
+      if (cap_ms < p + 30) cap_ms = p + 30;
     }
     int max_samples = ch_ * rate_ * cap_ms / 1000;
-    /* Soft floor for trim safety — never force above the active cap. */
-    int floor_ms = max_queue_ms_ < 100 ? 35 : (max_queue_ms_ < 140 ? 60 : 100);
+    int floor_ms = max_queue_ms_ < 100 ? 55 : (max_queue_ms_ < 140 ? 70 : 90);
     if (floor_ms > max_queue_ms_) floor_ms = max_queue_ms_;
     if (max_samples < ch_ * rate_ * floor_ms / 1000) {
       max_samples = ch_ * rate_ * floor_ms / 1000;
     }
     if (max_samples > kRingCap - n) max_samples = kRingCap - n;
-    const bool snap = max_queue_ms_ <= 80;
-    const int trim_at = snap ? max_samples : (max_samples + max_samples / 4);
-    const int keep_ms =
-        max_queue_ms_ >= 160 ? 80 : (max_queue_ms_ >= 100 ? 50 : 25);
-    /* Never trim below prime threshold while still silent. */
+    /* Small slack above target — absorb jitter without constant micro-trims. */
+    const int trim_at = max_samples + max_samples / 8;
+    int keep_ms = base_queue_ms_ * 3 / 4;
+    if (keep_ms < 55) keep_ms = 55;
+    if (keep_ms > max_queue_ms_) keep_ms = max_queue_ms_;
     const int prime_keep = ch_ * rate_ * PrimeNeedMsLocked() / 1000;
     const int min_keep =
         primed_ ? (ch_ * rate_ * keep_ms / 1000) : prime_keep;
-    while (count_ + n > trim_at && count_ > min_keep) {
-      int drop = ch_ * (snap ? (rate_ / 25) : (rate_ / 50));  // ~40ms / ~20ms
-      if (drop < 1) drop = n;
+    /* O(1) drop — long while-trim held mu_ and starved AAudio → stutter. */
+    int excess = count_ + n - trim_at;
+    if (excess > 0 && count_ > min_keep) {
+      int drop = excess;
       if (drop > count_ - min_keep) drop = count_ - min_keep;
-      if (drop < 1) break;
-      r_ = (r_ + drop) % kRingCap;
-      count_ -= drop;
+      if (drop > 0) {
+        r_ = (r_ + drop) % kRingCap;
+        count_ -= drop;
+      }
     }
     int off = 0;
     while (off < n) {
@@ -326,12 +362,9 @@ class AudioOut {
 
   aaudio_data_callback_result_t OnAAudio(float* dst, int32_t num_frames) {
     int need = num_frames * ch_;
-    /* try_lock: must not block — Push may hold mu_ while opening the stream. */
-    std::unique_lock<std::mutex> lock(mu_, std::try_to_lock);
-    if (!lock.owns_lock()) {
-      memset(dst, 0, (size_t)need * sizeof(float));
-      return kAAudioContinue;
-    }
+    /* Blocking lock: try_lock→silence was the main listen stutter (Push used
+       to hold mu_ across multi-drop trim). Trim is O(1) now so wait is short. */
+    std::lock_guard<std::mutex> lock(mu_);
     DrainRingLocked(dst, nullptr, need);
     return kAAudioContinue;
   }
@@ -467,8 +500,8 @@ class AudioOut {
     int32_t burst =
         a.stream_getFramesPerBurst ? a.stream_getFramesPerBurst(stream) : 0;
     if (burst > 0 && a.stream_setBufferSizeInFrames) {
-      /* 2 bursts: leaner sink; reopen path falls back if device crackles. */
-      a.stream_setBufferSizeInFrames(stream, burst * 2);
+      /* 4 bursts ≈ 80ms @20ms burst — smooth; PCM target still ~90ms. */
+      a.stream_setBufferSizeInFrames(stream, burst * 4);
     }
     if (a.stream_requestStart(stream) != kAAudioOk) {
       a.stream_close(stream);
@@ -532,6 +565,7 @@ class Session {
   }
 
   void AttachSurface(JNIEnv* env, jobject surface) {
+    EnsureJavaVm(env);
     jobject global = nullptr;
     ANativeWindow* win = nullptr;
     {
@@ -567,6 +601,10 @@ class Session {
 
   bool Open(const std::string& url, const std::string& headers) {
     Stop();
+    {
+      std::lock_guard<std::mutex> lock(mu_);
+      last_error_.clear();
+    }
     LixhCallbacks cb{};
     cb.opaque = this;
     cb.on_video = [](void* o, int kind, int w, int h, int64_t, int64_t,
@@ -614,7 +652,12 @@ class Session {
     lixh_player_set_play_rate(p, rate);
     lixh_player_set_latency(p, latency_target_ms_, latency_max_ms_);
     if (lixh_player_open(p, url.c_str()) < 0) {
-      SetError("lixh_player_open failed");
+      /* open_input already emitted LIXH_EVT_ERROR with av_err2str — keep it. */
+      {
+        std::lock_guard<std::mutex> lock(mu_);
+        if (last_error_.empty()) last_error_ = "lixh_player_open failed";
+        LOGE("open failed: %s", last_error_.c_str());
+      }
       lixh_player_destroy(p);
       return false;
     }
@@ -779,6 +822,8 @@ class Session {
     }
     sws_w_ = sws_h_ = 0;
     sws_fmt_ = AV_PIX_FMT_NONE;
+    /* New Surface ⇒ its buffer geometry is unknown again. */
+    buf_w_ = buf_h_ = 0;
     if (window_) {
       ANativeWindow_release(window_);
       window_ = nullptr;
@@ -825,7 +870,13 @@ class Session {
     if (!win) return 1;
 
     const AVFrame* src = static_cast<const AVFrame*>(frame->handle0);
-    ANativeWindow_setBuffersGeometry(win, width, height, WINDOW_FORMAT_RGBA_8888);
+    /* Reconfiguring the buffer queue per frame is a needless round-trip on the
+       present path; only do it when the geometry actually changes. */
+    if (buf_w_ != width || buf_h_ != height) {
+      ANativeWindow_setBuffersGeometry(win, width, height, WINDOW_FORMAT_RGBA_8888);
+      buf_w_ = width;
+      buf_h_ = height;
+    }
     ANativeWindow_Buffer buf{};
     if (ANativeWindow_lock(win, &buf, nullptr) != 0) {
       ANativeWindow_release(win);
@@ -876,13 +927,15 @@ class Session {
   jobject surface_global_ = nullptr;
   SwsContext* sws_ = nullptr;
   int sws_w_ = 0, sws_h_ = 0, sws_fmt_ = AV_PIX_FMT_NONE;
+  /* Last geometry pushed to the Surface; avoids a per-frame reconfiguration. */
+  int buf_w_ = 0, buf_h_ = 0;
   std::chrono::steady_clock::time_point last_present_{};
   std::string last_error_;
   std::atomic<uint64_t> video_frames_{0};
   std::atomic<uint64_t> audio_frames_{0};
   std::atomic<uint64_t> present_ok_{0};
   std::atomic<bool> video_enabled_{false};
-  float listen_play_rate_ = 1.3f;
+  float listen_play_rate_ = 1.0f;
   int latency_target_ms_ = 40;
   int latency_max_ms_ = 160;
 };
@@ -890,7 +943,8 @@ class Session {
 }  // namespace
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeCreate(JNIEnv*, jobject) {
+Java_com_livecatch_lixh_1player_LixhPlayerPlugin_nativeCreate(JNIEnv* env, jobject) {
+  EnsureJavaVm(env);
   return reinterpret_cast<jlong>(new Session());
 }
 
