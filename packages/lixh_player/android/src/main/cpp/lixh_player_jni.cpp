@@ -210,20 +210,35 @@ class AudioOut {
     }
   }
 
-  /* Slow shed after healthy stretch — avoid underrun↔grow oscillation. */
+  /* Slow shed after healthy stretch — avoid underrun↔grow oscillation.
+   *
+   * Growth was effectively one-way. Thickening is triggered by an underrun and
+   * only shed 10ms per 400ms with a 2s quiet period in front, so a stream that
+   * underran once every couple of seconds kept max_queue_ms_ pinned near the
+   * 200ms ceiling for the rest of the session — measured as a steady 136-206ms
+   * queue on a 90ms base long after the network had recovered.
+   *
+   * So also shed when the queue is simply over-full relative to its own limit:
+   * that means the cushion is no longer being consumed and is pure added delay.
+   */
   void MaybeShrinkLocked() {
     if (max_queue_ms_ <= base_queue_ms_ || !primed_) return;
     const auto now = std::chrono::steady_clock::now();
-    if (last_underrun_.time_since_epoch().count() != 0 &&
-        now - last_underrun_ < std::chrono::milliseconds(2000)) {
-      return;
+    int qms = (rate_ > 0 && ch_ > 0) ? (int)((count_ / ch_) * 1000L / rate_) : 0;
+    /* Over-full: excess sits above the cap and cannot be drained by playback,
+       so trimming it does not remove jitter protection the stream is using. */
+    const bool overfull = qms > max_queue_ms_ + 20;
+    if (!overfull) {
+      if (last_underrun_.time_since_epoch().count() != 0 &&
+          now - last_underrun_ < std::chrono::milliseconds(2000)) {
+        return;
+      }
     }
     if (last_shrink_.time_since_epoch().count() != 0 &&
-        now - last_shrink_ < std::chrono::milliseconds(400)) {
+        now - last_shrink_ < std::chrono::milliseconds(overfull ? 150 : 400)) {
       return;
     }
-    int qms = (rate_ > 0 && ch_ > 0) ? (int)((count_ / ch_) * 1000L / rate_) : 0;
-    if (qms < base_queue_ms_ * 2 / 3) return;
+    if (!overfull && qms < base_queue_ms_ * 2 / 3) return;
     last_shrink_ = now;
     int next = max_queue_ms_ - 10;
     if (next < base_queue_ms_) next = base_queue_ms_;
