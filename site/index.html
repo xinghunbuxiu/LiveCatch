@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LiveCatch｜直播低延迟收听</title>
+<meta name="description" content="LiveCatch——直播低延迟收听工具。支持抖音、快手、小红书直播间，声音优先，比画面更早听见关键信息。" />
+<meta name="theme-color" content="#00c878" />
+<meta property="og:title" content="LiveCatch｜直播低延迟收听" />
+<meta property="og:description" content="声音优先，比画面更早听见。支持抖音、快手、小红书直播间。" />
+<meta property="og:type" content="website" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%2300c878'/><text x='16' y='23' font-size='20' text-anchor='middle' fill='%2305070a' font-family='Arial Black'>L</text></svg>" />
+<style>
+  :root {
+    --bg: #05070a;
+    --panel: #10110e;
+    --ink: #f2f2e9;
+    --ink-dim: #a5a699;
+    --accent: #00c878;
+    --line: rgba(255, 255, 255, .09);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- nav ---------- */
+  header {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(5, 7, 10, .82);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav { display: flex; align-items: center; gap: 28px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .04em; }
+  .mark {
+    width: 26px; height: 26px; display: grid; place-items: center;
+    background: var(--accent); color: #05070a; font-weight: 900; font-size: 15px;
+  }
+  .nav a.link { color: var(--ink-dim); font-size: 14px; }
+  .nav a.link:hover { color: var(--ink); }
+  .nav .spacer { flex: 1; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 18px; font-size: 14px; font-weight: 600;
+    border: 1px solid var(--line); background: transparent; color: var(--ink);
+    cursor: pointer; transition: .18s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); color: #05070a; border-color: var(--accent); }
+  .btn.primary:hover { filter: brightness(1.1); color: #05070a; }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 88px 0 64px; border-bottom: 1px solid var(--line); }
+  .kicker {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .18em;
+    color: var(--accent); margin-bottom: 22px;
+  }
+  h1 {
+    font-size: clamp(38px, 6.4vw, 76px); line-height: 1.06;
+    font-weight: 900; letter-spacing: -.02em; margin-bottom: 26px;
+  }
+  h1 em { font-style: normal; color: var(--accent); }
+  .lede { font-size: 17px; color: var(--ink-dim); max-width: 640px; margin-bottom: 36px; }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; }
+  .note { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); }
+
+  /* ---------- readout ---------- */
+  .readout {
+    margin-top: 54px; border: 1px solid var(--line); background: var(--panel);
+    padding: 22px 24px; display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+  .ro-item .k {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+    color: var(--ink-dim); margin-bottom: 6px;
+  }
+  .ro-item .v { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .ro-item .v small { font-size: 13px; font-weight: 500; color: var(--ink-dim); margin-left: 4px; }
+  .dot { color: var(--accent); }
+
+  /* ---------- section ---------- */
+  section { padding: 78px 0; border-bottom: 1px solid var(--line); }
+  .sec-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 44px; }
+  .sec-no { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: .14em; }
+  h2 { font-size: clamp(26px, 3.4vw, 40px); font-weight: 800; letter-spacing: -.01em; }
+  .sec-sub { color: var(--ink-dim); margin-top: 12px; max-width: 620px; }
+
+  /* ---------- cards ---------- */
+  .grid { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .grid.c2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .card { background: var(--bg); padding: 30px 26px; }
+  .card .tag {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+    color: var(--accent); margin-bottom: 14px;
+  }
+  .card h3 { font-size: 19px; font-weight: 700; margin-bottom: 10px; }
+  .card p { color: var(--ink-dim); font-size: 14.5px; }
+
+  /* ---------- modes ---------- */
+  .modes { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .mode {
+    background: var(--bg); padding: 26px; display: flex; gap: 18px; align-items: flex-start;
+  }
+  .mode .idx {
+    font-family: var(--mono); font-size: 12px; color: var(--ink-dim);
+    border: 1px solid var(--line); padding: 4px 8px; flex: none;
+  }
+  .mode h4 { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+  .mode p { color: var(--ink-dim); font-size: 14px; }
+  .mode.hl { background: linear-gradient(180deg, rgba(0,200,120,.06), transparent); }
+  .mode.hl .idx { border-color: var(--accent); color: var(--accent); }
+
+  /* ---------- steps ---------- */
+  .steps { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .step { border-top: 2px solid var(--accent); padding-top: 18px; }
+  .step .n { font-family: var(--mono); font-size: 12px; color: var(--accent); margin-bottom: 8px; }
+  .step h4 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .step p { color: var(--ink-dim); font-size: 14px; }
+
+  /* ---------- faq ---------- */
+  .faq { border-top: 1px solid var(--line); }
+  details { border-bottom: 1px solid var(--line); }
+  summary {
+    cursor: pointer; padding: 20px 0; font-size: 16px; font-weight: 600;
+    list-style: none; display: flex; justify-content: space-between; gap: 16px;
+  }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; color: var(--accent); font-family: var(--mono); }
+  details[open] summary::after { content: "−"; }
+  details p { color: var(--ink-dim); font-size: 14.5px; padding-bottom: 20px; max-width: 720px; }
+
+  /* ---------- footer ---------- */
+  footer { padding: 46px 0 60px; }
+  .foot { display: flex; flex-wrap: wrap; gap: 18px; justify-content: space-between; align-items: center; }
+  .foot .fnote { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); }
+  .compliance { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--line); font-size: 12px; color: #64748b; }
+  .compliance a { margin-right: 14px; }
+
+  @media (max-width: 640px) {
+    .nav a.link { display: none; }
+    .hero { padding: 56px 0 44px; }
+    section { padding: 56px 0; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <a class="brand" href="#top"><span class="mark">L</span> LiveCatch</a>
+    <a class="link" href="#product">产品能力</a>
+    <a class="link" href="#modes">播放方式</a>
+    <a class="link" href="#how">使用方式</a>
+    <a class="link" href="#faq">常见问题</a>
+    <span class="spacer"></span>
+    <a class="btn primary" href="#download">下载客户端</a>
+  </div>
+</header>
+
+<main id="top">
+
+  <div class="hero">
+    <div class="wrap">
+      <div class="kicker">LOW LATENCY · AUDIO FIRST</div>
+      <h1>你的耳朵，<br /><em>应该比画面先到。</em></h1>
+      <p class="lede">
+        LiveCatch 把直播间识别、线路选择和低延迟收听收进一次粘贴。
+        你只管听见关键信息，剩下的交给它。
+      </p>
+      <div class="cta">
+        <a class="btn primary" href="#download">下载手机应用</a>
+        <a class="btn" href="#how">了解使用方式</a>
+      </div>
+      <div class="note">支持 抖音 / 快手 / 小红书 · 无需手动找流</div>
+
+      <div class="readout">
+        <div class="ro-item">
+          <div class="k">AUDIO QUEUE</div>
+          <div class="v">~90<small>ms</small></div>
+        </div>
+        <div class="ro-item">
+          <div class="k">DECODE</div>
+          <div class="v">硬解<small>MediaCodec</small></div>
+        </div>
+        <div class="ro-item">
+          <div class="k">DROPPED FRAMES</div>
+          <div class="v">0<small>/ 分钟</small></div>
+        </div>
+        <div class="ro-item">
+          <div class="k">STATUS</div>
+          <div class="v"><span class="dot">●</span> 已就绪</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section id="product">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="sec-no">01 / PRODUCT</span>
+        <h2>声音优先，更早听见</h2>
+      </div>
+      <p class="sec-sub">
+        直播抢货真正关键的是声音。LiveCatch 专注声音链路，减少画面缓冲带来的等待感。
+      </p>
+
+      <div class="grid c2" style="margin-top:40px">
+        <div class="card">
+          <div class="tag">A / 01</div>
+          <h3>声音优先</h3>
+          <p>只解码音频，跳过视频字节。同样网络下，声音比画面更早到达。</p>
+        </div>
+        <div class="card">
+          <div class="tag">A / 02</div>
+          <h3>粘贴即识别</h3>
+          <p>正常链接和手机分享文字都能识别，不用研究复杂设置。</p>
+        </div>
+        <div class="card">
+          <div class="tag">A / 03</div>
+          <h3>多路可选</h3>
+          <p>声音优先、极速声音、声画模式，按需随时切换，不必重开。</p>
+        </div>
+        <div class="card">
+          <div class="tag">A / 04</div>
+          <h3>手机电脑都能用</h3>
+          <p>手机端轻量收听，桌面端更快更稳。同一套播放内核。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="modes">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="sec-no">02 / PLAYBACK</span>
+        <h2>三种播放方式</h2>
+      </div>
+      <p class="sec-sub">同一路直播，三种取舍。切换不需要重新加载。</p>
+
+      <div class="modes" style="margin-top:40px">
+        <div class="mode hl">
+          <span class="idx">01</span>
+          <div>
+            <h4>声音优先</h4>
+            <p>专注关键声音信息，最低延迟。抢货、扣号、听价最常用。</p>
+          </div>
+        </div>
+        <div class="mode">
+          <span class="idx">02</span>
+          <div>
+            <h4>极速声音</h4>
+            <p>进一步压缩缓冲，更快听到，弱网下会自动加厚保证连续。</p>
+          </div>
+        </div>
+        <div class="mode">
+          <span class="idx">03</span>
+          <div>
+            <h4>声画模式</h4>
+            <p>兼顾画面，音画同步。适合需要看商品展示的场景。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="sec-no">03 / HOW</span>
+        <h2>一次粘贴完成</h2>
+      </div>
+
+      <div class="steps" style="margin-top:36px">
+        <div class="step">
+          <div class="n">STEP 01</div>
+          <h4>复制直播链接</h4>
+          <p>在直播 App 里分享，复制链接或分享文字。</p>
+        </div>
+        <div class="step">
+          <div class="n">STEP 02</div>
+          <h4>粘贴到输入框</h4>
+          <p>自动识别平台与房间号，短链自动展开。</p>
+        </div>
+        <div class="step">
+          <div class="n">STEP 03</div>
+          <h4>开始收听</h4>
+          <p>默认声音优先，需要画面时点一下即可切换。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="sec-no">04 / FAQ</span>
+        <h2>常见问题</h2>
+      </div>
+
+      <div class="faq">
+        <details>
+          <summary>和直接用直播 App 比，快在哪里？</summary>
+          <p>
+            LiveCatch 只解码音频并跳过视频字节，同时用更短的低延迟缓冲。
+            抢货场景里，声音往往比画面先到几百毫秒。
+          </p>
+        </details>
+        <details>
+          <summary>支持哪些平台？</summary>
+          <p>抖音、快手、小红书直播。其他平台的链接会提示不支持。</p>
+        </details>
+        <details>
+          <summary>弱网会卡吗？</summary>
+          <p>
+            缓冲会根据网络状况自动加厚：出现断音时短暂加大缓冲保证连续，
+            网络恢复后自动回落，不需要手动干预。
+          </p>
+        </details>
+        <details>
+          <summary>需要一直开着屏幕吗？</summary>
+          <p>不需要。切到后台会继续收听，通知栏可以随时停止。</p>
+        </details>
+        <details>
+          <summary>账号和授权怎么算？</summary>
+          <p>按设备授权，一个注册码绑定一台设备。到期前会有提醒。</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="sec-no">05 / DOWNLOAD</span>
+        <h2>准备好就出发</h2>
+      </div>
+      <p class="sec-sub">选择你的平台，粘贴一条链接就能开始。</p>
+      <div class="cta" style="margin-top:32px">
+        <a class="btn primary" href="#" data-plat="android">Android 版</a>
+        <a class="btn" href="#" data-plat="windows">Windows 版</a>
+        <a class="btn" href="#" data-plat="macos">macOS 版</a>
+      </div>
+      <p class="note" style="margin-top:16px">
+        下载地址待接入 · 如需试用请联系客服获取注册码
+      </p>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div class="brand"><span class="mark">L</span> LiveCatch</div>
+      <div class="fnote">低延迟直播收听 · AUDIO FIRST</div>
+    </div>
+    <div class="compliance">
+      <!-- 备案信息：上线前替换为真实编号 -->
+      <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">ICP 备案号待填</a>
+      <a href="https://beian.mps.gov.cn/" target="_blank" rel="noopener noreferrer">公安备案号待填</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // 下载按钮：拿到真实分发地址后填这里，未配置时给出提示而不是死链。
+  const DOWNLOADS = {
+    android: '',
+    windows: '',
+    macos: '',
+  };
+  document.querySelectorAll('[data-plat]').forEach(function (el) {
+    el.addEventListener('click', function (ev) {
+      const url = DOWNLOADS[el.dataset.plat];
+      if (!url) {
+        ev.preventDefault();
+        el.textContent = '即将开放';
+        el.style.opacity = '0.6';
+      } else {
+        el.href = url;
+      }
+    });
+  });
+
+  // 滚动进入视口时轻微上浮，尊重 reduced-motion。
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          e.target.style.transition = 'opacity .5s ease, transform .5s ease';
+          e.target.style.opacity = '1';
+          e.target.style.transform = 'none';
+          io.unobserve(e.target);
+        }
+      });
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.card, .mode, .step').forEach(function (el) {
+      el.style.opacity = '0';
+      el.style.transform = 'translateY(12px)';
+      io.observe(el);
+    });
+  }
+</script>
+</body>
+</html>
