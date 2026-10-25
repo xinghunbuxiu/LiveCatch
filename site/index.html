@@ -193,7 +193,7 @@
   /* ---------------- modes (three columns, ruled) ---------------- */
   .modes {
     display: grid; gap: 0;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     border-top: 1px solid var(--ink);
     border-bottom: 1px solid var(--ink);
   }
@@ -297,7 +297,7 @@
     <a class="brand" href="#top"><span class="mark"></span>LiveCatch</a>
     <nav class="links">
       <a href="#product">产品</a>
-      <a href="#modes">播放方式</a>
+      <a href="#modes">延迟档位</a>
       <a href="#how">使用</a>
       <a href="#faq">问答</a>
     </nav>
@@ -319,7 +319,7 @@
       <div class="cta">
         <a class="btn solid" href="#download">下载手机应用</a>
         <a class="btn" href="#how">看怎么用</a>
-        <span class="hint">抖音 / 快手 / 小红书 · 无需手动找流</span>
+        <span class="hint">抖音 / 快手 / 小红书 · 粘贴即播</span>
       </div>
 
       <div class="spec">
@@ -373,8 +373,8 @@
         <div class="row">
           <div class="no">A / 03</div>
           <div>
-            <h3>多路可选</h3>
-            <p>声音优先、极速声音、声画模式，按需随时切换，不必重新加载。</p>
+            <h3>自动选线路</h3>
+            <p>解析后自动挑选可用线路，卡顿时自己换到另一条；也可以开启探测，选出延迟最低的一路。</p>
           </div>
         </div>
         <div class="row">
@@ -391,28 +391,33 @@
   <section id="modes">
     <div class="wrap">
       <div class="sec-head">
-        <div class="sec-no">02 — 播放</div>
+        <div class="sec-no">02 — 档位</div>
         <div>
-          <h2>三种播放方式</h2>
-          <p class="sec-sub">同一路直播，三种取舍。切换不需要重新加载。</p>
+          <h2>四档延迟，自己选</h2>
+          <p class="sec-sub">在设置里切换，切完立即生效。默认档已经偏向低延迟。</p>
         </div>
       </div>
 
       <div class="modes">
-        <div class="mode on">
+        <div class="mode">
           <span class="tag">Mode 01</span>
-          <h4>声音优先</h4>
-          <p>专注关键声音信息，最低延迟。抢货、扣号、听价最常用。</p>
+          <h4>平滑</h4>
+          <p>缓冲更大，弱网更稳。适合网络波动明显、或者只挂着听的环境。</p>
         </div>
         <div class="mode">
           <span class="tag">Mode 02</span>
-          <h4>极速声音</h4>
-          <p>进一步压缩缓冲，更快听到。弱网下会自动加厚保证连续。</p>
+          <h4>均衡</h4>
+          <p>延迟与稳定性折中。不确定选哪个时，用这档。</p>
         </div>
         <div class="mode">
           <span class="tag">Mode 03</span>
-          <h4>声画模式</h4>
-          <p>兼顾画面，音画同步。适合需要看商品展示的场景。</p>
+          <h4>低延迟</h4>
+          <p>追帧更紧，听播约 50–80ms。卡顿时会短暂加厚再回落。</p>
+        </div>
+        <div class="mode on">
+          <span class="tag">Mode 04</span>
+          <h4>极速</h4>
+          <p>听播优先，缓冲约 90ms，低延迟且连续。抢货最常用。</p>
         </div>
       </div>
     </div>
