@@ -572,7 +572,12 @@ class _PlayerPageState extends State<PlayerPage>
       // MediaCodec + wait-for-keyframe ("等待首帧…").
       await _player.setVideoEnabled(keepVideo);
       if (gen != _playGen) return;
-      await _player.open(pick.url, headers: _headers);
+      /* A switch that hangs here leaves the UI stuck on "ABR 切换…" with no
+       * audio. Bound it: reopening a stream should take a couple of seconds,
+       * and a link that cannot be reopened within 15s is not worth waiting on. */
+      await _player
+          .open(pick.url, headers: _headers)
+          .timeout(const Duration(seconds: 15));
       if (gen != _playGen) return;
       await _player.play();
       if (gen != _playGen) return;
@@ -599,8 +604,13 @@ class _PlayerPageState extends State<PlayerPage>
       if (gen != _playGen) return;
       debugPrint('[LiveCatch] ABR switch failed: $e');
       final next = abr.reportFailure('open failed: $e');
-      if (next.kind == AbrActionKind.switchTo && next.index != null) {
-        _abrBusy = false;
+      /* Manual switches do not chain: the user picked this line, so a failure
+       * reports back instead of silently hopping to another one. Automatic
+       * failover keeps its bounded retry. */
+      final manual = reason == '手动切换';
+      if (!manual &&
+          next.kind == AbrActionKind.switchTo &&
+          next.index != null) {
         await _switchAbr(next.index!, next.reason);
         return;
       }
@@ -608,7 +618,6 @@ class _PlayerPageState extends State<PlayerPage>
           _roomInput != null &&
           _reconnects < 3) {
         _reconnects++;
-        _abrBusy = false;
         _appendLog('ABR 失败，重解析: ${formatResolveError(e)}');
         if (mounted) setState(() => _status = 'ABR 失败，重解析…');
         await _start();
@@ -624,7 +633,12 @@ class _PlayerPageState extends State<PlayerPage>
         });
       }
     } finally {
-      if (gen == _playGen) _abrBusy = false;
+      /* Always release the switch guard. Gating it on gen == _playGen left
+       * _abrBusy stuck at true whenever the generation moved during a switch
+       * (user hit start, an ABR failover raced in, ...). Everything downstream
+       * then returned early — stats polling stopped, stall detection stopped,
+       * and the UI looked frozen with no way to recover but restarting. */
+      _abrBusy = false;
     }
   }
 
@@ -1464,6 +1478,7 @@ class _Dock extends StatelessWidget {
         Row(
           children: [
             Expanded(
+              flex: 3,
               child: FilledButton(
                 onPressed: (busy || playing) ? null : onStart,
                 style: FilledButton.styleFrom(
@@ -1480,53 +1495,69 @@ class _Dock extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            SizedBox(
-              height: 44,
-              child: OutlinedButton(
-                onPressed: (playing || busy) ? onStop : null,
-                style: OutlinedButton.styleFrom(
-                  shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.zero,
+            // All three trailing buttons are Expanded: fixed-width boxes
+            // overflowed the row once a third was added and the line button
+            // was clipped off-screen entirely.
+            Expanded(
+              flex: 2,
+              child: SizedBox(
+                height: 44,
+                child: OutlinedButton(
+                  onPressed: (playing || busy) ? onStop : null,
+                  style: OutlinedButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.zero,
+                    ),
+                    side: BorderSide(color: foam.withValues(alpha: 0.28)),
                   ),
-                  side: BorderSide(color: foam.withValues(alpha: 0.28)),
+                  child: const Text('停止'),
                 ),
-                child: const Text('停止'),
               ),
             ),
             const SizedBox(width: 8),
-            SizedBox(
-              height: 44,
-              child: OutlinedButton(
-                onPressed: playing ? onToggleVideo : null,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: signal,
-                  shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.zero,
+            Expanded(
+              flex: 2,
+              child: SizedBox(
+                height: 44,
+                child: OutlinedButton(
+                  onPressed: playing ? onToggleVideo : null,
+                  style: OutlinedButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    foregroundColor: signal,
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.zero,
+                    ),
+                    side: BorderSide(color: signal.withValues(alpha: 0.55)),
                   ),
-                  side: BorderSide(color: signal.withValues(alpha: 0.55)),
+                  child: Text(videoOn ? '关画面' : '开画面'),
                 ),
-                child: Text(videoOn ? '关画面' : '开画面'),
               ),
             ),
             const SizedBox(width: 8),
             // Manual line picker. Automatic failover stays available for
             // open failures, but nothing switches on a stall any more, so the
             // user is the one who decides when to change lines.
-            SizedBox(
-              height: 44,
-              child: OutlinedButton(
-                onPressed: playing ? onPickLine : null,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: foam,
-                  shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.zero,
+            Expanded(
+              flex: 2,
+              child: SizedBox(
+                height: 44,
+                child: OutlinedButton(
+                  onPressed: playing ? onPickLine : null,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    foregroundColor: foam,
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.zero,
+                    ),
+                    side: BorderSide(color: foam.withValues(alpha: 0.28)),
                   ),
-                  side: BorderSide(color: foam.withValues(alpha: 0.28)),
-                ),
-                child: Text(
-                  lineLabel.isEmpty ? '线路' : lineLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  child: Text(
+                    lineLabel.isEmpty ? '线路' : lineLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12.5),
+                  ),
                 ),
               ),
             ),
