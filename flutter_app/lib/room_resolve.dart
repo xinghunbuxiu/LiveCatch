@@ -420,6 +420,15 @@ Future<Map<String, dynamic>> _resolveViaRemote(
       if (resp.statusCode == 401) {
         throw StateError('解析服务鉴权失败');
       }
+      if (resp.statusCode == 403) {
+        /* The resolver refused service because the entitlement it was shown is
+         * not active for this device. Surface it as a licence problem so the UI
+         * sends the user to activation instead of showing a raw server string. */
+        throw StateError('权益无效或已过期，请重新激活');
+      }
+      if (resp.statusCode == 429) {
+        throw StateError('请求过于频繁，请稍后再试');
+      }
       if (resp.statusCode >= 400) {
         var msg = raw;
         try {

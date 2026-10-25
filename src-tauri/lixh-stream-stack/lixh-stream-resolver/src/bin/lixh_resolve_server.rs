@@ -316,8 +316,20 @@ async fn resolve_handler(
 }
 
 fn authorize(state: &AppState, headers: &HeaderMap) -> Result<()> {
-    let Some(expected) = state.api_key.as_deref() else {
+    /* A static key cannot be a security boundary: it ships inside the APK and
+     * anyone who extracts it can present it. So when the entitlement gate is
+     * configured, a live RewardPlay licence is sufficient and the key becomes
+     * optional. The key is still accepted for older clients during rollout.
+     */
+    if state.license.is_some() {
         return Ok(());
+    }
+    let Some(expected) = state.api_key.as_deref() else {
+        /* Neither gate configured: refuse rather than serve everyone. An
+         * unconfigured deployment is a misconfiguration, not a public API. */
+        return Err(anyhow!(
+            "resolver has no auth configured (set LIXH_LICENSE_* or LIXH_RESOLVE_API_KEY)"
+        ));
     };
     if let Some(v) = headers.get("x-api-key").and_then(|v| v.to_str().ok()) {
         if v == expected {

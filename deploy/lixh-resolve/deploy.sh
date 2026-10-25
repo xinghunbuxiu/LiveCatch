@@ -60,16 +60,29 @@ install -d -m 755 "$INSTALL_DIR"
 install -d -m 755 "$(dirname "$ENV_FILE")"
 install -m 755 "$BIN" "$INSTALL_DIR/lixh_resolve_server"
 
-# Keep in sync with flutter_app/lib/resolve_config.dart default.
-DEFAULT_KEY="${LIXH_RESOLVE_API_KEY:-lc_resolve_2026_xhb_7f3a9c2e1b84}"
+# Access control is the RewardPlay entitlement, not a static key: a key shipped
+# inside the APK can be extracted and replayed, so it is not a boundary.
+# The gate activates when these three are present in the environment.
+LICENSE_BASE="${LIXH_LICENSE_BASE_URL:-}"
+LICENSE_PROJECT="${LIXH_LICENSE_PROJECT_CODE:-}"
+LICENSE_TOKEN="${LIXH_LICENSE_TOKEN:-}"
+# Optional legacy key for clients that still send one during rollout.
+LEGACY_KEY="${LIXH_RESOLVE_API_KEY:-}"
 if [[ ! -f "$ENV_FILE" ]]; then
-  cat >"$ENV_FILE" <<EOF
-LIXH_RESOLVE_BIND=127.0.0.1:9101
-LIXH_RESOLVE_API_KEY=$DEFAULT_KEY
-RUST_LOG=info
-EOF
+  {
+    echo "LIXH_RESOLVE_BIND=127.0.0.1:9101"
+    echo "RUST_LOG=info"
+    [[ -n "$LICENSE_BASE" ]] && echo "LIXH_LICENSE_BASE_URL=$LICENSE_BASE"
+    [[ -n "$LICENSE_PROJECT" ]] && echo "LIXH_LICENSE_PROJECT_CODE=$LICENSE_PROJECT"
+    [[ -n "$LICENSE_TOKEN" ]] && echo "LIXH_LICENSE_TOKEN=$LICENSE_TOKEN"
+    [[ -n "$LEGACY_KEY" ]] && echo "LIXH_RESOLVE_API_KEY=$LEGACY_KEY"
+  } >"$ENV_FILE"
   chmod 600 "$ENV_FILE"
   echo "Wrote $ENV_FILE"
+  if [[ -z "$LICENSE_BASE$LICENSE_PROJECT$LICENSE_TOKEN" && -z "$LEGACY_KEY" ]]; then
+    echo "WARNING: no LIXH_LICENSE_* and no LIXH_RESOLVE_API_KEY set." >&2
+    echo "         The resolver will refuse every request (401) until one is configured." >&2
+  fi
 else
   echo "Keeping existing $ENV_FILE"
 fi
