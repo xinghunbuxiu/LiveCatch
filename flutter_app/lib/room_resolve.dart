@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:livecatch_app/resolve_config.dart';
 
 /// Result of [resolveRoom] — room metadata + ranked playable stream URLs.
@@ -99,6 +100,15 @@ String formatResolveError(Object error) {
   if (s.contains('服务繁忙') || s.contains('繁忙')) {
     return '抖音接口繁忙，请确认直播间在播后稍后重试';
   }
+  if (s.contains('Connection closed before full header') ||
+      s.contains('Connection closed before full headers') ||
+      s.contains('Connection reset by peer') ||
+      s.contains('Broken pipe')) {
+    return '解析服务连接被中断。若开了 Clash/VPN，请将解析服务器设为直连后重试';
+  }
+  if (s.contains('ClientException') && s.contains('uri=')) {
+    return '解析服务请求失败（网络中断）。请检查 Clash/VPN 直连或稍后重试';
+  }
   if (s.contains('error sending request') ||
       s.contains('网络请求失败') ||
       s.contains('certificate') ||
@@ -130,8 +140,30 @@ String formatResolveError(Object error) {
   if (s.contains('短链') && (s.contains('展开') || s.contains('跳转') || s.contains('web_rid'))) {
     return s;
   }
-  // PlatformException(open_failed, …) from lixh_player.
+  // PlatformException(open_failed, DETAIL, …) from lixh_player.
   if (s.contains('open_failed') || s.contains('open failed')) {
+    final m = RegExp(
+      r'open_failed[,\s]+([^,\)]+)',
+      caseSensitive: false,
+    ).firstMatch(s);
+    var detail = (m?.group(1) ?? '').trim();
+    if (detail == 'null' ||
+        detail.isEmpty ||
+        detail.contains('lixh_player_open failed')) {
+      // Also try plain "open failed: DETAIL" from our logs/wrappers.
+      final m2 = RegExp(
+        r'open failed[:\s]+(.+)$',
+        caseSensitive: false,
+      ).firstMatch(s);
+      detail = (m2?.group(1) ?? '').trim();
+    }
+    if (detail.isNotEmpty &&
+        detail != 'null' &&
+        !detail.contains('lixh_player_open failed')) {
+      final short =
+          detail.length > 80 ? '${detail.substring(0, 80)}…' : detail;
+      return '打开流失败：$short';
+    }
     return '打开流失败（线路不可用或协议不支持，请换清晰度/网络后重试）';
   }
   return s.isEmpty ? '房间解析失败' : s;
@@ -159,8 +191,18 @@ Future<ResolvedRoom> resolveRoom(
   bool preferFlv = true,
   /// Prefer only_audio / audio_only FLV first (秒听-style listen).
   bool preferAudioOnly = true,
+  /// RewardPlay entitlement forwarded to the resolver so it can refuse service
+  /// to expired or unbound devices. The resolver holds the integration token;
+  /// only these two identifiers travel from the client.
+  String? licenseCode,
+  String? deviceId,
 }) async {
-  final map = await _resolveViaRemote(roomUrl, cookies: cookies);
+  final map = await _resolveViaRemote(
+    roomUrl,
+    cookies: cookies,
+    licenseCode: licenseCode,
+    deviceId: deviceId,
+  );
   final isLive = map['is_live'] as bool? ?? false;
   if (!isLive) {
     throw StateError('直播已结束或不在播');
@@ -278,7 +320,8 @@ Future<int?> _probeStreamTtfb(
   final client = HttpClient()
     ..connectionTimeout = timeout
     ..idleTimeout = timeout
-    ..autoUncompress = false;
+    ..autoUncompress = false
+    ..findProxy = (_) => 'DIRECT';
   try {
     final req = await client.openUrl('GET', uri).timeout(timeout);
     req.followRedirects = true;
@@ -313,16 +356,32 @@ Future<int?> _probeStreamTtfb(
   }
 }
 
+bool _isTransientResolveTransportError(Object e) {
+  final s = e.toString();
+  return s.contains('Connection closed before full header') ||
+      s.contains('Connection closed before full headers') ||
+      s.contains('Connection reset by peer') ||
+      s.contains('Broken pipe') ||
+      s.contains('ClientException') ||
+      s.contains('SocketException') ||
+      s.contains('HttpException');
+}
+
 /// POST room URL to remote `lixh_resolve_server` → ResolvedStream JSON map.
 Future<Map<String, dynamic>> _resolveViaRemote(
   String roomUrl, {
   String? cookies,
+  String? licenseCode,
+  String? deviceId,
 }) async {
   final base = kResolveBaseUrl.replaceAll(RegExp(r'/+$'), '');
   final uri = Uri.parse('$base/v1/resolve');
   final headers = <String, String>{
     HttpHeaders.contentTypeHeader: 'application/json; charset=utf-8',
     HttpHeaders.acceptHeader: 'application/json',
+    // Avoid sticky keep-alive through Clash/transparent proxies that drop
+    // the first response headers on long Douyin expands.
+    HttpHeaders.connectionHeader: 'close',
   };
   if (kResolveApiKey.isNotEmpty) {
     headers['X-Api-Key'] = kResolveApiKey;
@@ -332,48 +391,79 @@ Future<Map<String, dynamic>> _resolveViaRemote(
   if (cookies != null && cookies.trim().isNotEmpty) {
     body['cookies'] = cookies.trim();
   }
-
-  late http.Response resp;
-  try {
-    resp = await http
-        .post(uri, headers: headers, body: jsonEncode(body))
-        .timeout(const Duration(seconds: 45));
-  } on SocketException catch (e) {
-    throw StateError('解析服务不可达: $e');
-  } on HttpException catch (e) {
-    throw StateError('解析服务请求失败: $e');
-  } on TimeoutException {
-    throw StateError('解析服务超时');
-  } catch (e) {
-    throw StateError(formatResolveError(e));
+  /* Entitlement proof for the resolver. Omitted when the build has no licence
+   * wired, which keeps the old key-only flow working during rollout. */
+  final code = licenseCode?.trim() ?? '';
+  final device = deviceId?.trim() ?? '';
+  if (code.isNotEmpty && device.isNotEmpty) {
+    body['license_code'] = code;
+    body['device_id'] = device;
   }
+  final payload = jsonEncode(body);
 
-  final raw = utf8.decode(resp.bodyBytes).trim();
-  if (resp.statusCode == 401) {
-    throw StateError('解析服务鉴权失败');
-  }
-  if (resp.statusCode >= 400) {
-    var msg = raw;
+  Object? lastErr;
+  for (var attempt = 1; attempt <= 3; attempt++) {
+    final io = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 12)
+      ..idleTimeout = const Duration(seconds: 60)
+      ..autoUncompress = true
+      ..userAgent = 'LiveCatch/0.48'
+      // Clash/VPN system proxy often 0-byte / mid-header kills resolve.
+      // Dart HttpClient honors findProxy; force DIRECT for the resolve host.
+      ..findProxy = (_) => 'DIRECT';
+    final client = IOClient(io);
     try {
-      final errMap = jsonDecode(raw);
-      if (errMap is Map && errMap['error'] != null) {
-        msg = '${errMap['error']}';
+      final resp = await client
+          .post(uri, headers: headers, body: payload)
+          .timeout(const Duration(seconds: 45));
+      final raw = utf8.decode(resp.bodyBytes).trim();
+      if (resp.statusCode == 401) {
+        throw StateError('解析服务鉴权失败');
       }
-    } catch (_) {}
-    throw StateError(
-      formatResolveError(
-        msg.isEmpty ? '房间解析失败 (HTTP ${resp.statusCode})' : msg,
-      ),
-    );
+      if (resp.statusCode >= 400) {
+        var msg = raw;
+        try {
+          final errMap = jsonDecode(raw);
+          if (errMap is Map && errMap['error'] != null) {
+            msg = '${errMap['error']}';
+          }
+        } catch (_) {}
+        throw StateError(
+          formatResolveError(
+            msg.isEmpty ? '房间解析失败 (HTTP ${resp.statusCode})' : msg,
+          ),
+        );
+      }
+      if (raw.isEmpty) {
+        throw StateError('解析服务返回为空');
+      }
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) {
+        throw StateError('解析服务返回格式错误');
+      }
+      return decoded;
+    } on TimeoutException {
+      lastErr = StateError('解析服务超时');
+    } on SocketException catch (e) {
+      lastErr = StateError('解析服务不可达: $e');
+    } on HttpException catch (e) {
+      lastErr = StateError('解析服务请求失败: $e');
+    } catch (e) {
+      lastErr = e;
+      if (e is StateError && !_isTransientResolveTransportError(e)) {
+        rethrow;
+      }
+    } finally {
+      client.close();
+      io.close(force: true);
+    }
+    if (attempt < 3 && lastErr != null && _isTransientResolveTransportError(lastErr)) {
+      await Future<void>.delayed(Duration(milliseconds: 350 * attempt));
+      continue;
+    }
+    break;
   }
-  if (raw.isEmpty) {
-    throw StateError('解析服务返回为空');
-  }
-  final decoded = jsonDecode(raw);
-  if (decoded is! Map<String, dynamic>) {
-    throw StateError('解析服务返回格式错误');
-  }
-  return decoded;
+  throw StateError(formatResolveError(lastErr ?? '解析服务请求失败'));
 }
 
 /// Candidate filtering for ABR (top few; optionally prefer FLV / audio-only).

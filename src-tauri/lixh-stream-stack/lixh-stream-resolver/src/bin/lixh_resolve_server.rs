@@ -25,6 +25,27 @@ use tracing::{error, info};
 #[derive(Clone)]
 struct AppState {
     api_key: Option<String>,
+    /// RewardPlay entitlement gate. When configured, every resolve must carry a
+    /// license code + device id that RewardPlay still reports as active. The
+    /// integration token stays server-side: it is never sent to clients.
+    license: Option<LicenseGate>,
+    /// Per-device request budget so a leaked code cannot be used to scrape.
+    rate: RateLimiter,
+}
+
+#[derive(Clone)]
+struct LicenseGate {
+    base_url: String,
+    project_code: String,
+    integration_token: String,
+    /// Skip the network call when a code was verified this recently.
+    cache: Arc<std::sync::Mutex<std::collections::HashMap<String, (std::time::Instant, bool)>>>,
+}
+
+#[derive(Clone)]
+struct RateLimiter {
+    per_minute: u32,
+    hits: Arc<std::sync::Mutex<std::collections::HashMap<String, (std::time::Instant, u32)>>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -32,6 +53,12 @@ struct ResolveRequest {
     url: String,
     #[serde(default)]
     cookies: Option<String>,
+    /// License code bound to this device (RewardPlay `authorizationCode`).
+    #[serde(default)]
+    license_code: Option<String>,
+    /// Stable device id the app already uses for licensing.
+    #[serde(default)]
+    device_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -55,7 +82,42 @@ async fn main() -> Result<()> {
         .filter(|s| !s.is_empty());
 
     let auth_enabled = api_key.is_some();
-    let state = Arc::new(AppState { api_key });
+
+    /* RewardPlay gate. Enabled only when all three values are present, so an
+     * existing deployment keeps working until the operator opts in. */
+    let license = match (
+        env::var("LIXH_LICENSE_BASE_URL").ok(),
+        env::var("LIXH_LICENSE_PROJECT_CODE").ok(),
+        env::var("LIXH_LICENSE_TOKEN").ok(),
+    ) {
+        (Some(base), Some(project), Some(token))
+            if !base.trim().is_empty() && !project.trim().is_empty() && !token.trim().is_empty() =>
+        {
+            Some(LicenseGate {
+                base_url: base.trim().trim_end_matches('/').to_string(),
+                project_code: project.trim().to_string(),
+                integration_token: token.trim().to_string(),
+                cache: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+            })
+        }
+        _ => None,
+    };
+    let license_enabled = license.is_some();
+
+    let per_minute = env::var("LIXH_RESOLVE_RATE_PER_MIN")
+        .ok()
+        .and_then(|v| v.trim().parse::<u32>().ok())
+        .unwrap_or(30);
+    let rate = RateLimiter {
+        per_minute,
+        hits: Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
+    };
+
+    let state = Arc::new(AppState {
+        api_key,
+        license,
+        rate,
+    });
     let app = Router::new()
         .route("/health", get(health))
         .route("/v1/resolve", post(resolve_handler))
@@ -69,7 +131,13 @@ async fn main() -> Result<()> {
         .with_state(state);
 
     let addr: SocketAddr = bind.parse().context("parse LIXH_RESOLVE_BIND")?;
-    info!(%addr, auth_enabled, "lixh_resolve_server listening");
+    info!(
+        %addr,
+        auth_enabled,
+        license_enabled,
+        rate_per_min = per_minute,
+        "lixh_resolve_server listening"
+    );
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .with_context(|| format!("bind {addr}"))?;
@@ -79,6 +147,97 @@ async fn main() -> Result<()> {
 
 async fn health() -> impl IntoResponse {
     (StatusCode::OK, "ok\n")
+}
+
+impl RateLimiter {
+    /// Sliding one-minute budget keyed by device (or peer when unlicensed).
+    fn allow(&self, key: &str) -> Result<()> {
+        if self.per_minute == 0 {
+            return Ok(());
+        }
+        let now = std::time::Instant::now();
+        let mut hits = self.hits.lock().expect("rate limiter poisoned");
+        // Drop stale keys so the map cannot grow without bound.
+        hits.retain(|_, (start, _)| now.duration_since(*start).as_secs() < 120);
+        let entry = hits.entry(key.to_string()).or_insert((now, 0));
+        if now.duration_since(entry.0).as_secs() >= 60 {
+            *entry = (now, 0);
+        }
+        if entry.1 >= self.per_minute {
+            return Err(anyhow!("rate limit exceeded"));
+        }
+        entry.1 += 1;
+        Ok(())
+    }
+}
+
+impl LicenseGate {
+    /// Ask RewardPlay whether this code is still active on this device.
+    ///
+    /// Only "active" counts as success. A code bound to a different device is
+    /// rejected here even if it is otherwise valid, which is what stops a
+    /// shared code from being used to run the resolver on many machines.
+    async fn verify(&self, code: &str, device_id: &str) -> Result<()> {
+        let cache_key = format!("{code}\u{1}{device_id}");
+        {
+            let cache = self.cache.lock().expect("license cache poisoned");
+            if let Some((at, ok)) = cache.get(&cache_key) {
+                // RewardPlay heartbeats are cheap but not free; 60s of grace is
+                // far below the licence heartbeat interval the app already uses.
+                if at.elapsed().as_secs() < 60 {
+                    return if *ok { Ok(()) } else { Err(anyhow!("license not active")) };
+                }
+            }
+        }
+
+        let url = format!("{}/api/open/license/heartbeat", self.base_url);
+        let payload = serde_json::json!({
+            "projectCode": self.project_code,
+            "code": code,
+            "deviceId": device_id,
+        });
+        let resp = reqwest::Client::new()
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.integration_token))
+            .header("Content-Type", "application/json")
+            .json(&payload)
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await
+            .context("license heartbeat transport")?;
+
+        let status = resp.status();
+        let text = resp.text().await.unwrap_or_default();
+        let ok = status.is_success() && license_payload_active(&text);
+
+        if let Ok(mut cache) = self.cache.lock() {
+            cache.insert(cache_key, (std::time::Instant::now(), ok));
+        }
+        if ok {
+            Ok(())
+        } else {
+            error!(%status, body = %text.chars().take(200).collect::<String>(), "license rejected");
+            Err(anyhow!("license not active"))
+        }
+    }
+}
+
+/// `success: true` plus `status: "active"` (or an explicit expiry still ahead).
+fn license_payload_active(body: &str) -> bool {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(body) else {
+        return false;
+    };
+    let data = v.get("data").unwrap_or(&v);
+    let success = data
+        .get("success")
+        .and_then(|b| b.as_bool())
+        .unwrap_or(false);
+    let status_ok = data
+        .get("status")
+        .and_then(|s| s.as_str())
+        .map(|s| s.eq_ignore_ascii_case("active"))
+        .unwrap_or(false);
+    success && status_ok
 }
 
 async fn resolve_handler(
@@ -103,6 +262,38 @@ async fn resolve_handler(
                 error: "url required".into(),
             }),
         ));
+    }
+
+    /* Entitlement gate. Checked before any upstream work so an expired or
+     * foreign device cannot make the resolver do network traffic. */
+    if let Some(gate) = state.license.as_ref() {
+        let code = body.license_code.as_deref().map(str::trim).unwrap_or("");
+        let device = body.device_id.as_deref().map(str::trim).unwrap_or("");
+        if code.is_empty() || device.is_empty() {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(ErrorBody {
+                    error: "license_code and device_id required".into(),
+                }),
+            ));
+        }
+        if let Err(e) = gate.verify(code, device).await {
+            return Err((
+                StatusCode::FORBIDDEN,
+                Json(ErrorBody {
+                    error: e.to_string(),
+                }),
+            ));
+        }
+        /* Budget per licensed device, so one leaked code cannot scrape. */
+        if let Err(e) = state.rate.allow(device) {
+            return Err((
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(ErrorBody {
+                    error: e.to_string(),
+                }),
+            ));
+        }
     }
 
     let cookies = body

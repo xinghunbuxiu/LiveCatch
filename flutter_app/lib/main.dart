@@ -724,9 +724,13 @@ class _PlayerPageState extends State<PlayerPage>
         var room = await resolveRoom(
           input,
           preferFlv: _settings.preferFlv,
-          // Lean A/V with video sink off — only_audio forced a reopen on every
-          // picture toggle and was a common silent/gap path.
-          preferAudioOnly: false,
+          // only_audio CDN avoids downloading video bytes — required for <1s
+          // listen. Picture toggle switches to a lean A/V rung when needed.
+          preferAudioOnly: true,
+          // Resolver refuses expired/unbound devices; this is the same licence
+          // the app already gates playback on, so no extra prompt appears.
+          licenseCode: lic.code,
+          deviceId: lic.deviceId,
         );
         _appendLog(
           '解析成功 ${room.platform} live=${room.isLive} '
@@ -837,8 +841,22 @@ class _PlayerPageState extends State<PlayerPage>
           return;
         } catch (e) {
           lastErr = e;
-          final next = abr.reportFailure('open failed');
-          idx = next.kind == AbrActionKind.switchTo ? next.index : null;
+          final label = pick.quality.isNotEmpty
+              ? pick.quality
+              : pick.protocol;
+          final ao = pick.audioOnly ? ' only_audio' : '';
+          _appendLog('开流失败 $label$ao: ${formatResolveError(e)}');
+          final next = abr.reportFailure('open failed: $e');
+          if (next.kind == AbrActionKind.switchTo && next.index != null) {
+            final n = urls[next.index!];
+            _appendLog(
+              '换线路 → ${n.quality.isNotEmpty ? n.quality : n.protocol}'
+              '${n.audioOnly ? ' only_audio' : ''}',
+            );
+            idx = next.index;
+          } else {
+            idx = null;
+          }
         }
       }
       throw lastErr ?? StateError('没有可用的播放源');
@@ -943,9 +961,17 @@ class _PlayerPageState extends State<PlayerPage>
             return;
           }
         }
+      } else if (abr != null && cur != null && !cur.audioOnly) {
+        // Back to listen: only_audio again so CDN stops shipping video bytes.
+        final ix = abr.candidates.indexWhere((c) => c.audioOnly);
+        if (ix >= 0) {
+          await _switchAbr(ix, 'listen → only_audio');
+          if (!mounted) return;
+          setState(() => _status = '听播中');
+          await _syncKeepAlive(playing: true);
+          return;
+        }
       }
-      // Returning to listen: keep the current A/V session (AVDISCARD + catch-up).
-      // Reopening only_audio caused audible gaps / "没声音" after every toggle.
       await _player.setVideoEnabled(next);
       await _applyLatency(videoOn: next);
       debugPrint('[LiveCatch] setVideoEnabled ok ($next)');
