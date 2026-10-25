@@ -242,16 +242,22 @@ class AudioOut {
       if (cap_ms < p + 30) cap_ms = p + 30;
     }
     int max_samples = ch_ * rate_ * cap_ms / 1000;
-    int floor_ms = max_queue_ms_ < 100 ? 55 : (max_queue_ms_ < 140 ? 70 : 90);
+    /* Never trim below the level the caller asked to keep. The old floor table
+       (55/70/90ms by cap) fought keep_ms below and produced a 121ms sawtooth in
+       the measured queue depth: trim fires at cap*1.125, drags the ring down to
+       cap*0.75, then the writer refills it and it fires again. */
+    int floor_ms = max_queue_ms_ / 2;
     if (floor_ms > max_queue_ms_) floor_ms = max_queue_ms_;
     if (max_samples < ch_ * rate_ * floor_ms / 1000) {
       max_samples = ch_ * rate_ * floor_ms / 1000;
     }
     if (max_samples > kRingCap - n) max_samples = kRingCap - n;
-    /* Small slack above target — absorb jitter without constant micro-trims. */
+    /* Trim only the excess above a level close to the requested depth. Keeping
+       the drop target near base (rather than 75% of it) means one trim settles
+       the queue instead of restarting the sawtooth. */
     const int trim_at = max_samples + max_samples / 8;
-    int keep_ms = base_queue_ms_ * 3 / 4;
-    if (keep_ms < 55) keep_ms = 55;
+    int keep_ms = max_queue_ms_ - max_queue_ms_ / 8;
+    if (keep_ms < max_queue_ms_ / 2) keep_ms = max_queue_ms_ / 2;
     if (keep_ms > max_queue_ms_) keep_ms = max_queue_ms_;
     const int prime_keep = ch_ * rate_ * PrimeNeedMsLocked() / 1000;
     const int min_keep =
