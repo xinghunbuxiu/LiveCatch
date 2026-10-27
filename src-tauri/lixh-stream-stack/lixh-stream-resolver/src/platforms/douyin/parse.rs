@@ -20,7 +20,10 @@ fn playback_url(url: &str) -> String {
 
 fn quality_bitrate(name: &str) -> u64 {
     let n = name.to_ascii_uppercase();
-    if n.contains("ORIGIN") || n.contains("蓝光") || n.contains("原画") {
+    // Unsuffixed CDN path (stream-<id>.flv) — same class as peer pull links.
+    if n == "DEFAULT" {
+        8500
+    } else if n.contains("ORIGIN") || n.contains("蓝光") || n.contains("原画") {
         8000
     } else if n.contains("FULL_HD") || n.contains("UH") || n.contains("蓝光") {
         4000
@@ -32,6 +35,26 @@ fn quality_bitrate(name: &str) -> u64 {
         600
     } else {
         1500
+    }
+}
+
+/// Drop `only_audio=1` so the bare `stream-<id>.flv` path serves A+V (CDN
+/// serves audio-only when that flag is present).
+fn strip_only_audio_param(url: &str) -> String {
+    let Some((base, query)) = url.split_once('?') else {
+        return url.to_string();
+    };
+    let kept: Vec<&str> = query
+        .split('&')
+        .filter(|p| {
+            let key = p.split('=').next().unwrap_or("");
+            !key.eq_ignore_ascii_case("only_audio")
+        })
+        .collect();
+    if kept.is_empty() {
+        base.to_string()
+    } else {
+        format!("{base}?{}", kept.join("&"))
     }
 }
 
@@ -72,6 +95,7 @@ pub fn resolved_from_enter(root: &Value, site_url: &str) -> Result<ResolvedStrea
 
     let mut flv_map = extract_flv_map(room)?;
     merge_origin_flv(room, &mut flv_map);
+    merge_bare_flv(room, &mut flv_map);
 
     if flv_map.is_empty() {
         return Err(anyhow!("没有可播放线路（直播可能已结束）"));
@@ -82,6 +106,12 @@ pub fn resolved_from_enter(root: &Value, site_url: &str) -> Result<ResolvedStrea
         .filter(|(_, u)| !u.trim().is_empty())
         .map(|(quality, url)| {
             let bitrate = quality_bitrate(&quality);
+            // Prefer unsuffixed DEFAULT first (matches peer pull links / faster path).
+            let priority = if quality.eq_ignore_ascii_case("DEFAULT") {
+                0
+            } else {
+                bitrate.min(u64::from(u32::MAX)) as u32
+            };
             StreamCandidate {
                 url: playback_url(&url),
                 format: "flv".into(),
@@ -90,7 +120,7 @@ pub fn resolved_from_enter(root: &Value, site_url: &str) -> Result<ResolvedStrea
                 bitrate,
                 codec: "h264".into(),
                 fps: 0.0,
-                priority: bitrate.min(u64::from(u32::MAX)) as u32,
+                priority,
                 headers_needed: true,
                 audio_only: url.contains("only_audio=1"),
             }
@@ -130,15 +160,15 @@ fn extract_flv_map(room: &Value) -> Result<HashMap<String, String>> {
     Ok(map)
 }
 
+fn parse_stream_data(room: &Value) -> Option<Value> {
+    let stream_data = room
+        .pointer("/stream_url/live_core_sdk_data/pull_data/stream_data")
+        .and_then(|v| v.as_str())?;
+    serde_json::from_str(stream_data).ok()
+}
+
 fn merge_origin_flv(room: &Value, flv_map: &mut HashMap<String, String>) {
-    let Some(stream_data) = room.pointer(
-        "/stream_url/live_core_sdk_data/pull_data/stream_data",
-    )
-    .and_then(|v| v.as_str())
-    else {
-        return;
-    };
-    let Ok(parsed) = serde_json::from_str::<Value>(stream_data) else {
+    let Some(parsed) = parse_stream_data(room) else {
         return;
     };
     let Some(main) = parsed.pointer("/data/origin/main") else {
@@ -170,6 +200,28 @@ fn merge_origin_flv(room: &Value, flv_map: &mut HashMap<String, String>) {
     flv_map.entry("ORIGIN".into()).or_insert(url);
 }
 
+/// Peer tools often pull the unsuffixed `stream-<id>.flv` path. In web-enter
+/// JSON that path lives under `stream_data.data.ao.main.flv` (usually with
+/// `only_audio=1`). Strip the flag so the CDN returns the A+V variant.
+fn merge_bare_flv(room: &Value, flv_map: &mut HashMap<String, String>) {
+    let Some(parsed) = parse_stream_data(room) else {
+        return;
+    };
+    let Some(flv) = parsed
+        .pointer("/data/ao/main/flv")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    else {
+        return;
+    };
+    let url = strip_only_audio_param(flv);
+    if url.is_empty() || url.contains("only_audio=") {
+        return;
+    }
+    flv_map.entry("DEFAULT".into()).or_insert(url);
+}
+
 pub fn playback_headers() -> HashMap<String, String> {
     let mut h = HashMap::new();
     h.insert("User-Agent".into(), PC_UA.into());
@@ -191,7 +243,37 @@ mod tests {
     }
 
     #[test]
+    fn strips_only_audio_query() {
+        assert_eq!(
+            strip_only_audio_param(
+                "http://cdn/x.flv?a=1&only_audio=1&b=2"
+            ),
+            "http://cdn/x.flv?a=1&b=2"
+        );
+        assert_eq!(
+            strip_only_audio_param("http://cdn/x.flv?only_audio=1"),
+            "http://cdn/x.flv"
+        );
+    }
+
+    #[test]
     fn parses_minimal_live_room() {
+        let stream_data = serde_json::json!({
+            "data": {
+                "origin": {
+                    "main": {
+                        "flv": "https://cdn.example/stream-1_or4.flv",
+                        "sdk_params": "{\"VCodec\":\"h264\"}"
+                    }
+                },
+                "ao": {
+                    "main": {
+                        "flv": "https://cdn.example/stream-1.flv?keeptime=1&only_audio=1&sign=abc"
+                    }
+                }
+            }
+        })
+        .to_string();
         let root = serde_json::json!({
             "data": {
                 "user": {"nickname": "主播"},
@@ -205,7 +287,7 @@ mod tests {
                         },
                         "live_core_sdk_data": {
                             "pull_data": {
-                                "stream_data": "{\"data\":{\"origin\":{\"main\":{\"flv\":\"https://cdn.example/origin.flv\",\"sdk_params\":\"{\\\"VCodec\\\":\\\"h264\\\"}\"}}}}"
+                                "stream_data": stream_data
                             }
                         }
                     }
@@ -216,8 +298,15 @@ mod tests {
         assert!(r.is_live);
         assert_eq!(r.artist, "主播");
         assert!(r.streams.iter().any(|s| s.quality == "ORIGIN"));
+        let bare = r
+            .streams
+            .iter()
+            .find(|s| s.quality == "DEFAULT")
+            .expect("DEFAULT bare flv");
+        assert!(bare.url.contains("stream-1.flv"));
+        assert!(!bare.url.contains("only_audio"));
+        assert!(!bare.audio_only);
+        assert_eq!(r.streams[0].quality, "DEFAULT");
         assert!(r.streams.iter().all(|s| s.url.starts_with("http://")));
-        // lowest priority/bitrate first
-        assert!(r.streams[0].bitrate <= r.streams.last().unwrap().bitrate);
     }
 }
