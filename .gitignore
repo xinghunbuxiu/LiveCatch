@@ -52,6 +52,9 @@ Thumbs.db
 # Env / secrets
 .env
 .env.*
+# Shared RewardPlay dart-defines for packaging on other machines (Integration Token).
+!.env.rewardplay.local
+!flutter_app/.env.rewardplay.local
 
 # FFmpeg SDK/runtime (fetched by CI/scripts; keep manifests for local sanity)
 src-tauri/lixh-stream-stack/sdk/**
