@@ -60,15 +60,35 @@ try {
 
     if (-not $SkipInstaller) {
         New-Item -ItemType Directory -Force -Path $InstallerDir | Out-Null
-        $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
-        if (-not (Test-Path $iscc)) { $iscc = "C:\Program Files\Inno Setup 6\ISCC.exe" }
-        if (-not (Test-Path $iscc)) {
+        $iscc = $null
+        foreach ($cand in @(
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+            "C:\Program Files\Inno Setup 6\ISCC.exe"
+        )) {
+            if (Test-Path $cand) { $iscc = $cand; break }
+        }
+        if (-not $iscc) {
+            $cmd = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+            if ($cmd) { $iscc = $cmd.Source }
+        }
+        if (-not $iscc) {
             Write-Warning "Inno Setup not found; skipping installer. Release folder: $ReleaseDir"
         } else {
-            & $iscc (Join-Path $ScriptDir "installer\LiveCatch.iss") `
-                "/DMyAppVersion=$version" `
-                "/DSourceDir=$ReleaseDir" `
-                "/DOutputDir=$InstallerDir"
+            # Inno Setup 6: /DName=Value ; Inno Setup 7+: --define=Name=Value
+            $isccVer = & $iscc --version 2>$null
+            $useIs7 = ($isccVer -match '^7\.')
+            $iss = Join-Path $ScriptDir "installer\LiveCatch.iss"
+            if ($useIs7) {
+                & $iscc $iss `
+                    "--define=MyAppVersion=$version" `
+                    "--define=SourceDir=$ReleaseDir" `
+                    "--define=OutputDir=$InstallerDir"
+            } else {
+                & $iscc $iss `
+                    "/DMyAppVersion=$version" `
+                    "/DSourceDir=$ReleaseDir" `
+                    "/DOutputDir=$InstallerDir"
+            }
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
         }
     }
