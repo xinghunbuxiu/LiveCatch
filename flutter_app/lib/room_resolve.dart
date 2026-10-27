@@ -426,6 +426,10 @@ Future<Map<String, dynamic>> _resolveViaRemote(
          * sends the user to activation instead of showing a raw server string. */
         throw StateError('权益无效或已过期，请重新激活');
       }
+      if (resp.statusCode == 503) {
+        /* RewardPlay check itself failed (timeout / 5xx). Not a dead licence. */
+        throw StateError('权益校验暂时不可用，请稍后重试');
+      }
       if (resp.statusCode == 429) {
         throw StateError('请求过于频繁，请稍后再试');
       }

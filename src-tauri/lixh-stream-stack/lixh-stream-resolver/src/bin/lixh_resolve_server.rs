@@ -171,6 +171,10 @@ impl RateLimiter {
     }
 }
 
+/// Marker for RewardPlay transport blips — mapped to HTTP 503, not 403, so the
+/// client does not tell the user their licence expired when the check itself failed.
+const LICENSE_CHECK_UNAVAILABLE: &str = "license check unavailable";
+
 impl LicenseGate {
     /// Ask RewardPlay whether this code is still active on this device.
     ///
@@ -180,12 +184,15 @@ impl LicenseGate {
     async fn verify(&self, code: &str, device_id: &str) -> Result<()> {
         let cache_key = format!("{code}\u{1}{device_id}");
         {
-            let cache = self.cache.lock().expect("license cache poisoned");
+            let mut cache = self.cache.lock().expect("license cache poisoned");
+            // Drop stale entries so scrapers cannot grow the map without bound.
+            cache.retain(|_, (at, _)| at.elapsed().as_secs() < 120);
             if let Some((at, ok)) = cache.get(&cache_key) {
-                // RewardPlay heartbeats are cheap but not free; 60s of grace is
-                // far below the licence heartbeat interval the app already uses.
-                if at.elapsed().as_secs() < 60 {
-                    return if *ok { Ok(()) } else { Err(anyhow!("license not active")) };
+                // Positive hits get 60s grace (below the app's own heartbeat interval).
+                // Negatives are not cached — see insert below — so a just-activated
+                // code is not stuck for a minute after a failed probe.
+                if *ok && at.elapsed().as_secs() < 60 {
+                    return Ok(());
                 }
             }
         }
@@ -196,7 +203,7 @@ impl LicenseGate {
             "code": code,
             "deviceId": device_id,
         });
-        let resp = reqwest::Client::new()
+        let resp = match reqwest::Client::new()
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.integration_token))
             .header("Content-Type", "application/json")
@@ -204,16 +211,28 @@ impl LicenseGate {
             .timeout(std::time::Duration::from_secs(10))
             .send()
             .await
-            .context("license heartbeat transport")?;
+        {
+            Ok(r) => r,
+            Err(e) => {
+                error!(error = %e, "license heartbeat transport");
+                return Err(anyhow!(LICENSE_CHECK_UNAVAILABLE));
+            }
+        };
 
         let status = resp.status();
         let text = resp.text().await.unwrap_or_default();
+        // Upstream 5xx / empty body is a check outage, not proof the licence is dead.
+        if status.is_server_error() || (status.is_success() && text.trim().is_empty()) {
+            error!(%status, "license heartbeat upstream unavailable");
+            return Err(anyhow!(LICENSE_CHECK_UNAVAILABLE));
+        }
         let ok = status.is_success() && license_payload_active(&text);
 
-        if let Ok(mut cache) = self.cache.lock() {
-            cache.insert(cache_key, (std::time::Instant::now(), ok));
-        }
         if ok {
+            if let Ok(mut cache) = self.cache.lock() {
+                cache.retain(|_, (at, _)| at.elapsed().as_secs() < 120);
+                cache.insert(cache_key, (std::time::Instant::now(), true));
+            }
             Ok(())
         } else {
             error!(%status, body = %text.chars().take(200).collect::<String>(), "license rejected");
@@ -278,12 +297,13 @@ async fn resolve_handler(
             ));
         }
         if let Err(e) = gate.verify(code, device).await {
-            return Err((
-                StatusCode::FORBIDDEN,
-                Json(ErrorBody {
-                    error: e.to_string(),
-                }),
-            ));
+            let msg = e.to_string();
+            let status = if msg.contains(LICENSE_CHECK_UNAVAILABLE) {
+                StatusCode::SERVICE_UNAVAILABLE
+            } else {
+                StatusCode::FORBIDDEN
+            };
+            return Err((status, Json(ErrorBody { error: msg })));
         }
         /* Budget per licensed device, so one leaked code cannot scrape. */
         if let Err(e) = state.rate.allow(device) {

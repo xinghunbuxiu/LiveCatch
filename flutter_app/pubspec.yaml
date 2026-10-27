@@ -1,7 +1,7 @@
 name: livecatch_app
 description: LiveCatch Flutter desktop shell (native decode + GPU Texture).
 publish_to: "none"
-version: 0.48.0+1
+version: 0.48.1+2021
 
 environment:
   # CI uses Flutter stable; local FVM 3.29 (Dart 3.7) also works.

@@ -40,9 +40,25 @@ jobs:
       - name: Pub get
         working-directory: flutter_app
         run: flutter pub get
+      - name: Write RewardPlay dart-defines
+        working-directory: flutter_app
+        shell: bash
+        env:
+          REWARDPLAY_BASE_URL: ${{ secrets.REWARDPLAY_BASE_URL }}
+          REWARDPLAY_PROJECT_CODE: ${{ secrets.REWARDPLAY_PROJECT_CODE }}
+          REWARDPLAY_INTEGRATION_TOKEN: ${{ secrets.REWARDPLAY_INTEGRATION_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${REWARDPLAY_INTEGRATION_TOKEN:-}" ]]; then
+            echo "::error::Missing repo secret REWARDPLAY_INTEGRATION_TOKEN — Windows builds without it show 暂时无法联网校验"
+            exit 1
+          fi
+          python3 -c 'import json,os; print(json.dumps({"REWARDPLAY_BASE_URL":(os.environ.get("REWARDPLAY_BASE_URL") or "http://101.35.40.114").strip(),"REWARDPLAY_PROJECT_CODE":(os.environ.get("REWARDPLAY_PROJECT_CODE") or "LIVE_CATCH").strip(),"REWARDPLAY_INTEGRATION_TOKEN":os.environ["REWARDPLAY_INTEGRATION_TOKEN"].strip()},ensure_ascii=False))' \
+            > .env.rewardplay.ci.json
+          echo "Wrote .env.rewardplay.ci.json (token length=${#REWARDPLAY_INTEGRATION_TOKEN})"
       - name: Build Windows release
         working-directory: flutter_app
-        run: flutter build windows --release
+        run: flutter build windows --release --dart-define-from-file=.env.rewardplay.ci.json
       - name: Install Inno Setup
         shell: pwsh
         run: choco install innosetup -y --no-progress
